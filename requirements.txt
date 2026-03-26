@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+gspread
+google-auth
+beautifulsoup4
+requests
+pytz
