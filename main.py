@@ -34,7 +34,7 @@ try:
     TEST_MODE_TIME_HR = 20
     TEST_MODE_TIME_MIN = 0
     
-    MATCH_CODE_OFFSET = 1107 if TEST_MODE else 1107 #1181
+    MATCH_CODE_OFFSET = 1107 if TEST_MODE else 1181
     
     ROLES = ["Wicketkeeper", "Batter", "AllRounder", "Bowler"]
     
@@ -62,11 +62,9 @@ try:
         "https://www.googleapis.com/auth/drive"
     ]
     try:
-        print("✅ creds loading")
         #creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
         creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        print("✅ creds loaded")
     except Exception as e:
         print("❌ creds failed")
         traceback.print_exc()
@@ -245,9 +243,135 @@ try:
             return None
             
     # =============================
+    # PLAYER MODEL
+    # =============================
+    class Player:
+        def __init__(self, player_id, name):
+            self.player_id = player_id
+            self.name = name
+            self.team = None
+    
+            # Batting
+            self.runs = 0
+            self.balls = 0
+            self.fours = 0
+            self.sixes = 0
+            self.strike_rate = 0.0
+            self.dismissal = None
+            self.is_out = False
+    
+            # Bowling
+            self.overs = 0.0
+            self.maidens = 0
+            self.runs_conceded = 0
+            self.wickets = 0
+            self.bowled = 0
+            self.lbw = 0
+            self.economy = 0.0
+    
+            # Fielding
+            self.catches = 0
+            self.runout_direct = 0
+            self.runout_indirect = 0
+            self.stumpings = 0
+    
+            # Played
+            self.played = False
+    
+        # =============================
+        # DISMISSAL PARSER (PID SAFE)
+        # =============================
+        def apply_dismissal(self, dismissal_text, match, bowling_team=None):
+            self.dismissal = dismissal_text.strip()
+    
+            if self.dismissal.lower() == "not out":
+                self.is_out = False
+                return
+    
+            self.is_out = True
+    
+            # 🔥 Always resolve via MATCH and bowling team (dismissal is from bowling side)
+            def get_player(name):
+                if bowling_team:
+                    return match.get_player_by_team(name, bowling_team)
+                return match.get_player_by_name(name)
+    
+            # -----------------------
+            # CAUGHT
+            # -----------------------
+            if self.dismissal.startswith("c "):
+                match_obj = re.search(r"c\s+(.+?)\s+b\s+(.+)", self.dismissal)
+                if match_obj:
+                    fielder = get_player(match_obj.group(1))
+                    bowler = get_player(match_obj.group(2))
+    
+                    if fielder:
+                        fielder.catches += 1
+                    if bowler:
+                        bowler.wickets += 1
+                return
+    
+            # -----------------------
+            # BOWLED
+            # -----------------------
+            if self.dismissal.startswith("b "):
+                bowler = get_player(self.dismissal.replace("b ", "").strip())
+                if bowler:
+                    bowler.wickets += 1
+                    bowler.bowled += 1
+                return
+    
+            # -----------------------
+            # LBW
+            # -----------------------
+            if self.dismissal.startswith("lbw"):
+                match_obj = re.search(r"lbw\s+b\s+(.+)", self.dismissal)
+                if match_obj:
+                    bowler = get_player(match_obj.group(1))
+                    if bowler:
+                        bowler.wickets += 1
+                        bowler.lbw += 1
+                return
+    
+            # -----------------------
+            # STUMPING
+            # -----------------------
+            if self.dismissal.startswith("st"):
+                match_obj = re.search(r"st\s+(.+?)\s+b\s+(.+)", self.dismissal)
+                if match_obj:
+                    fielder = get_player(match_obj.group(1))
+                    bowler = get_player(match_obj.group(2))
+    
+                    if fielder:
+                        fielder.stumpings += 1
+                        fielder.runout_direct += 1
+                    if bowler:
+                        bowler.wickets += 1
+                return
+    
+            # -----------------------
+            # RUN OUT
+            # -----------------------
+            if "run out" in self.dismissal.lower():
+                match_obj = re.search(r"\((.*?)\)", self.dismissal)
+                if match_obj:
+                    fielders = [f.strip() for f in match_obj.group(1).split("/")]
+    
+                    if len(fielders) == 1:
+                        f = get_player(fielders[0])
+                        if f:
+                            f.runout_direct += 1
+                    else:
+                        for name in fielders:
+                            f = get_player(name)
+                            if f:
+                                f.runout_indirect += 1
+                return
+    
+    
+    # =============================
     # PLAYER POINTS ENGINE
     # =============================
-    class Player: pass 
     def calculate_player_points(player: Player, role: str):
     
         points = 0
@@ -401,132 +525,6 @@ try:
             return None
     
     # =============================
-    # PLAYER MODEL
-    # =============================
-    class Player:
-        def __init__(self, player_id, name):
-            self.player_id = player_id
-            self.name = name
-    
-            # Batting
-            self.runs = 0
-            self.balls = 0
-            self.fours = 0
-            self.sixes = 0
-            self.strike_rate = 0.0
-            self.dismissal = None
-            self.is_out = False
-    
-            # Bowling
-            self.overs = 0.0
-            self.maidens = 0
-            self.runs_conceded = 0
-            self.wickets = 0
-            self.bowled = 0
-            self.lbw = 0
-            self.economy = 0.0
-    
-            # Fielding
-            self.catches = 0
-            self.runout_direct = 0
-            self.runout_indirect = 0
-            self.stumpings = 0
-    
-            # Played
-            self.played = False
-    
-        # =============================
-        # DISMISSAL PARSER (PID SAFE)
-        # =============================
-        def apply_dismissal(self, dismissal_text, match, bowling_team=None):
-            self.dismissal = dismissal_text.strip()
-    
-            if self.dismissal.lower() == "not out":
-                self.is_out = False
-                return
-    
-            self.is_out = True
-    
-            # 🔥 Always resolve via MATCH and bowling team (dismissal is from bowling side)
-            def get_player(name):
-                if bowling_team:
-                    return match.get_player_by_team(name, bowling_team)
-                return match.get_player_by_name(name)
-    
-            # -----------------------
-            # CAUGHT
-            # -----------------------
-            if self.dismissal.startswith("c "):
-                match_obj = re.search(r"c\s+(.+?)\s+b\s+(.+)", self.dismissal)
-                if match_obj:
-                    fielder = get_player(match_obj.group(1))
-                    bowler = get_player(match_obj.group(2))
-    
-                    if fielder:
-                        fielder.catches += 1
-                    if bowler:
-                        bowler.wickets += 1
-                return
-    
-            # -----------------------
-            # BOWLED
-            # -----------------------
-            if self.dismissal.startswith("b "):
-                bowler = get_player(self.dismissal.replace("b ", "").strip())
-                if bowler:
-                    bowler.wickets += 1
-                    bowler.bowled += 1
-                return
-    
-            # -----------------------
-            # LBW
-            # -----------------------
-            if self.dismissal.startswith("lbw"):
-                match_obj = re.search(r"lbw\s+b\s+(.+)", self.dismissal)
-                if match_obj:
-                    bowler = get_player(match_obj.group(1))
-                    if bowler:
-                        bowler.wickets += 1
-                        bowler.lbw += 1
-                return
-    
-            # -----------------------
-            # STUMPING
-            # -----------------------
-            if self.dismissal.startswith("st"):
-                match_obj = re.search(r"st\s+(.+?)\s+b\s+(.+)", self.dismissal)
-                if match_obj:
-                    fielder = get_player(match_obj.group(1))
-                    bowler = get_player(match_obj.group(2))
-    
-                    if fielder:
-                        fielder.stumpings += 1
-                        fielder.runout_direct += 1
-                    if bowler:
-                        bowler.wickets += 1
-                return
-    
-            # -----------------------
-            # RUN OUT
-            # -----------------------
-            if "run out" in self.dismissal.lower():
-                match_obj = re.search(r"\((.*?)\)", self.dismissal)
-                if match_obj:
-                    fielders = [f.strip() for f in match_obj.group(1).split("/")]
-    
-                    if len(fielders) == 1:
-                        f = get_player(fielders[0])
-                        if f:
-                            f.runout_direct += 1
-                    else:
-                        for name in fielders:
-                            f = get_player(name)
-                            if f:
-                                f.runout_indirect += 1
-                return
-    
-    
-    # =============================
     # MATCH
     # =============================
     class Match:
@@ -615,18 +613,29 @@ try:
                 for r in table.find_all("tr"):
                     cols = [c.text.strip() for c in r.find_all("td")]
     
-                    if len(cols) < 7 or cols[0] == "BATTING":
+                    # Header/summary rows can appear in the table; ignore non-player rows.
+                    if len(cols) < 7:
                         continue
-    
+
+                    first_col_label = cols[0].upper()
+                    if first_col_label in ("BATTING", "BOWLING", "TOTAL", "EXTRAS", "DNB", "SR", "R"):
+                        continue
+
+                    # Batting names are typically links; skip rows without player link.
+                    first_td = r.find("td")
+                    if not first_td or not first_td.find("a"):
+                        continue
+
                     name = clean_name(cols[0])
                     pid = self.get_player_id(name, batting_team)
-    
+
                     if not pid:
                         print(f"❌ Missing ID (bat): {name} | {batting_team}")
                         continue
     
                     player = self.get_or_create_player(pid, name)
     
+                    player.team = batting_team
                     player.played = True
                     player.runs = int(cols[2])
                     player.balls = int(cols[3])
@@ -652,18 +661,22 @@ try:
                 for r in table.find_all("tr")[1:]:
                     cols = [c.text.strip() for c in r.find_all("td")]
     
+                    # Ignore non-player/bowling-summary rows
                     if len(cols) < 5:
                         continue
-    
-                    name = clean_name(cols[0])
-                    pid = self.get_player_id(name, bowling_team)
-    
-                    if not pid:
-                        print(f"❌ Missing ID (bowl): {name} | {bowling_team}")
+
+                    first_col_label = cols[0].upper()
+                    if first_col_label in ("BOWLING", "TOTAL", "O", "M", "R", "W", "ER", "% WICKETS"):
+                        continue
+
+                    # Bowling names are typically links; skip rows without player link.
+                    first_td = r.find("td")
+                    if not first_td or not first_td.find("a"):
                         continue
     
                     player = self.get_or_create_player(pid, name)
     
+                    player.team = bowling_team
                     player.played = True
                     player.overs = float(cols[1])
                     player.maidens = int(cols[2])
@@ -830,6 +843,7 @@ try:
                 if str(row["ViceCaptain"]).lower() == "true":
                     team.vice_captain = pid
     
+
         # -------------------------
         # UPDATE MATCH DATA
         # -------------------------
@@ -1483,6 +1497,11 @@ try:
             alert("Captain and Vice Captain cannot be same");
             return false;
         }
+        
+        // Disable buttons during submission
+        document.querySelector('button[type="submit"]').disabled = true;
+        document.querySelector('button[type="button"]').disabled = true;
+        document.querySelector('button[type="submit"]').textContent = 'Submitting...';
     
         return true;
     }
@@ -1594,6 +1613,7 @@ try:
         html += """
         <br>
         <button type="submit">Submit Team</button>
+        <button type="button" onclick="window.history.back()">⬅ Back</button>
         </form>
         """
     
@@ -1705,16 +1725,28 @@ try:
     
         # 🟢 STEP 4: SAVE NEW TEAM
         for pid in selected_ids:
+            player = next((p for p in selected_players if int(p["PlayerID"]) == int(pid)), None)
+            player_name = player["Name"] if player else ""
             teams_sheet.append_row([
                 name,
                 mobile,
                 match_id,
                 pid,
+                player_name,
                 "TRUE" if str(pid) == captain else "FALSE",
                 "TRUE" if str(pid) == vice_captain else "FALSE"
             ])
     
-        return "<h3>✅ Team submitted successfully</h3>"
+        return HTMLResponse("""
+        <html>
+        <body>
+        <script>
+            alert('✅ Team submitted successfully');
+            window.location.href = '/select-match';
+        </script>
+        </body>
+        </html>
+        """)
     
     # 👁️ VIEW TEAMS (AFTER LOCK)
     @app.get("/view-teams", response_class=HTMLResponse)
@@ -1745,50 +1777,113 @@ try:
         html = f"""
         <h2>Match {match_id} - Live Score</h2>
     
-        <div id="loader">Loading scores...</div>
-        <div id="score-container" style="display:none"></div>
+        <div id="loader" style="display:none; margin-bottom:10px;"></div>
+        <div style="display:flex; gap:20px;">
+            <div id="players-container">
+                <h3>Player Statistics</h3>
+                <div id="players-table" style="overflow-x:auto;"></div>
+            </div>
+            <div id="contestants-container">
+                <h3>Contestant Rankings</h3>
+                <div id="contestants-table" style="overflow-x:auto;"></div>
+            </div>
+        </div>
     
         <br><a href='javascript:window.history.back()'>⬅ Back</a>
     
+        <style>
+            #players-table, #contestants-table {{
+                border-collapse: collapse;
+                width: 100%;
+                min-width: 400px;
+            }}
+            #players-table th, #players-table td, #contestants-table th, #contestants-table td {{
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: left;
+            }}
+            #players-table th, #contestants-table th {{
+                background: #f4f4f8;
+            }}
+            #players-table tr:nth-child(even), #contestants-table tr:nth-child(even) {{
+                background: #fafafa;
+            }}
+            .user-team {{
+                background: #fff3cd;
+                font-weight: bold;
+            }}
+        </style>
+    
         <script>
+        let firstLoad = true;
+        let userTeam = [];
+
         async function loadScores() {{
             const loader = document.getElementById('loader');
-            const container = document.getElementById('score-container');
-            loader.style.display = 'block';
-            container.style.display = 'none';
-    
+
+            if (firstLoad) {{
+                loader.textContent = 'Loading scores...';
+                loader.style.display = 'block';
+            }} else {{
+                loader.textContent = '⏳';
+                loader.style.display = 'block';
+            }}
+
             try {{
+                // Fetch user team
+                if (firstLoad) {{
+                    let teamRes = await fetch('/user-team-data?match_id={match_id}');
+                    userTeam = await teamRes.json();
+                }}
+
+                // Fetch scores
                 let res = await fetch('/match-score-data?match_id={match_id}');
                 let data = await res.json();
-    
-                let html = "";
-    
-                data.forEach(p => {{
-                    html += `
-                    <div style="margin-bottom:6px;">
-                        <b>${{p.name}}</b> -
-                        ${{p.runs}}(${{p.balls}})
-                        | Wkts: ${{p.wickets}}
-                        | Catches: ${{p.catches}}
-                    </div>
-                    `;
+
+                if (data.error) {{
+                    document.getElementById("players-table").innerHTML = '<p>' + data.error + '</p>';
+                    document.getElementById("contestants-table").innerHTML = '<p>' + data.error + '</p>';
+                    loader.style.display = 'none';
+                    return;
+                }}
+
+                // Build players table
+                let playersHTML = '<table><thead><tr><th>Name</th><th>Team</th><th>Runs</th><th>Balls</th><th>Wickets</th><th>Catches</th><th>Points</th></tr></thead><tbody>';
+                data.players.forEach(p => {{
+                    let rowClass = userTeam.includes(p.name) ? 'user-team' : '';
+                    playersHTML += `<tr class="${{rowClass}}"><td>${{p.name}}</td><td>${{p.team}}</td><td>${{p.runs}}</td><td>${{p.balls}}</td><td>${{p.wickets}}</td><td>${{p.catches}}</td><td>${{p.points.toFixed(2)}}</td></tr>`;
                 }});
-    
-                document.getElementById("score-container").innerHTML = html;
+                playersHTML += '</tbody></table>';
+                document.getElementById("players-table").innerHTML = playersHTML;
+
+                // Build contestants table
+                let contestantsHTML = '<table><thead><tr><th>Contestant</th><th>Points</th></tr></thead><tbody>';
+                data.contestants.forEach(c => {{
+                    contestantsHTML += `<tr><td>${{c.name}}</td><td>${{c.points.toFixed(2)}}</td></tr>`;
+                }});
+                contestantsHTML += '</tbody></table>';
+                document.getElementById("contestants-table").innerHTML = contestantsHTML;
+
                 loader.style.display = 'none';
-                container.style.display = 'block';
-    
+
+                if (firstLoad) {{
+                    firstLoad = false;
+                }}
+
             }} catch (e) {{
                 console.log("Error loading scores", e);
                 loader.textContent = 'Error loading scores. Please try again.';
+                if (firstLoad) {{
+                    firstLoad = false;
+                }}
             }}
         }}
-    
+
         // Initial load
         loadScores();
-    
-        // Auto refresh every 10 sec
-        setInterval(loadScores, 10000);
+
+        // Auto refresh every 30 sec
+        setInterval(loadScores, 30000);
         </script>
         """
     
@@ -1812,154 +1907,210 @@ try:
             traceback.print_exc()
         
     @app.get("/leaderboard", response_class=HTMLResponse)
-    def leaderboard():
-    
-        html = """
+    def leaderboard(request: Request):
+        current_user = request.session.get('name', '')
+
+        html = f"""
         <h2>🏆 Leaderboard</h2>
-    
+
         <div id="loader">Loading leaderboard...</div>
-        <div id="leaderboard" style="display:none"></div>
-    
+        <div id="leaderboard" style="overflow-x:auto; display:none; max-width:100%;"></div>
+
         <br><a href='javascript:window.history.back()'>⬅ Back</a>
-    
+
+        <style>
+            #leaderboard-table {{
+                border-collapse: collapse;
+                width: 100%;
+                min-width: 500px;
+            }}
+            #leaderboard-table th, #leaderboard-table td {{
+                border: 1px solid #ccc;
+                padding: 10px;
+                text-align: left;
+            }}
+            #leaderboard-table th {{
+                background: #f4f4f8;
+            }}
+            #leaderboard-table tr:nth-child(even) {{
+                background: #fafafa;
+            }}
+            .current-user-row {{
+                background: #fff3cd;
+                font-weight: bold;
+            }}
+        </style>
+
         <script>
-            let previousRanks = {};
-    
-            async function loadLeaderboard() {
+            async function loadLeaderboard() {{
                 const loader = document.getElementById('loader');
                 const board = document.getElementById('leaderboard');
+                const currentUser = "{current_user}";
+
                 loader.style.display = 'block';
                 board.style.display = 'none';
-    
-                try {
-                    let res = await fetch('/leaderboard-data');
+
+                try {{
+                    const res = await fetch('/leaderboard-data');
                     let data = await res.json();
-    
-                    let html = "";
-                    let rank = 1;
-    
-                    data.forEach(user => {
-                        let prevRank = previousRanks[user.name];
-                        let movement = "";
-                        let color = "black";
-    
-                        if (prevRank) {
-                            if (rank < prevRank) {
-                                movement = "⬆";
-                                color = "green";
-                            } else if (rank > prevRank) {
-                                movement = "⬇";
-                                color = "red";
-                            }
-                        }
-    
-                        let className = "";
-                        if (prevRank !== undefined) {
-                            if (rank < prevRank) className = "flash-up";
-                            if (rank > prevRank) className = "flash-down";
-                        }
-    
-                        html += `<div class="${className}" style="margin-bottom:8px; color:${color}; transition:0.3s;">
-                            <b>#${rank}</b> ${movement} &nbsp;
-                            ${user.name} &nbsp;&nbsp;
-                            <span>${user.points.toFixed(2)} pts</span>
-                        </div>`;
-    
-                        previousRanks[user.name] = rank;
-                        rank++;
-                    });
-    
-                    board.innerHTML = html;
+
+                    if (!Array.isArray(data) || data.length === 0) {{
+                        board.innerHTML = '<p>No leaderboard data available</p>';
+                        loader.style.display = 'none';
+                        board.style.display = 'block';
+                        return;
+                    }}
+
+                    // Sort descending by points
+                    data.sort((a, b) => parseFloat(b.points) - parseFloat(a.points));
+
+                    let tableHTML = '<table id="leaderboard-table"><thead><tr><th>#</th><th>Contestant</th><th>Points</th></tr></thead><tbody>'; 
+
+                    data.forEach((user, index) => {{
+                        const rowClass = user.name === currentUser ? 'current-user-row' : '';
+                        tableHTML += `<tr class="${{rowClass}}"><td>${{index + 1}}</td><td>${{user.name}}</td><td>${{parseFloat(user.points).toFixed(2)}}</td></tr>`;
+                    }});
+
+                    tableHTML += '</tbody></table>';
+
+                    board.innerHTML = tableHTML;
                     loader.style.display = 'none';
                     board.style.display = 'block';
-    
-                } catch (e) {
+
+                }} catch (e) {{
                     console.log('Error loading leaderboard', e);
                     loader.textContent = 'Error loading leaderboard. Please try again.';
-                }
-            }
-    
-            // Initial load
+                }}
+            }}
+
             loadLeaderboard();
-    
-            // Refresh every 15 sec
             setInterval(loadLeaderboard, 15000);
         </script>
-        <style>
-            .flash-up {
-                animation: flashGreen 0.5s;
-            }
-            .flash-down {
-                animation: flashRed 0.5s;
-            }
-            
-            @keyframes flashGreen {
-                from { background-color: #d4edda; }
-                to { background-color: transparent; }
-            }
-            
-            @keyframes flashRed {
-                from { background-color: #f8d7da; }
-                to { background-color: transparent; }
-            }
-        </style>
         """
-    
+
         return html
         
         
     @app.get("/points-table", response_class=HTMLResponse)
-    def points_table():
-        html = """
-        <h2>📊 Match-wise Points</h2>
-    
+    def points_table(request: Request):
+        current_user = request.session.get('name', '')
+
+        html = f"""
+        <h2>📊 Match-wise Points Table</h2>
+
         <div id="loader">Loading points table...</div>
-        <div id="points-container" style="display:none"></div>
-    
+        <div id="points-container" style="overflow-x:auto; display:none; max-width:100%;"></div>
+
         <br><a href='javascript:window.history.back()'>⬅ Back</a>
-    
+
+        <style>
+            #points-table {{
+                border-collapse: collapse;
+                width: 100%;
+                min-width: 700px;
+            }}
+            #points-table th, #points-table td {{
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: center;
+                white-space: nowrap;
+            }}
+            #points-table th {{
+                background: #f4f4f8;
+            }}
+            #points-table tr:nth-child(even) {{
+                background: #fafafa;
+            }}
+            #points-table tfoot td {{
+                font-weight: bold;
+                background: #eeffee;
+            }}
+            .current-user-column {{
+                background: #fff3cd;
+                font-weight: bold;
+            }}
+        </style>
+
         <script>
-        async function loadPointsTable() {
+        async function loadPointsTable() {{
             const loader = document.getElementById('loader');
             const container = document.getElementById('points-container');
-    
+            const currentUser = "{current_user}";
+
             loader.style.display = 'block';
             container.style.display = 'none';
-    
-            try {
-                let res = await fetch('/points-table-data');
-                let data = await res.json();
-    
-                if (!data.length) {
+
+            try {{
+                const res = await fetch('/points-table-data');
+                const data = await res.json();
+
+                if (!Array.isArray(data) || data.length === 0) {{
                     loader.textContent = 'No data available';
                     return;
-                }
-    
-                let html = '';
-                data.forEach(row => {
-                    html += `
-                    <div style="margin-bottom:6px;">
-                        <b>${row.User}</b> &nbsp; | Match ${row.MatchID} &nbsp; | <span style="color:blue;">${row.Points} pts</span>
-                    </div>
-                    `;
-                });
-    
-                container.innerHTML = html;
+                }}
+
+                const contestants = [...new Set(data.map(r => r.User))].sort();
+                const matches = [...new Set(data.map(r => r.MatchID))].sort((a, b) => Number(a) - Number(b));
+
+                const pointsLookup = {{}};
+                data.forEach(r => {{
+                    const matchId = String(r.MatchID);
+                    const user = r.User;
+                    const points = parseFloat(r.Points) || 0;
+
+                    if (!pointsLookup[matchId]) pointsLookup[matchId] = {{}};
+                    pointsLookup[matchId][user] = points;
+                }});
+
+                let tableHTML = '<table id="points-table"><thead><tr><th>Match</th>';
+                contestants.forEach(user => {{
+                    const thClass = user === currentUser ? 'current-user-column' : '';
+                    tableHTML += `<th class="${{thClass}}">${{user}}</th>`;
+                }});
+                tableHTML += '</tr></thead><tbody>';
+
+                matches.forEach(matchId => {{
+                    tableHTML += `<tr><td><b>${{matchId}}</b></td>`;
+
+                    contestants.forEach(user => {{
+                        const value = pointsLookup[matchId]?.[user] ?? 0;
+                        const tdClass = user === currentUser ? 'current-user-column' : '';
+                        tableHTML += `<td class="${{tdClass}}">${{value.toFixed(2)}}</td>`;
+                    }});
+
+                    tableHTML += '</tr>';
+                }});
+
+                // Add totals row
+                tableHTML += '<tfoot><tr><td><b>Total</b></td>';
+                contestants.forEach(user => {{
+                    let userTotal = 0;
+                    matches.forEach(matchId => {{
+                        userTotal += pointsLookup[matchId]?.[user] ?? 0;
+                    }});
+                    const tdClass = user === currentUser ? 'current-user-column' : '';
+                    tableHTML += `<td class="${{tdClass}}"><b>${{userTotal.toFixed(2)}}</b></td>`;
+                }});
+                tableHTML += '</tr></tfoot>';
+
+                tableHTML += '</tbody></table>';
+
+                container.innerHTML = tableHTML;
                 loader.style.display = 'none';
                 container.style.display = 'block';
-    
-            } catch (e) {
-                console.log('Error loading points table', e);
+
+            }} catch (e) {{
+                console.error('Error loading points table', e);
                 loader.textContent = 'Error loading points table. Please try again.';
-            }
-        }
-    
+            }}
+        }}
+
         loadPointsTable();
         </script>
         """
-    
+
         return html
-    
+
     @app.get('/points-table-data')
     def points_table_data():
         try:
@@ -1998,6 +2149,25 @@ try:
     
         return JSONResponse(sorted_users)
     
+    @app.get("/user-team-data")
+    def user_team_data(request: Request, match_id: str):
+        mobile = request.session.get('mobile')
+        if not mobile:
+            return JSONResponse([])
+        
+        try:
+            teams_sheet = client.open("FantasyCricket").worksheet("Teams")
+            teams_data = teams_sheet.get_all_records()
+        except:
+            return JSONResponse([])
+        
+        user_team = []
+        for row in teams_data:
+            if str(row["Mobile"]) == str(mobile) and str(row["MatchID"]) == str(match_id):
+                user_team.append(row["Name"])
+        
+        return JSONResponse(user_team)
+    
     @app.get("/match-score-data")
     def match_score_data(match_id: str):
     
@@ -2031,19 +2201,53 @@ try:
     
         players = match_obj.players
         
+        # Get player points for this match
+        player_points = {}
+        try:
+            points_sheet = client.open("FantasyCricket").worksheet("PlayerPoints")
+            points_data = points_sheet.get_all_records()
+            for row in points_data:
+                if str(row["MatchID"]) == str(match_id):
+                    player_points[str(row["PlayerID"])] = float(row["Points"])
+        except:
+            pass
         
         result = []
     
         for p in players.values():
+            player_id = str(p.player_id) if hasattr(p, 'player_id') else None
+            points = player_points.get(player_id, 0)
             result.append({
                 "name": p.name,
+                "team": p.team,
                 "runs": p.runs,
                 "balls": p.balls,
                 "wickets": p.wickets,
-                "catches": p.catches
+                "catches": p.catches,
+                "points": points
             })
-    
-        return JSONResponse(result)
+        
+        # Sort players by points descending
+        result.sort(key=lambda x: x["points"], reverse=True)
+        
+        # Get contestants for this match
+        contestants = []
+        try:
+            sheet = client.open('FantasyCricket').worksheet('ContestantPoints')
+            all_points = sheet.get_all_records()
+            for row in all_points:
+                if str(row['MatchID']) == str(match_id):
+                    contestants.append({
+                        'name': row['User'],
+                        'points': float(row['Points'])
+                    })
+        except:
+            pass
+        
+        # Sort contestants by points descending
+        contestants.sort(key=lambda x: x['points'], reverse=True)
+        
+        return JSONResponse({"players": result, "contestants": contestants})
         
     @app.get("/debug")
     def debug():
