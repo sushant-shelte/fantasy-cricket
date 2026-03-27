@@ -63,9 +63,9 @@ try:
     ]
     try:
         print("✅ creds loading")
-        creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
-        #creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-        #creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        #creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
+        creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         print("✅ creds loaded")
     except Exception as e:
         print("❌ creds failed")
