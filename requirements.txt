@@ -6,3 +6,4 @@ beautifulsoup4
 requests
 pytz
 itsdangerous
+python-multipart
