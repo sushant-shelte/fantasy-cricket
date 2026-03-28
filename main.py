@@ -169,6 +169,302 @@ try:
     
     def get_player_id_from_lookup(name, team, lookup):
         return lookup.get((normalize_name(name), team))
+
+    def render_page(title, body, extra_head="", page_class=""):
+        page_class_attr = f" {page_class}" if page_class else ""
+        body = f"""
+        <h1>Hippies Mahasangram</h1>
+        <p class="muted">Sign in to manage your fantasy team and track match points.</p>
+        {msg}
+        <form action="/login" method="post" class="form-grid">
+            <div>
+                <label for="mobile">Mobile Number</label>
+                <input id="mobile" type="text" name="mobile" inputmode="numeric" autocomplete="tel" required>
+            </div>
+            <div>
+                <label for="password">Password</label>
+                <input id="password" type="password" name="password" autocomplete="current-password" required>
+            </div>
+            <div class="button-row">
+                <button class="btn btn-primary" type="submit">Login</button>
+            </div>
+        </form>
+        """
+
+        return render_page("Login", body)
+
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+            <title>{title}</title>
+            <style>
+                :root {{
+                    --bg: #f4f6fb;
+                    --card: #ffffff;
+                    --text: #172033;
+                    --muted: #61708a;
+                    --border: #dbe2ef;
+                    --shadow: 0 18px 48px rgba(21, 31, 56, 0.08);
+                    --primary: #1d4ed8;
+                    --primary-dark: #1e40af;
+                    --success: #16803c;
+                    --warning: #d97706;
+                    --danger: #c62828;
+                    --secondary: #5b6474;
+                    --highlight: #fff3cd;
+                }}
+                * {{
+                    box-sizing: border-box;
+                }}
+                body {{
+                    margin: 0;
+                    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                    background:
+                        radial-gradient(circle at top, rgba(29, 78, 216, 0.08), transparent 28%),
+                        linear-gradient(180deg, #f8faff 0%, var(--bg) 100%);
+                    color: var(--text);
+                }}
+                .page-shell {{
+                    width: min(1100px, 100%);
+                    margin: 0 auto;
+                    padding: 20px 16px 40px;
+                }}
+                .page-card {{
+                    background: var(--card);
+                    border: 1px solid rgba(219, 226, 239, 0.95);
+                    border-radius: 20px;
+                    box-shadow: var(--shadow);
+                    padding: 22px;
+                }}
+                h1, h2, h3 {{
+                    margin: 0 0 12px;
+                    line-height: 1.2;
+                }}
+                p {{
+                    margin: 0 0 12px;
+                }}
+                .muted {{
+                    color: var(--muted);
+                }}
+                .message {{
+                    margin-bottom: 16px;
+                    padding: 12px 14px;
+                    border-radius: 12px;
+                    font-size: 0.95rem;
+                }}
+                .message.error {{
+                    background: #fdecec;
+                    color: #9f1d1d;
+                    border: 1px solid #f3c5c5;
+                }}
+                .message.success {{
+                    background: #ebf8ee;
+                    color: #136132;
+                    border: 1px solid #bfe0ca;
+                }}
+                .form-grid {{
+                    display: grid;
+                    gap: 14px;
+                }}
+                label {{
+                    display: block;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    margin-bottom: 6px;
+                }}
+                input[type="text"],
+                input[type="password"] {{
+                    width: 100%;
+                    min-height: 46px;
+                    padding: 11px 13px;
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    font-size: 16px;
+                    background: #fff;
+                }}
+                input[type="text"]:focus,
+                input[type="password"]:focus {{
+                    outline: 2px solid rgba(29, 78, 216, 0.14);
+                    border-color: var(--primary);
+                }}
+                .button-row {{
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-top: 8px;
+                }}
+                .btn,
+                button {{
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    width: fit-content;
+                    min-height: 44px;
+                    padding: 10px 14px;
+                    border: 0;
+                    border-radius: 12px;
+                    color: #fff;
+                    text-decoration: none;
+                    font-weight: 600;
+                    font-size: 0.95rem;
+                    cursor: pointer;
+                }}
+                .btn:disabled,
+                button:disabled {{
+                    opacity: 0.7;
+                    cursor: wait;
+                }}
+                .btn-primary {{ background: var(--primary); }}
+                .btn-primary:hover {{ background: var(--primary-dark); }}
+                .btn-success {{ background: var(--success); }}
+                .btn-warning {{ background: var(--warning); }}
+                .btn-danger {{ background: var(--danger); }}
+                .btn-secondary {{ background: var(--secondary); }}
+                .back-link {{
+                    display: inline-flex;
+                    margin-top: 18px;
+                    color: var(--primary-dark);
+                    text-decoration: none;
+                    font-weight: 600;
+                }}
+                .match-list,
+                .actions-grid,
+                .score-layout {{
+                    display: grid;
+                    gap: 14px;
+                }}
+                .actions-grid {{
+                    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+                    margin-bottom: 18px;
+                }}
+                .action-card,
+                .match-card,
+                .panel-card {{
+                    border: 1px solid var(--border);
+                    border-radius: 16px;
+                    background: #fff;
+                    padding: 16px;
+                }}
+                .match-card {{
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 14px;
+                }}
+                .match-meta {{
+                    display: grid;
+                    gap: 6px;
+                }}
+                .kicker {{
+                    font-size: 0.83rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                    color: var(--muted);
+                }}
+                .table-scroll {{
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                    border: 1px solid var(--border);
+                    border-radius: 14px;
+                    background: #fff;
+                }}
+                .table-scroll table {{
+                    width: 100%;
+                    min-width: 100%;
+                    border-collapse: collapse;
+                }}
+                .table-scroll th,
+                .table-scroll td {{
+                    border-bottom: 1px solid #e8edf5;
+                    padding: 10px 12px;
+                    text-align: left;
+                    white-space: nowrap;
+                    font-size: 0.94rem;
+                }}
+                .table-scroll th {{
+                    background: #f6f8fc;
+                }}
+                .table-scroll tr:last-child td {{
+                    border-bottom: 0;
+                }}
+                .user-team,
+                .current-user-row,
+                .current-user-column {{
+                    background: var(--highlight);
+                    font-weight: 700;
+                }}
+                .selection-summary {{
+                    margin-bottom: 14px;
+                    color: var(--muted);
+                    font-weight: 600;
+                }}
+                .team-section {{
+                    margin-top: 18px;
+                }}
+                .team-section h3 {{
+                    margin-bottom: 10px;
+                }}
+                .compact-note {{
+                    margin-bottom: 12px;
+                    color: var(--muted);
+                    font-size: 0.92rem;
+                }}
+                @media (max-width: 720px) {{
+                    .page-shell {{
+                        padding: 14px 12px 28px;
+                    }}
+                    .page-card {{
+                        border-radius: 16px;
+                        padding: 16px;
+                    }}
+                    .actions-grid {{
+                        grid-template-columns: 1fr;
+                    }}
+                    .match-card {{
+                        flex-direction: column;
+                        align-items: stretch;
+                    }}
+                    .match-card .btn {{
+                        width: 100%;
+                    }}
+                    .score-layout {{
+                        grid-template-columns: 1fr;
+                    }}
+                    .table-scroll th,
+                    .table-scroll td {{
+                        padding: 9px 10px;
+                        font-size: 0.88rem;
+                    }}
+                    .btn,
+                    button {{
+                        width: 100%;
+                    }}
+                    .button-row .btn,
+                    .button-row button {{
+                        flex: 1 1 100%;
+                    }}
+                }}
+                @media (min-width: 721px) {{
+                    .score-layout {{
+                        grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+                    }}
+                }}
+            </style>
+            {extra_head}
+        </head>
+        <body>
+            <main class="page-shell{page_class_attr}">
+                <section class="page-card">
+                    {body}
+                </section>
+            </main>
+        </body>
+        </html>
+        """
     
     # =============================
     # CACHE FETCH
@@ -1395,7 +1691,7 @@ try:
     
         msg = ""
         if error == "invalid":
-            msg = "<p style='color:red;'>Invalid credentials</p>"
+            msg = "<div class='message error'>Invalid credentials</div>"
     
         return f"""
         <h1>🏏 Hippies Mahasangram Login</h1>
@@ -1436,8 +1732,51 @@ try:
     
         name = request.session.get('name')
         matches = get_cached_data("matches")
+
+        msg_param = request.query_params.get("msg", "")
+        flash = ""
+        if msg_param == "passchanged":
+            flash = "<div class='message success'>Password updated successfully.</div>"
+        elif msg_param == "teamsaved":
+            flash = "<div class='message success'>Your team has been saved.</div>"
+
+        body = f"""
+        <h2>Welcome {name}</h2>
+        <p class="muted">Pick your team before match lock and keep an eye on live standings.</p>
+        {flash}
+        <div class="actions-grid">
+            <a href="/change-password" class="btn btn-danger">Change Password</a>
+            <a href="/leaderboard" class="btn btn-warning">Leaderboard</a>
+            <a href="/points-table" class="btn btn-primary">Points Table</a>
+            <a href="/logout" class="btn btn-secondary">Logout</a>
+        </div>
+        <div class="match-list">
+        """
+
+        for m in matches:
+            locked = is_match_locked_by_row(m)
+
+            if locked:
+                action_button = f'<a href="/view-scores?match_id={m["MatchID"]}" class="btn btn-success">View Scores</a>'
+            else:
+                action_button = f'<a href="/select-team?match_id={m["MatchID"]}" class="btn btn-primary">Select Team</a>'
+
+            body += f"""
+            <div class="match-card">
+                <div class="match-meta">
+                    <div class="kicker">Match {m['MatchID']}</div>
+                    <div><b>{m['Team1']} vs {m['Team2']}</b></div>
+                    <div class="muted">{m['Date']} at {m['Time']}</div>
+                </div>
+                <div>{action_button}</div>
+            </div>
+            """
+
+        body += "</div>"
+
+        return render_page("Dashboard", body)
     
-        html = f"""
+        legacy_html = f"""
         <h2>Welcome {name}</h2>
     
         <a href="/change-password"
@@ -1491,7 +1830,7 @@ try:
             </div>
             """
     
-        return html
+        return render_page("Select Team", html)
     
     # 🚪 LOGOUT
     @app.get("/logout")
@@ -1505,6 +1844,41 @@ try:
         mobile = request.session.get('mobile')
         if not mobile:
             return RedirectResponse(url="/", status_code=302)
+
+        error = request.query_params.get("error", "")
+        msg = ""
+        if error == "nomatch":
+            msg = "<div class='message error'>New password and confirmation do not match.</div>"
+        elif error == "wrongpass":
+            msg = "<div class='message error'>Current password is incorrect.</div>"
+        elif error == "server":
+            msg = "<div class='message error'>Could not update the password right now. Please try again.</div>"
+
+        body = f"""
+        <h1>Change Password</h1>
+        <p class="muted">Use a password you can remember easily on mobile.</p>
+        {msg}
+        <form action="/change-password" method="post" class="form-grid">
+            <div>
+                <label for="current_password">Current Password</label>
+                <input id="current_password" type="password" name="current_password" required>
+            </div>
+            <div>
+                <label for="new_password">New Password</label>
+                <input id="new_password" type="password" name="new_password" required>
+            </div>
+            <div>
+                <label for="confirm_password">Confirm New Password</label>
+                <input id="confirm_password" type="password" name="confirm_password" required>
+            </div>
+            <div class="button-row">
+                <button class="btn btn-primary" type="submit">Change Password</button>
+            </div>
+        </form>
+        <a class="back-link" href='/dashboard'>Back to dashboard</a>
+        """
+
+        return render_page("Change Password", body)
         
         return f"""
         <h1>🔑 Change Password</h1>
@@ -1614,19 +1988,18 @@ try:
         for p in players:
             if p["Role"] in grouped:
                 grouped[p["Role"]].append(p)
-    
+
         html = f"""
         <h2>{team1} vs {team2}</h2>
-        <h3>Select 11 Players</h3>
-    
+        <p class="selection-summary">Select exactly 11 players with at least one from each category.</p>
+
         <form method="post" action="/submit-team" onsubmit="return validateForm()">
         <input type="hidden" name="match_id" value="{match_id}">
         """
-    
-        def render_section(title, plist):
-            section = f"<h3>{title}</h3>"
+
+        def render_section_mobile(title, plist):
+            section = f"<section class='team-section'><h3>{title}</h3><div class='table-scroll'><table>"
             section += """
-            <table cellpadding="5">
                 <tr>
                     <th>Select</th>
                     <th>C</th>
@@ -1634,7 +2007,7 @@ try:
                     <th>Player</th>
                 </tr>
             """
-    
+
             for p in plist:
                 section += f"""
                 <tr>
@@ -1647,16 +2020,33 @@ try:
                          onchange="toggleRadio(this); limitSelection()">
                     </td>
                     <td>
-                        <input type="radio" name="captain" value="{p['PlayerID']}" id="c{p['PlayerID']}" disabled>
+                        <input type="radio" name="captain" value="{p['PlayerID']}" id="mc{p['PlayerID']}" disabled>
                     </td>
                     <td>
-                        <input type="radio" name="vice_captain" value="{p['PlayerID']}" id="vc{p['PlayerID']}" disabled>
+                        <input type="radio" name="vice_captain" value="{p['PlayerID']}" id="mvc{p['PlayerID']}" disabled>
                     </td>
                     <td>{p['Name']} ({p['Team']})</td>
                 </tr>
                 """
-            section += "</table><br>"
+
+            section += "</table></div></section>"
             return section
+
+        html += render_section_mobile("Wicketkeepers", grouped["Wicketkeeper"])
+        html += render_section_mobile("Batter", grouped["Batter"])
+        html += render_section_mobile("AllRounder", grouped["AllRounder"])
+        html += render_section_mobile("Bowlers", grouped["Bowler"])
+    
+        html = f"""
+        <h2>{team1} vs {team2}</h2>
+        <h3>Select 11 Players</h3>
+    
+        <form method="post" action="/submit-team" onsubmit="return validateForm()">
+        <input type="hidden" name="match_id" value="{match_id}">
+        """
+    
+        def render_section(title, plist):
+            return ""
     
         html += render_section("Wicketkeepers", grouped["Wicketkeeper"])
         html += render_section("Batter", grouped["Batter"])
@@ -1951,19 +2341,145 @@ try:
             return "<h3>🔒 Teams will be visible after match starts</h3>"
     
         teams = teams_sheet.get_all_records()
-    
-        html = "<h2>All Teams</h2>"
-    
+
+        body = "<h2>All Teams</h2><div class='match-list'>"
+
         for t in teams:
             if int(t["MatchID"]) == int(match_id):
-                html += f"{t['User']} - Player {t['PlayerID']}<br>"
-    
-        return html
+                body += f"<div class='match-card'><div><b>{t['User']}</b></div><div>Player {t['PlayerID']}</div></div>"
+
+        body += "</div>"
+
+        return render_page("All Teams", body)
     
     tournament = Tournament()
         
     @app.get("/view-scores", response_class=HTMLResponse)
     def view_scores(match_id: str):
+
+        body = f"""
+        <h2>Match {match_id} Live Score</h2>
+        <p class="compact-note">Swipe inside the tables on smaller screens to see every stat without the page feeling loose.</p>
+        <div id="loader" class="message success" style="display:none;"></div>
+        <div class="score-layout">
+            <div id="players-container" class="panel-card">
+                <h3>Player Statistics</h3>
+                <div id="players-table" class="table-scroll"></div>
+            </div>
+            <div id="contestants-container" class="panel-card">
+                <h3>Contestant Rankings</h3>
+                <div id="contestants-table" class="table-scroll"></div>
+            </div>
+        </div>
+        <a class="back-link" href='/dashboard'>Back to dashboard</a>
+        <script>
+        let firstLoad = true;
+        let userTeam = [];
+
+        async function loadScores() {{
+            const loader = document.getElementById('loader');
+
+            if (firstLoad) {{
+                loader.textContent = 'Loading scores...';
+                loader.style.display = 'block';
+            }} else {{
+                loader.textContent = 'Refreshing live scores...';
+                loader.style.display = 'block';
+            }}
+
+            try {{
+                if (firstLoad) {{
+                    let teamRes = await fetch('/user-team-data?match_id={match_id}');
+                    userTeam = await teamRes.json();
+                }}
+
+                let res = await fetch('/match-score-data?match_id={match_id}');
+                let data = await res.json();
+
+                if (data.error) {{
+                    document.getElementById("players-table").innerHTML = '<p>' + data.error + '</p>';
+                    document.getElementById("contestants-table").innerHTML = '<p>' + data.error + '</p>';
+                    loader.style.display = 'none';
+                    return;
+                }}
+
+                let playersHTML = `
+                                  <table>
+                                  <thead>
+                                  <tr>
+                                  <th>Name</th>
+                                  <th>Team</th>
+                                  <th>Role</th>
+                                  <th>Runs</th>
+                                  <th>Balls</th>
+                                  <th>4s</th>
+                                  <th>6s</th>
+                                  <th>SR</th>
+                                  <th>Overs</th>
+                                  <th>Maidens</th>
+                                  <th>Wkts</th>
+                                  <th>B/LBW</th>
+                                  <th>Eco</th>
+                                  <th>Catches</th>
+                                  <th>RO+St</th>
+                                  <th>RO Ind</th>
+                                  <th style="font-weight: bold; color: #2e7d32;">Points</th>
+                                  </tr>
+                                  </thead>
+                                  <tbody>`;
+                data.players.forEach(p => {{
+                    let rowClass = userTeam.includes(p.name) ? 'user-team' : '';
+                    playersHTML += `<tr class="${{rowClass}}">
+                                    <td>${{p.name}}</td>
+                                    <td>${{p.team}}</td>
+                                    <td>${{p.role}}</td>
+                                    <td>${{p.runs || 0}}</td>
+                                    <td>${{p.balls || 0}}</td>
+                                    <td>${{p.fours || 0}}</td>
+                                    <td>${{p.sixes || 0}}</td>
+                                    <td>${{p.strike_rate || 0}}</td>
+                                    <td>${{p.overs || 0}}</td>
+                                    <td>${{p.maidens || 0}}</td>
+                                    <td>${{p.wickets || 0}}</td>
+                                    <td>${{(p.bowled || 0) + (p.lbw || 0)}}</td>
+                                    <td>${{p.economy || 0}}</td>
+                                    <td>${{p.catches || 0}}</td>
+                                    <td>${{(p.runout_direct || 0) + (p.stumpings || 0)}}</td>
+                                    <td>${{p.runout_indirect || 0}}</td>
+                                    <td style="font-weight: bold;">${{p.points.toFixed(2)}}</td>
+                                    </tr>`;
+                }});
+                playersHTML += '</tbody></table>';
+                document.getElementById("players-table").innerHTML = playersHTML;
+
+                let contestantsHTML = '<table><thead><tr><th>Contestant</th><th>Points</th></tr></thead><tbody>';
+                data.contestants.forEach(c => {{
+                    contestantsHTML += `<tr><td>${{c.name}}</td><td>${{c.points.toFixed(2)}}</td></tr>`;
+                }});
+                contestantsHTML += '</tbody></table>';
+                document.getElementById("contestants-table").innerHTML = contestantsHTML;
+
+                loader.style.display = 'none';
+
+                if (firstLoad) {{
+                    firstLoad = false;
+                }}
+
+            }} catch (e) {{
+                console.log("Error loading scores", e);
+                loader.textContent = 'Error loading scores. Please try again.';
+                if (firstLoad) {{
+                    firstLoad = false;
+                }}
+            }}
+        }}
+
+        loadScores();
+        setInterval(loadScores, 30000);
+        </script>
+        """
+
+        return render_page("Live Scores", body)
     
         html = f"""
         <h2>Match {match_id} - Live Score</h2>
@@ -2142,6 +2658,59 @@ try:
     def leaderboard(request: Request):
         current_user = request.session.get('name', '')
 
+        body = f"""
+        <h2>Leaderboard</h2>
+        <p class="muted">Live standings across all contestants.</p>
+        <div id="loader" class="message success">Loading leaderboard...</div>
+        <div id="leaderboard" class="table-scroll" style="display:none;"></div>
+        <a class="back-link" href='/dashboard'>Back to dashboard</a>
+        <script>
+            async function loadLeaderboard() {{
+                const loader = document.getElementById('loader');
+                const board = document.getElementById('leaderboard');
+                const currentUser = "{current_user}";
+
+                loader.style.display = 'block';
+                board.style.display = 'none';
+
+                try {{
+                    const res = await fetch('/leaderboard-data');
+                    let data = await res.json();
+
+                    if (!Array.isArray(data) || data.length === 0) {{
+                        board.innerHTML = '<p>No leaderboard data available</p>';
+                        loader.style.display = 'none';
+                        board.style.display = 'block';
+                        return;
+                    }}
+
+                    data.sort((a, b) => parseFloat(b.points) - parseFloat(a.points));
+
+                    let tableHTML = '<table id="leaderboard-table"><thead><tr><th>#</th><th>Contestant</th><th>Points</th></tr></thead><tbody>';
+
+                    data.forEach((user, index) => {{
+                        const rowClass = user.name === currentUser ? 'current-user-row' : '';
+                        tableHTML += `<tr class="${{rowClass}}"><td>${{index + 1}}</td><td>${{user.name}}</td><td>${{parseFloat(user.points).toFixed(2)}}</td></tr>`;
+                    }});
+
+                    tableHTML += '</tbody></table>';
+                    board.innerHTML = tableHTML;
+                    loader.style.display = 'none';
+                    board.style.display = 'block';
+
+                }} catch (e) {{
+                    console.log('Error loading leaderboard', e);
+                    loader.textContent = 'Error loading leaderboard. Please try again.';
+                }}
+            }}
+
+            loadLeaderboard();
+            setInterval(loadLeaderboard, 15000);
+        </script>
+        """
+
+        return render_page("Leaderboard", body)
+
         html = f"""
         <h2>🏆 Leaderboard</h2>
 
@@ -2230,6 +2799,90 @@ try:
     @app.get("/points-table", response_class=HTMLResponse)
     def points_table(request: Request):
         current_user = request.session.get('name', '')
+
+        body = f"""
+        <h2>Match-wise Points Table</h2>
+        <p class="muted">Swipe horizontally on mobile to compare every contestant match by match.</p>
+        <div id="loader" class="message success">Loading points table...</div>
+        <div id="points-container" class="table-scroll" style="display:none;"></div>
+        <a class="back-link" href='/dashboard'>Back to dashboard</a>
+        <script>
+        async function loadPointsTable() {{
+            const loader = document.getElementById('loader');
+            const container = document.getElementById('points-container');
+            const currentUser = "{current_user}";
+
+            loader.style.display = 'block';
+            container.style.display = 'none';
+
+            try {{
+                const res = await fetch('/points-table-data');
+                const data = await res.json();
+
+                if (!Array.isArray(data) || data.length === 0) {{
+                    loader.textContent = 'No data available';
+                    return;
+                }}
+
+                const contestants = [...new Set(data.map(r => r.User))].sort();
+                const matches = [...new Set(data.map(r => r.MatchID))].sort((a, b) => Number(a) - Number(b));
+
+                const pointsLookup = {{}};
+                data.forEach(r => {{
+                    const matchId = String(r.MatchID);
+                    const user = r.User;
+                    const points = parseFloat(r.Points) || 0;
+
+                    if (!pointsLookup[matchId]) pointsLookup[matchId] = {{}};
+                    pointsLookup[matchId][user] = points;
+                }});
+
+                let tableHTML = '<table id="points-table"><thead><tr><th>Match</th>';
+                contestants.forEach(user => {{
+                    const thClass = user === currentUser ? 'current-user-column' : '';
+                    tableHTML += `<th class="${{thClass}}">${{user}}</th>`;
+                }});
+                tableHTML += '</tr></thead><tbody>';
+
+                matches.forEach(matchId => {{
+                    tableHTML += `<tr><td><b>${{matchId}}</b></td>`;
+
+                    contestants.forEach(user => {{
+                        const value = pointsLookup[matchId]?.[user] ?? 0;
+                        const tdClass = user === currentUser ? 'current-user-column' : '';
+                        tableHTML += `<td class="${{tdClass}}">${{value.toFixed(2)}}</td>`;
+                    }});
+
+                    tableHTML += '</tr>';
+                }});
+
+                tableHTML += '<tfoot><tr><td><b>Total</b></td>';
+                contestants.forEach(user => {{
+                    let userTotal = 0;
+                    matches.forEach(matchId => {{
+                        userTotal += pointsLookup[matchId]?.[user] ?? 0;
+                    }});
+                    const tdClass = user === currentUser ? 'current-user-column' : '';
+                    tableHTML += `<td class="${{tdClass}}"><b>${{userTotal.toFixed(2)}}</b></td>`;
+                }});
+                tableHTML += '</tr></tfoot>';
+
+                tableHTML += '</tbody></table>';
+                container.innerHTML = tableHTML;
+                loader.style.display = 'none';
+                container.style.display = 'block';
+
+            }} catch (e) {{
+                console.error('Error loading points table', e);
+                loader.textContent = 'Error loading points table. Please try again.';
+            }}
+        }}
+
+        loadPointsTable();
+        </script>
+        """
+
+        return render_page("Points Table", body)
 
         html = f"""
         <h2>📊 Match-wise Points Table</h2>
