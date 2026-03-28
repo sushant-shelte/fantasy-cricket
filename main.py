@@ -72,7 +72,10 @@ try:
     
     
     client = gspread.authorize(creds)
-    sheet = client.open("FantasyCricket")
+    if (TEST_MODE):
+        sheet = client.open("FantasyCricket2025")
+    else:
+        sheet = client.open("FantasyCricket")
     
     users_sheet = sheet.worksheet("Users")
     players_sheet = sheet.worksheet("Players")
