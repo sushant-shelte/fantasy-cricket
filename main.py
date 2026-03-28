@@ -172,27 +172,6 @@ try:
 
     def render_page(title, body, extra_head="", page_class=""):
         page_class_attr = f" {page_class}" if page_class else ""
-        body = f"""
-        <h1>Hippies Mahasangram</h1>
-        <p class="muted">Sign in to manage your fantasy team and track match points.</p>
-        {msg}
-        <form action="/login" method="post" class="form-grid">
-            <div>
-                <label for="mobile">Mobile Number</label>
-                <input id="mobile" type="text" name="mobile" inputmode="numeric" autocomplete="tel" required>
-            </div>
-            <div>
-                <label for="password">Password</label>
-                <input id="password" type="password" name="password" autocomplete="current-password" required>
-            </div>
-            <div class="button-row">
-                <button class="btn btn-primary" type="submit">Login</button>
-            </div>
-        </form>
-        """
-
-        return render_page("Login", body)
-
         return f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -1692,10 +1671,35 @@ try:
         msg = ""
         if error == "invalid":
             msg = "<div class='message error'>Invalid credentials</div>"
+
+        mobile_body = f"""
+        <div class="panel-card" style="max-width:480px; margin:0 auto;">
+            <div class="kicker">Fantasy Cricket</div>
+            <h1 style="margin-top:6px;">Hippies Mahasangram</h1>
+            <p class="muted">Sign in to select your team, track scores, and follow the leaderboard comfortably on mobile.</p>
+            {msg}
+            <form action="/login" method="post" class="form-grid">
+                <div>
+                    <label for="mobile">Mobile Number</label>
+                    <input id="mobile" type="text" name="mobile" inputmode="numeric" autocomplete="tel" placeholder="Enter your mobile number" required>
+                </div>
+                <div>
+                    <label for="password">Password</label>
+                    <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Enter your password" required>
+                </div>
+                <div class="button-row">
+                    <button class="btn btn-primary" type="submit">Login</button>
+                </div>
+            </form>
+        </div>
+        """
+
+        return render_page("Login", mobile_body)
+        """
     
-        return f"""
+        
         <h1>🏏 Hippies Mahasangram Login</h1>
-        {msg}
+        
         <form action="/login" method="post">
             Mobile Number: <input type="text" name="mobile" required><br><br>
             Password: <input type="password" name="password" required><br><br>
@@ -2037,21 +2041,7 @@ try:
         html += render_section_mobile("AllRounder", grouped["AllRounder"])
         html += render_section_mobile("Bowlers", grouped["Bowler"])
     
-        html = f"""
-        <h2>{team1} vs {team2}</h2>
-        <h3>Select 11 Players</h3>
-    
-        <form method="post" action="/submit-team" onsubmit="return validateForm()">
-        <input type="hidden" name="match_id" value="{match_id}">
-        """
-    
-        def render_section(title, plist):
-            return ""
-    
-        html += render_section("Wicketkeepers", grouped["Wicketkeeper"])
-        html += render_section("Batter", grouped["Batter"])
-        html += render_section("AllRounder", grouped["AllRounder"])
-        html += render_section("Bowlers", grouped["Bowler"])
+        
     
         # 🧠 JAVASCRIPT LOGIC
         html += f"""
@@ -2205,7 +2195,7 @@ try:
         </form>
         """
     
-        return html
+        return render_page("Select Team", html)
     
     
     
@@ -2408,6 +2398,7 @@ try:
                                   <thead>
                                   <tr>
                                   <th>Name</th>
+                                  <th style="font-weight: bold; color: #2e7d32;">Points</th>
                                   <th>Team</th>
                                   <th>Role</th>
                                   <th>Runs</th>
@@ -2423,7 +2414,6 @@ try:
                                   <th>Catches</th>
                                   <th>RO+St</th>
                                   <th>RO Ind</th>
-                                  <th style="font-weight: bold; color: #2e7d32;">Points</th>
                                   </tr>
                                   </thead>
                                   <tbody>`;
@@ -2431,6 +2421,7 @@ try:
                     let rowClass = userTeam.includes(p.name) ? 'user-team' : '';
                     playersHTML += `<tr class="${{rowClass}}">
                                     <td>${{p.name}}</td>
+                                    <td style="font-weight: bold;">${{p.points.toFixed(2)}}</td>
                                     <td>${{p.team}}</td>
                                     <td>${{p.role}}</td>
                                     <td>${{p.runs || 0}}</td>
@@ -2446,7 +2437,6 @@ try:
                                     <td>${{p.catches || 0}}</td>
                                     <td>${{(p.runout_direct || 0) + (p.stumpings || 0)}}</td>
                                     <td>${{p.runout_indirect || 0}}</td>
-                                    <td style="font-weight: bold;">${{p.points.toFixed(2)}}</td>
                                     </tr>`;
                 }});
                 playersHTML += '</tbody></table>';
