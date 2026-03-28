@@ -28,7 +28,7 @@ try:
     # =============================
     # CONFIG
     # =============================
-    TEST_MODE = True
+    TEST_MODE = False
     TEST_MODE_MONTH = 3
     TEST_MODE_DATE = 22
     TEST_MODE_TIME_HR = 20
@@ -277,6 +277,27 @@ try:
     
             # Played
             self.played = False
+
+            self.points = 0
+            self.role = None
+
+        def __str__(self):
+            return (
+            f"PlayerID: {self.player_id}\n"
+            f"Name: {self.name}\n"
+            f"Team: {self.team}\n"
+            f"Role: {self.role}\n"
+            f"Points: {self.points}\n"
+            f"Batting:\n"
+            f"  Runs: {self.runs}, Balls: {self.balls}, 4s: {self.fours}, 6s: {self.sixes}, SR: {self.strike_rate}\n"
+            f"Bowling:\n"
+            f"  Overs: {self.overs}, Maidens: {self.maidens}, Runs Conceded: {self.runs_conceded}, "
+            f"Wickets: {self.wickets}, Econ: {self.economy}\n"
+            f"Fielding:\n"
+            f"  Catches: {self.catches}, Runouts (Direct): {self.runout_direct}, "
+            f"Runouts (Indirect): {self.runout_indirect}, Stumpings: {self.stumpings}\n"
+            f"Dismissal: {self.dismissal}, Is Out: {self.is_out}, Played: {self.played}\n\n"
+        )
     
         # =============================
         # DISMISSAL PARSER (PID SAFE)
@@ -369,108 +390,171 @@ try:
                 return
     
     
-    # =============================
-    # PLAYER POINTS ENGINE
-    # =============================
-    def calculate_player_points(player: Player, role: str):
-    
-        points = 0
-    
-        # -----------------------
-        # 🟢 PLAYING
-        # -----------------------
-        if player.played:
-            points += 4
-    
-        # -----------------------
-        # 🏏 BATTING
-        # -----------------------
-        runs = player.runs
-    
-        points += runs
-    
-        # Boundaries
-        points += player.fours * 1
-        points += player.sixes * 2
-    
-        # Milestones
-        if runs >= 100:
-            points += 16
-        elif runs >= 50:
-            points += 8
-        elif runs >= 30:
-            points += 4
-    
-        # Duck (only batting roles)
-        if runs == 0 and player.is_out and is_batting_role(role):
-            points -= 2
-    
-        # Strike Rate (min 10 balls)
-        if player.balls >= 10:
-            sr = player.strike_rate
-    
-            if sr > 170:
-                points += 6
-            elif sr >= 150:
+        # =============================
+        # PLAYER POINTS ENGINE
+        # =============================
+        def calculate_player_points(self, role: str):
+            debugPlayerID = 0
+            points = 0
+            self.role = role
+            # -----------------------
+            # 🟢 PLAYING
+            # -----------------------
+            if self.played:
+                if self.player_id == debugPlayerID:
+                    print("Played points +4")
                 points += 4
-            elif sr >= 130:
-                points += 2
-            elif sr < 50:
-                points -= 6
-            elif sr < 60:
-                points -= 4
-            elif sr < 70:
+    
+            # -----------------------
+            # 🏏 BATTING
+            # -----------------------
+            runs = self.runs
+    
+            points += runs
+            if self.player_id == debugPlayerID:
+                print("Runs points +", str(runs))
+    
+            # Boundaries
+            points += self.fours * 4
+            if self.player_id == debugPlayerID:
+                print("fours points +", str(self.fours * 4))
+            points += self.sixes * 6
+            if self.player_id == debugPlayerID:
+                print("sixes points +", str(self.sixes * 6))
+    
+            # Milestones
+            if runs >= 100:
+                if self.player_id == debugPlayerID:
+                    print("+100 runs points +", str(16))
+                points += 16
+            elif runs >= 50:
+                if self.player_id == debugPlayerID:
+                    print("+50 runs points +", str(8))
+                points += 8
+            elif runs >= 30:
+                if self.player_id == debugPlayerID:
+                    print("+30 runs points +", str(4))
+                points += 4
+    
+            # Duck (only batting roles)
+            if runs == 0 and self.is_out and is_batting_role(role):
+                if self.player_id == debugPlayerID:
+                    print("Duck points -", str(2))
                 points -= 2
     
-        # -----------------------
-        # 🎯 BOWLING
-        # -----------------------
-        wkts = player.wickets
+            # Strike Rate (min 10 balls)
+            if self.balls >= 10 and is_batting_role(role):
+                sr = self.strike_rate
     
-        points += wkts * 25
+                if sr > 170:
+                    if self.player_id == debugPlayerID:
+                        print("SR+170 points +", str(6))
+                    points += 6
+                elif sr > 150:
+                    if self.player_id == debugPlayerID:
+                        print("SR+150 points +", str(4))
+                    points += 4
+                elif sr >= 130:
+                    if self.player_id == debugPlayerID:
+                        print("SR+130 points +", str(2))
+                    points += 2
+                elif sr <= 50:
+                    if self.player_id == debugPlayerID:
+                        print("SR<50 points -", str(6))
+                    points -= 6
+                elif sr < 60:
+                    if self.player_id == debugPlayerID:
+                        print("SR<60 points -", str(4))
+                    points -= 4
+                elif sr <= 70:
+                    if self.player_id == debugPlayerID:
+                        print("SR<70 points -", str(2))
+                    points -= 2
     
-        # Wicket haul bonus
-        if wkts >= 5:
-            points += 16
-        elif wkts == 4:
-            points += 8
-        elif wkts == 3:
-            points += 4
+            # -----------------------
+            # 🎯 BOWLING
+            # -----------------------
+            wkts = self.wickets
     
-        # Maidens
-        points += player.maidens * 12
+            points += wkts * 30
+            if self.player_id == debugPlayerID:
+                print("Wickets points +", str(wkts * 30))
     
-        # Economy (min 2 overs)
-        if player.overs >= 2:
-            eco = player.economy
-    
-            if eco < 5:
-                points += 6
-            elif eco < 6:
+            # Wicket haul bonus
+            if wkts >= 5:
+                if self.player_id == debugPlayerID:
+                    print("Wickets+5 points +", str(16))
+                points += 16
+            elif wkts == 4:
+                if self.player_id == debugPlayerID:
+                    print("Wickets+4 points +", str(8))
+                points += 8
+            elif wkts == 3:
+                if self.player_id == debugPlayerID:
+                    print("Wickets+3 points +", str(4))
                 points += 4
-            elif eco < 7:
-                points += 2
-            elif eco > 11:
-                points -= 6
-            elif eco > 10:
-                points -= 4
-            elif eco > 9:
-                points -= 2
     
-        # -----------------------
-        # 🧤 FIELDING
-        # -----------------------
-        points += player.catches * 8
+            # Maidens
+            points += self.maidens * 12
+            if self.player_id == debugPlayerID:
+                print("Maidens points +", str(self.maidens * 12))
     
-        # 3 catch bonus
-        if player.catches >= 3:
-            points += 4
+            # Economy (min 2 overs)
+            if self.overs >= 2:
+                eco = self.economy
     
-        points += player.stumpings * 12
-        points += player.runout_direct * 12
-        points += player.runout_indirect * 6
+                if eco < 5:
+                    if self.player_id == debugPlayerID:
+                        print("Economy<5 points +", str(6))
+                    points += 6
+                elif eco < 6:
+                    if self.player_id == debugPlayerID:
+                        print("Economy<6 points +", str(4))
+                    points += 4
+                elif eco <= 7:
+                    if self.player_id == debugPlayerID:
+                        print("Economy<7 points +", str(2))
+                    points += 2
+                elif eco > 12:
+                    if self.player_id == debugPlayerID:
+                        print("Economy>12 points -", str(6))
+                    points -= 6
+                elif eco > 11:
+                    if self.player_id == debugPlayerID:
+                        print("Economy>11 points -", str(4))
+                    points -= 4
+                elif eco >= 10:
+                    if self.player_id == debugPlayerID:
+                        print("Economy>10 points -", str(2))
+                    points -= 2
     
-        return points
+            # -----------------------
+            # 🧤 FIELDING
+            # -----------------------
+            points += self.catches * 8
+            if self.player_id == debugPlayerID:
+                print("Catches points +", str(self.catches * 8))
+    
+            # 3 catch bonus
+            if self.catches >= 3:
+                if self.player_id == debugPlayerID:
+                    print("Catches+3 points +", str(4))
+                points += 4
+    
+            points += self.stumpings * 12
+            if self.player_id == debugPlayerID:
+                print("Stumpings points +", str(self.stumpings * 12))
+            points += self.runout_direct * 12
+            if self.player_id == debugPlayerID:
+                print("Runout direct points +", str(self.runout_direct * 12))
+            points += self.runout_indirect * 6
+            if self.player_id == debugPlayerID:
+                print("Runout indirect points +", str(self.runout_indirect * 6))
+
+            self.points = points
+            if self.player_id == 39:
+                print(str(self))
+            return points
     
     # =============================
     # PLAYER REGISTRY
@@ -544,17 +628,20 @@ try:
         # -------------------------
         # CORE: CREATE BY PID
         # -------------------------
-        def get_or_create_player(self, pid, name=None):
+        def get_or_create_player(self, pid):
     
             if not pid:
                 return None
-    
+
             if pid not in self.players:
-                if not name:
-                    name = self.registry.players.get(pid, {}).get("Name", "Unknown")
-    
-                self.players[pid] = Player(pid, name)
-    
+                
+                # ✅ Always fetch full name from registry using PID
+                player_data = self.registry.players.get(pid, {})
+                full_name = player_data.get("Name", "Unknown")
+                #print("Creating new player:", str(full_name))
+
+                self.players[pid] = Player(pid, full_name)
+
             return self.players[pid]
     
         # -------------------------
@@ -570,7 +657,7 @@ try:
                 print("❌ Player ID NOT FOUND (dismissal):", name)
                 return None
     
-            return self.get_or_create_player(pid, name)
+            return self.get_or_create_player(pid)
     
         def get_player_by_team(self, name, team):
             name = clean_name(name)
@@ -581,7 +668,7 @@ try:
                 print(f"❌ Player ID NOT FOUND in team {team} (dismissal):", name)
                 return None
     
-            return self.get_or_create_player(pid, name)
+            return self.get_or_create_player(pid)
     
         # =============================
         # PARSE SCORECARD
@@ -633,7 +720,7 @@ try:
                         print(f"❌ Missing ID (bat): {name} | {batting_team}")
                         continue
     
-                    player = self.get_or_create_player(pid, name)
+                    player = self.get_or_create_player(pid)
     
                     player.team = batting_team
                     player.played = True
@@ -673,8 +760,15 @@ try:
                     first_td = r.find("td")
                     if not first_td or not first_td.find("a"):
                         continue
-    
-                    player = self.get_or_create_player(pid, name)
+
+                    name = clean_name(first_td.get_text())
+                    pid = self.get_player_id(name, bowling_team)
+
+                    if not pid:
+                        print(f"❌ Missing ID (bowl): {name} | {bowling_team}")
+                        continue
+
+                    player = self.get_or_create_player(pid)
     
                     player.team = bowling_team
                     player.played = True
@@ -707,8 +801,9 @@ try:
                             print(f"❌ Missing ID (DNB): {name} | {batting_team}")
                             continue
     
-                        player = self.get_or_create_player(pid, name)
+                        player = self.get_or_create_player(pid)
                         player.played = True
+                        player.team = batting_team
     
                     dnb_index += 1
     
@@ -740,7 +835,7 @@ try:
                     print("❌ Missing role:", player.name)
                     continue
     
-                pts = calculate_player_points(player, role)
+                pts = player.calculate_player_points(role)
     
                 # Captain / VC multiplier
                 if pid == self.captain:
@@ -868,8 +963,8 @@ try:
             match.parse_scorecard(soup)
     
             # Debug
-            for p in match.players.values():
-                print(p.name, p.runs, p.wickets, p.catches)
+            #for p in match.players.values():
+                #print(p.name, p.runs, p.wickets, p.catches)
     
         # -------------------------
         # DETERMINE MATCH STATUS
@@ -963,7 +1058,7 @@ try:
                 if not role:
                     continue
     
-                points = calculate_player_points(player, role)
+                points = player.calculate_player_points(role)
                 player_points[pid] = points
     
             self.player_points[match_id] = player_points
@@ -1196,9 +1291,16 @@ try:
     
     # 🏠 LOGIN PAGE
     @app.get("/", response_class=HTMLResponse)
-    def login_page():
-        return """
+    def login_page(request: Request):
+        error = request.query_params.get("error", "")
+    
+        msg = ""
+        if error == "invalid":
+            msg = "<p style='color:red;'>Invalid credentials</p>"
+    
+        return f"""
         <h1>🏏 Hippies Mahasangram Login</h1>
+        {msg}
         <form action="/login" method="post">
             Mobile Number: <input type="text" name="mobile" required><br><br>
             Password: <input type="password" name="password" required><br><br>
@@ -1207,7 +1309,7 @@ try:
         """
     
     # 🔐 LOGIN API
-    @app.post("/login", response_class=HTMLResponse)
+    @app.post("/login")
     def login(request: Request, mobile: str = Form(...), password: str = Form(...)):
         users = get_cached_data("users")
     
@@ -1220,84 +1322,77 @@ try:
             allowed = str(u["Allowed"]).strip().lower()
     
             if sheet_mobile == mobile and sheet_password == password and allowed == "true":
-                name = u["Name"]
-                
-                # Set session
                 request.session['mobile'] = mobile
-                request.session['name'] = name
-                
-                # Show match list
-                matches = get_cached_data("matches")
-                html = f"""
-                       <h2>Welcome {name}</h2>
-                       <a href="/change-password"
-                          style="padding:8px 14px; background:#dc3545; color:white; text-decoration:none; border-radius:6px;">
-                          🔑 Change Password
-                       </a>
-                       <br><br>
-                       <a href="/leaderboard"
-                          style="padding:8px 14px; background:#ff9800; color:white; text-decoration:none; border-radius:6px;">
-                          🏆 Leaderboard
-                       </a>
-                       <br><br>
-                       """
-                       
-                html += """
-                <a href="/points-table"
-                   style="padding:8px 14px; background:#6f42c1; color:white; text-decoration:none; border-radius:6px;">
-                   📊 Points Table
+                request.session['name'] = u["Name"]
+    
+                return RedirectResponse(url="/dashboard", status_code=303)
+    
+        return RedirectResponse(url="/?error=invalid", status_code=303)
+        
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard(request: Request):
+        mobile = request.session.get('mobile')
+        if not mobile:
+            return RedirectResponse(url="/", status_code=302)
+    
+        name = request.session.get('name')
+        matches = get_cached_data("matches")
+    
+        html = f"""
+        <h2>Welcome {name}</h2>
+    
+        <a href="/change-password"
+           style="padding:8px 14px; background:#dc3545; color:white; text-decoration:none; border-radius:6px;">
+           🔑 Change Password
+        </a>
+        <br><br>
+    
+        <a href="/leaderboard"
+           style="padding:8px 14px; background:#ff9800; color:white; text-decoration:none; border-radius:6px;">
+           🏆 Leaderboard
+        </a>
+        <br><br>
+    
+        <a href="/points-table"
+           style="padding:8px 14px; background:#6f42c1; color:white; text-decoration:none; border-radius:6px;">
+           📊 Points Table
+        </a>
+        <br><br>
+    
+        <a href="/logout"
+           style="padding:8px 14px; background:#6c757d; color:white; text-decoration:none; border-radius:6px;">
+           🚪 Logout
+        </a>
+        <br><br>
+        """
+    
+        for m in matches:
+            locked = is_match_locked_by_row(m)
+    
+            if locked:
+                action_button = f"""
+                <a href="/view-scores?match_id={m['MatchID']}"
+                   style="padding:6px 12px; background:#28a745; color:white; text-decoration:none; border-radius:5px;">
+                   View Scores
                 </a>
-                
-                <br><br>
-                <a href="/logout"
-                   style="padding:8px 14px; background:#6c757d; color:white; text-decoration:none; border-radius:6px;">
-                   🚪 Logout
-                </a>
-                
-                <br><br>
                 """
-                
-                
+            else:
+                action_button = f"""
+                <a href="/select-team?match_id={m['MatchID']}"
+                   style="padding:6px 12px; background:#007bff; color:white; text-decoration:none; border-radius:5px;">
+                   Select Team
+                </a>
+                """
     
-                for m in matches:
-                    locked = is_match_locked_by_row(m)
+            html += f"""
+            <div style="display:flex; align-items:center; gap:20px; margin-bottom:12px;">
+                <div><b>Match {m['MatchID']}</b></div>
+                <div>{m['Team1']} vs {m['Team2']}</div>
+                <div>{action_button}</div>
+            </div>
+            """
     
-                    if locked:
-                        action_button = f"""
-                                        <a href="/view-scores?match_id={m['MatchID']}"
-                                           style="padding:6px 12px; background:#28a745; color:white; text-decoration:none; border-radius:5px;">
-                                           View Scores
-                                        </a>
-                                        """
-                    else:
-                        action_button = f"""
-                                        <a href="/select-team?match_id={m['MatchID']}"
-                                           style="padding:6px 12px; background:#007bff; color:white; text-decoration:none; border-radius:5px;">
-                                           Select Team
-                                        </a>
-                                        """
-    
-                    html += f"""
-                            <div style="display:flex; align-items:center; gap:20px; margin-bottom:12px;">
-                            
-                                <div style="font-size:18px;">
-                                    <b>Match {m['MatchID']}</b>
-                                </div>
-                            
-                                <div style="font-size:18px;">
-                                    {m['Team1']} vs {m['Team2']}
-                                </div>
-                            
-                                <div>
-                                    {action_button}
-                                </div>
-                            
-                            </div>
-                            """
-    
-                return html
-    
-        return "<h3>❌ Invalid credentials or not allowed</h3>"
+        return html
     
     # 🚪 LOGOUT
     @app.get("/logout")
@@ -1320,43 +1415,47 @@ try:
             Confirm New Password: <input type="password" name="confirm_password" required><br><br>
             <button type="submit">Change Password</button>
         </form>
-        <br><a href='javascript:window.history.back()'>⬅ Back</a>
+        <br><a href='/dashboard'>⬅ Back</a>
         """
     
     # 🔑 CHANGE PASSWORD API
-    @app.post("/change-password", response_class=HTMLResponse)
-    def change_password(request: Request, current_password: str = Form(...), new_password: str = Form(...), confirm_password: str = Form(...)):
+    @app.post("/change-password")
+    def change_password(
+        request: Request,
+        current_password: str = Form(...),
+        new_password: str = Form(...),
+        confirm_password: str = Form(...)
+    ):
         mobile = request.session.get('mobile')
         if not mobile:
             return RedirectResponse(url="/", status_code=302)
-        
+    
         if new_password != confirm_password:
-            return "<h3>❌ New passwords do not match</h3>"
+            return RedirectResponse(url="/change-password?error=nomatch", status_code=303)
     
         users = get_cached_data("users")
-        current_password = str(current_password).strip()
-        new_password = str(new_password).strip()
     
-        # Find the user
         user_row = None
         row_index = 0
-        for idx, u in enumerate(users, start=2):  # Assuming header is row 1
+    
+        for idx, u in enumerate(users, start=2):
             if str(u["Mobile"]).strip() == mobile:
                 user_row = u
                 row_index = idx
                 break
     
         if not user_row or str(user_row.get("Password", "")).strip() != current_password:
-            return "<h3>❌ Current password is incorrect</h3>"
+            return RedirectResponse(url="/change-password?error=wrongpass", status_code=303)
     
-        # Update the password in the sheet
         try:
             sheet = client.open("FantasyCricket").worksheet("Users")
-            sheet.update_cell(row_index, 4, new_password)  # Assuming Password is column D (4th column)
-            return "<h3>✅ Password changed successfully</h3><br><a href='/'>⬅ Back to Dashboard</a>"
-        except Exception as e:
-            return f"<h3>❌ Error updating password: {str(e)}</h3>"
-        
+            sheet.update_cell(row_index, 4, new_password)
+    
+            return RedirectResponse(url="/dashboard?msg=passchanged", status_code=303)
+    
+        except Exception:
+            return RedirectResponse(url="/change-password?error=server", status_code=303)
+            
     
     # 🧾 TEAM SELECTION PAGE
     @app.get("/select-team", response_class=HTMLResponse)
@@ -1737,16 +1836,7 @@ try:
                 "TRUE" if str(pid) == vice_captain else "FALSE"
             ])
     
-        return HTMLResponse("""
-        <html>
-        <body>
-        <script>
-            alert('✅ Team submitted successfully');
-            window.location.href = '/select-match';
-        </script>
-        </body>
-        </html>
-        """)
+        return RedirectResponse(url="/dashboard?msg=teamsaved", status_code=303)
     
     # 👁️ VIEW TEAMS (AFTER LOCK)
     @app.get("/view-teams", response_class=HTMLResponse)
@@ -1770,6 +1860,8 @@ try:
                 html += f"{t['User']} - Player {t['PlayerID']}<br>"
     
         return html
+    
+    tournament = Tournament()
         
     @app.get("/view-scores", response_class=HTMLResponse)
     def view_scores(match_id: str):
@@ -1789,7 +1881,7 @@ try:
             </div>
         </div>
     
-        <br><a href='javascript:window.history.back()'>⬅ Back</a>
+        <br><a href='/dashboard'>⬅ Back</a>
     
         <style>
             #players-table, #contestants-table {{
@@ -1848,10 +1940,51 @@ try:
                 }}
 
                 // Build players table
-                let playersHTML = '<table><thead><tr><th>Name</th><th>Team</th><th>Runs</th><th>Balls</th><th>Wickets</th><th>Catches</th><th>Points</th></tr></thead><tbody>';
+                let playersHTML = `
+                                  <table>
+                                  <thead>
+                                  <tr>
+                                  <th>Name</th>
+                                  <th>Team</th>
+                                  <th>Role</th>
+                                  <th>Runs</th>
+                                  <th>Balls</th>
+                                  <th>4s</th>
+                                  <th>6s</th>
+                                  <th>SR</th>
+                                  <th>Overs</th>
+                                  <th>Maidens</th>
+                                  <th>Wkts</th>
+                                  <th>B/LBW</th>
+                                  <th>Eco</th>
+                                  <th>Catches</th>
+                                  <th>RO+St</th>
+                                  <th>RO Ind</th>
+                                  <th style="font-weight: bold; color: #2e7d32;">Points</th>
+                                  </tr>
+                                  </thead>
+                                  <tbody>`;
                 data.players.forEach(p => {{
                     let rowClass = userTeam.includes(p.name) ? 'user-team' : '';
-                    playersHTML += `<tr class="${{rowClass}}"><td>${{p.name}}</td><td>${{p.team}}</td><td>${{p.runs}}</td><td>${{p.balls}}</td><td>${{p.wickets}}</td><td>${{p.catches}}</td><td>${{p.points.toFixed(2)}}</td></tr>`;
+                    playersHTML += `<tr class="${{rowClass}}">
+                                    <td>${{p.name}}</td>
+                                    <td>${{p.team}}</td>
+                                    <td>${{p.role}}</td>
+                                    <td>${{p.runs || 0}}</td>
+                                    <td>${{p.balls || 0}}</td>
+                                    <td>${{p.fours || 0}}</td>
+                                    <td>${{p.sixes || 0}}</td>
+                                    <td>${{p.strike_rate || 0}}</td>
+                                    <td>${{p.overs || 0}}</td>
+                                    <td>${{p.maidens || 0}}</td>
+                                    <td>${{p.wickets || 0}}</td>
+                                    <td>${{(p.bowled || 0) + (p.lbw || 0)}}</td>
+                                    <td>${{p.economy || 0}}</td>
+                                    <td>${{p.catches || 0}}</td>
+                                    <td>${{(p.runout_direct || 0) + (p.stumpings || 0)}}</td>
+                                    <td>${{p.runout_indirect || 0}}</td>
+                                    <td style="font-weight: bold;">${{p.points.toFixed(2)}}</td>
+                                    </tr>`;
                 }});
                 playersHTML += '</tbody></table>';
                 document.getElementById("players-table").innerHTML = playersHTML;
@@ -1889,7 +2022,7 @@ try:
     
         return html
         
-    tournament = Tournament()
+    
     
     @app.on_event("startup")
     def startup():
@@ -1916,7 +2049,7 @@ try:
         <div id="loader">Loading leaderboard...</div>
         <div id="leaderboard" style="overflow-x:auto; display:none; max-width:100%;"></div>
 
-        <br><a href='javascript:window.history.back()'>⬅ Back</a>
+        <br><a href='/dashboard'>⬅ Back</a>
 
         <style>
             #leaderboard-table {{
@@ -1938,6 +2071,10 @@ try:
             .current-user-row {{
                 background: #fff3cd;
                 font-weight: bold;
+            }}
+            .user-team {{
+                background-color: #fff3cd; /* light yellow */
+                font-weight: 600;
             }}
         </style>
 
@@ -2001,7 +2138,7 @@ try:
         <div id="loader">Loading points table...</div>
         <div id="points-container" style="overflow-x:auto; display:none; max-width:100%;"></div>
 
-        <br><a href='javascript:window.history.back()'>⬅ Back</a>
+        <br><a href='/dashboard'>⬅ Back</a>
 
         <style>
             #points-table {{
@@ -2170,7 +2307,7 @@ try:
     
     @app.get("/match-score-data")
     def match_score_data(match_id: str):
-    
+        #tournament.compute_player_points_for_match(match_id)
         matches = get_cached_data("matches")
         match_row = next((m for m in matches if str(m["MatchID"]) == str(match_id)), None)
     
@@ -2203,12 +2340,15 @@ try:
         
         # Get player points for this match
         player_points = {}
+        player_role = {}
         try:
             points_sheet = client.open("FantasyCricket").worksheet("PlayerPoints")
             points_data = points_sheet.get_all_records()
             for row in points_data:
                 if str(row["MatchID"]) == str(match_id):
-                    player_points[str(row["PlayerID"])] = float(row["Points"])
+                    pid = str(row["PlayerID"]).strip()
+                    player_points[pid] = float(row["Points"])
+                    player_role[pid] = row["Role"]
         except:
             pass
         
@@ -2217,14 +2357,28 @@ try:
         for p in players.values():
             player_id = str(p.player_id) if hasattr(p, 'player_id') else None
             points = player_points.get(player_id, 0)
+            role = player_role.get(player_id, None)
             result.append({
-                "name": p.name,
-                "team": p.team,
-                "runs": p.runs,
-                "balls": p.balls,
-                "wickets": p.wickets,
-                "catches": p.catches,
-                "points": points
+                    "name": p.name,
+                    "team": p.team,
+                    "role": role,
+                    "runs": p.runs,
+                    "balls": p.balls,
+                    "fours": p.fours,
+                    "sixes": p.sixes,
+                    "strike_rate": p.strike_rate,
+                    "overs": p.overs,
+                    "maidens": p.maidens,
+                    "runs_conceded": p.runs_conceded,
+                    "wickets": p.wickets,
+                    "bowled": p.bowled,
+                    "lbw": p.lbw,
+                    "economy": p.economy,
+                    "catches": p.catches,
+                    "runout_direct": p.runout_direct,
+                    "stumpings": p.stumpings,
+                    "runout_indirect": p.runout_indirect,
+                    "points": points
             })
         
         # Sort players by points descending
