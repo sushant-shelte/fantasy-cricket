@@ -28,7 +28,7 @@ try:
     # =============================
     # CONFIG
     # =============================
-    TEST_MODE = False
+    TEST_MODE = True
     TEST_MODE_MONTH = 3
     TEST_MODE_DATE = 22
     TEST_MODE_TIME_HR = 20
@@ -62,9 +62,11 @@ try:
         "https://www.googleapis.com/auth/drive"
     ]
     try:
-        #creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
-        creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        if (TEST_MODE):
+            creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
+        else:
+            creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     except Exception as e:
         print("❌ creds failed")
         traceback.print_exc()
@@ -570,7 +572,7 @@ try:
             self.build(players_data)
     
         def normalize(self, name):
-            return name.lower().replace(".", "").strip()
+            return " ".join(name.lower().replace(".", "").split())
     
         def build(self, players_data):
             for row in players_data:
@@ -585,7 +587,13 @@ try:
                     names.extend(row["Aliases"].split(","))
     
                 for n in names:
-                    self.lookup[(team, self.normalize(n))] = pid
+                    normalized = self.normalize(n)
+                    self.lookup[(team, normalized)] = pid
+
+                    parts = normalized.split()
+                    if len(parts) > 1:
+                        self.lookup.setdefault((team, parts[0]), pid)
+                        self.lookup.setdefault((team, parts[-1]), pid)
     
         def get_player_id(self, name, team):
             normalized_name = self.normalize(name)
@@ -641,7 +649,7 @@ try:
                 # ✅ Always fetch full name from registry using PID
                 player_data = self.registry.players.get(pid, {})
                 full_name = player_data.get("Name", "Unknown")
-                #print("Creating new player:", str(full_name))
+                print("Creating new player:", str(full_name))
 
                 self.players[pid] = Player(pid, full_name)
 
@@ -680,43 +688,110 @@ try:
     
             # ✅ CLEAR OLD PLAYER DATA BEFORE PARSING NEW SCORECARD
             self.players = {}
+
+            def get_table_rows(table):
+                rows = []
+                for row in table.find_all("tr"):
+                    if row.find_parent("table") == table:
+                        rows.append(row)
+                return rows
+
+            def get_row_cells(row, allowed_tags=("td", "th")):
+                cells = []
+                for tag in allowed_tags:
+                    for cell in row.find_all(tag):
+                        if cell.find_parent("tr") == row:
+                            cells.append(cell)
+                return cells
+
+            def is_int_text(value):
+                return bool(re.fullmatch(r"\d+", str(value).strip()))
+
+            def is_float_text(value):
+                return bool(re.fullmatch(r"\d+(?:\.\d+)?", str(value).strip()))
+
+            def extract_team_names():
+                valid_names = []
+                seen = set()
+
+                for tag in soup.find_all(class_="ScorecardCountry3"):
+                    text = clean_team_name(tag.get_text(" ", strip=True))
+                    if text in TEAM_MAP.values() and text not in seen:
+                        seen.add(text)
+                        valid_names.append(text)
+
+                return valid_names
     
-            team_tags = soup.find_all(class_="ScorecardCountry3")
-    
-            if len(team_tags) < 2:
+            team_names = extract_team_names()
+
+            if len(team_names) < 2:
                 print("❌ Teams not found")
                 return
     
-            team1_clean = clean_team_name(team_tags[0].get_text(strip=True))
-            team2_clean = clean_team_name(team_tags[1].get_text(strip=True))
+            team1_clean = team_names[0]
+            team2_clean = team_names[1]
+            print("While parsing scoreboard - " + str(team1_clean) + " vs " + str(team2_clean))
+            batting_order = []
     
             # ---------------------------
             # 🟢 BATTING
             # ---------------------------
-            batting_tables = [t for t in soup.find_all("table") if "BATTING" in t.text]
+            batting_tables = []
+            seen_tables = set()
+            for cell in soup.find_all(["td", "th"]):
+                if cell.get_text(" ", strip=True).upper() != "BATTING":
+                    continue
+
+                table = cell.find_parent("table")
+                if not table:
+                    continue
+
+                table_id = id(table)
+                if table_id in seen_tables:
+                    continue
+
+                seen_tables.add(table_id)
+                batting_tables.append(table)
     
             for i, table in enumerate(batting_tables):
+
+                if i >= 2:
+                    break
     
                 batting_team = team1_clean if i == 0 else team2_clean
                 bowling_team = team2_clean if batting_team == team1_clean else team1_clean
+                innings_started = False
     
-                for r in table.find_all("tr"):
-                    cols = [c.text.strip() for c in r.find_all("td")]
+                for r in get_table_rows(table):
+                    tds = get_row_cells(r, ("td",))
+
+                    cols = [c.get_text(" ", strip=True) for c in tds]
     
                     # Header/summary rows can appear in the table; ignore non-player rows.
                     if len(cols) < 7:
                         continue
 
                     first_col_label = cols[0].upper()
-                    if first_col_label in ("BATTING", "BOWLING", "TOTAL", "EXTRAS", "DNB", "SR", "R"):
+                    if first_col_label == "BATTING":
+                        if innings_started and batting_team == team1_clean:
+                            batting_team = team2_clean
+                            bowling_team = team1_clean
+                        continue
+
+                    if first_col_label in ("BOWLING", "TOTAL", "EXTRAS", "DNB", "SR", "R"):
                         continue
 
                     # Batting names are typically links; skip rows without player link.
-                    first_td = r.find("td")
+                    first_td = tds[0] if tds else None
                     if not first_td or not first_td.find("a"):
                         continue
 
-                    name = clean_name(cols[0])
+                    # Real batting rows have numeric stat columns for runs/balls/4s/6s.
+                    if not all(is_int_text(cols[idx]) for idx in (2, 3, 4, 5)):
+                        continue
+
+                    name_link = first_td.find("a")
+                    name = clean_name(name_link.get_text(" ", strip=True))
                     pid = self.get_player_id(name, batting_team)
 
                     if not pid:
@@ -724,6 +799,10 @@ try:
                         continue
     
                     player = self.get_or_create_player(pid)
+                    innings_started = True
+
+                    if batting_team not in batting_order:
+                        batting_order.append(batting_team)
     
                     player.team = batting_team
                     player.played = True
@@ -738,6 +817,40 @@ try:
     
                     # ✅ Pass bowling team into dismissal parser (dismissal is from bowling side)
                     player.apply_dismissal(cols[1], self, bowling_team)
+
+                # Parse "Did Not Bat" within the same batting table so team assignment
+                # follows the actual innings context instead of page-wide td order.
+                current_batting_team = team1_clean if i == 0 else team2_clean
+                innings_seen = False
+
+                for td in table.find_all("td"):
+                    td_text = td.get_text(" ", strip=True)
+
+                    if td_text.upper() == "BATTING":
+                        if innings_seen and current_batting_team == team1_clean:
+                            current_batting_team = team2_clean
+                        continue
+
+                    if "Did Not Bat" not in td_text:
+                        continue
+
+                    next_td = td.find_next_sibling("td")
+                    if not next_td:
+                        continue
+
+                    for p in next_td.find_all("a"):
+                        name = clean_name(p.get_text(" ", strip=True))
+                        pid = self.get_player_id(name, current_batting_team)
+
+                        if not pid:
+                            print(f"❌ Missing ID (DNB): {name} | {current_batting_team}")
+                            continue
+
+                        player = self.get_or_create_player(pid)
+                        player.played = True
+                        player.team = current_batting_team
+
+                    innings_seen = True
     
             # ---------------------------
             # 🔵 BOWLING
@@ -745,11 +858,16 @@ try:
             bowling_tables = soup.find_all(class_="ScorecardBowling")
     
             for i, table in enumerate(bowling_tables):
+
+                if i >= 2:
+                    break
     
                 bowling_team = team2_clean if i == 0 else team1_clean
     
-                for r in table.find_all("tr")[1:]:
-                    cols = [c.text.strip() for c in r.find_all("td")]
+                for r in get_table_rows(table)[1:]:
+                    tds = get_row_cells(r, ("td",))
+
+                    cols = [c.get_text(" ", strip=True) for c in tds]
     
                     # Ignore non-player/bowling-summary rows
                     if len(cols) < 5:
@@ -760,8 +878,12 @@ try:
                         continue
 
                     # Bowling names are typically links; skip rows without player link.
-                    first_td = r.find("td")
+                    first_td = tds[0] if tds else None
                     if not first_td or not first_td.find("a"):
+                        continue
+
+                    # Real bowling rows have numeric overs/maidens/runs/wickets columns.
+                    if not is_float_text(cols[1]) or not all(is_int_text(cols[idx]) for idx in (2, 3, 4)):
                         continue
 
                     name = clean_name(first_td.get_text())
@@ -783,32 +905,6 @@ try:
                     if player.overs > 0:
                         # ✅ Round to 2 decimals to avoid floating point precision issues
                         player.economy = round(player.runs_conceded / player.overs, 2)
-    
-            # ---------------------------
-            # 🟡 DID NOT BAT
-            # ---------------------------
-            tds = soup.find_all("td")
-            dnb_index = 0
-    
-            for i, td in enumerate(tds):
-                if "Did Not Bat" in td.get_text():
-    
-                    batting_team = team1_clean if dnb_index == 0 else team2_clean
-                    next_td = tds[i + 1]
-    
-                    for p in next_td.find_all("a"):
-                        name = clean_name(p.get_text())
-                        pid = self.get_player_id(name, batting_team)
-    
-                        if not pid:
-                            print(f"❌ Missing ID (DNB): {name} | {batting_team}")
-                            continue
-    
-                        player = self.get_or_create_player(pid)
-                        player.played = True
-                        player.team = batting_team
-    
-                    dnb_index += 1
     
             print(f"✅ Total players parsed: {len(self.players)}")
             
