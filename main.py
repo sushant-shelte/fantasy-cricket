@@ -3160,6 +3160,10 @@ try:
             }
             for c in tournament.contestants.values()
         ]
+    
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
 
 except Exception as e:
     print("❌ STARTUP ERROR:")
