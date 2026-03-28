@@ -28,7 +28,7 @@ try:
     # =============================
     # CONFIG
     # =============================
-    TEST_MODE = True
+    TEST_MODE = False
     TEST_MODE_MONTH = 3
     TEST_MODE_DATE = 22
     TEST_MODE_TIME_HR = 20
