@@ -153,9 +153,12 @@ export default function SelectTeamPage() {
       };
       await client.post('/api/teams', payload);
       setSuccess('Team saved successfully!');
-      setTimeout(() => navigate('/dashboard'), 1500);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => navigate('/dashboard'), 2000);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to save team.');
+      const msg = err?.response?.data?.detail || err?.response?.data?.error || 'Failed to save team.';
+      setError(msg);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setSubmitting(false);
     }
