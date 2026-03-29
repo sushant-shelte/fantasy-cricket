@@ -1,24 +1,12 @@
-from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
 
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
-from backend.config import IST, ROLES
+from backend.config import ROLES
 from backend.services.scraper import build_ipl_playing_xi_url, fetch_playing_xi
 
 router = APIRouter(prefix="/api", tags=["players"])
-
-
-def _should_fetch_playing_xi(match_date: str, match_time: str) -> bool:
-    try:
-        match_datetime = IST.localize(datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M"))
-    except Exception:
-        return False
-
-    now = datetime.now(IST)
-    return now >= match_datetime - timedelta(minutes=30)
-
 
 @router.get("/players")
 async def list_players(
@@ -77,8 +65,7 @@ async def list_players(
             "url": build_ipl_playing_xi_url(match_id, team1, team2),
             "player_ids": [],
         }
-        if _should_fetch_playing_xi(match["match_date"], match["match_time"]):
-            playing_xi_data = fetch_playing_xi(match_id, team1, team2, players)
+        playing_xi_data = fetch_playing_xi(match_id, team1, team2, players)
 
         playing_ids = set(playing_xi_data["player_ids"])
         playing_ids_complete = len(playing_ids) >= 18

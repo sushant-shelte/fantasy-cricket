@@ -58,6 +58,30 @@ def build_ipl_playing_xi_url(match_id: int, team1: str, team2: str) -> str:
     )
 
 
+def build_ipl_playing_xi_urls(match_id: int, team1: str, team2: str) -> list[str]:
+    espn_match_id = int(match_id) + ESPN_MATCH_ID_OFFSET
+    team1_slug = _slugify(_expand_team_name(team1))
+    team2_slug = _slugify(_expand_team_name(team2))
+    matchup_slug = f"{team1_slug}-vs-{team2_slug}"
+
+    candidates = [
+        build_ipl_playing_xi_url(match_id, team1, team2),
+        f"https://www.espncricinfo.com/series/{ESPN_IPL_SERIES_SLUG}-{ESPN_IPL_SERIES_ID}/{matchup_slug}-match-{espn_match_id}/match-playing-xi",
+        f"https://www.espncricinfo.com/series/{ESPN_IPL_SERIES_SLUG}-{ESPN_IPL_SERIES_ID}/{matchup_slug}-{espn_match_id}/match-playing-xi",
+        f"https://www.espncricinfo.com/series/{ESPN_IPL_SERIES_SLUG}-{ESPN_IPL_SERIES_ID}/{matchup_slug}-{_ordinal(int(match_id))}-match-{espn_match_id}/live-cricket-score",
+        f"https://www.espncricinfo.com/series/{ESPN_IPL_SERIES_SLUG}-{ESPN_IPL_SERIES_ID}/{matchup_slug}-match-{espn_match_id}/live-cricket-score",
+    ]
+
+    unique_candidates: list[str] = []
+    seen = set()
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            unique_candidates.append(candidate)
+
+    return unique_candidates
+
+
 def _normalize_player_name(name: str) -> str:
     name = re.sub(r"[\u2020\u2021*]", "", str(name))
     name = re.sub(r"\s*\((?:c|wk|sub)\)\s*$", "", name, flags=re.IGNORECASE)
@@ -186,32 +210,36 @@ def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_row
 
 
 def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[dict]) -> dict:
-    url = build_ipl_playing_xi_url(match_id, team1, team2)
+    urls = build_ipl_playing_xi_urls(match_id, team1, team2)
 
     try:
-        res = _session_get(url)
-        if res.status_code != 200:
-            return {"announced": False, "url": url, "player_ids": []}
+        for url in urls:
+            res = _session_get(url)
+            if res.status_code != 200:
+                continue
 
-        json_ids = _extract_playing_xi_from_json(res.text, players_rows)
-        text_ids = _extract_playing_xi_from_text(res.text, team1, team2, players_rows)
-        playing_ids = json_ids | text_ids
+            json_ids = _extract_playing_xi_from_json(res.text, players_rows)
+            text_ids = _extract_playing_xi_from_text(res.text, team1, team2, players_rows)
+            playing_ids = json_ids | text_ids
 
-        announced = (
-            len(text_ids) >= 18
-            or len(json_ids) >= 18
-            or len(playing_ids) >= 18
-            or "playing xi" in res.text.lower()
-        )
+            announced = (
+                len(text_ids) >= 18
+                or len(json_ids) >= 18
+                or len(playing_ids) >= 18
+                or "playing xi" in res.text.lower()
+                or "match-playing-xi" in url.lower()
+            )
 
-        if not announced:
-            return {"announced": False, "url": url, "player_ids": []}
+            if not announced:
+                continue
 
-        return {
-            "announced": True,
-            "url": url,
-            "player_ids": sorted(playing_ids),
-        }
+            return {
+                "announced": True,
+                "url": url,
+                "player_ids": sorted(playing_ids),
+            }
+
+        return {"announced": False, "url": urls[0], "player_ids": []}
     except Exception as e:
         print("Error fetching playing XI:", e)
-        return {"announced": False, "url": url, "player_ids": []}
+        return {"announced": False, "url": urls[0], "player_ids": []}
