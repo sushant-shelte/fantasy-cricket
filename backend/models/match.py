@@ -60,9 +60,7 @@ class Match:
 
     def parse_scorecard(self, soup):
         self.players = {}
-        if self.parse_espn_scorecard(soup):
-            return
-        self.parse_legacy_scorecard(soup)
+        self.parse_espn_scorecard(soup)
 
     def parse_espn_scorecard(self, soup):
         lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
