@@ -25,8 +25,8 @@ async def get_current_user(authorization: str = Header(default=None)):
 
             return dict(user)
 
-    # Fallback: dev mode — return first user
-    user = db.execute("SELECT * FROM users WHERE id = 1").fetchone()
+    # Fallback: dev mode — return first available user
+    user = db.execute("SELECT * FROM users ORDER BY id LIMIT 1").fetchone()
     if user:
         return dict(user)
 
