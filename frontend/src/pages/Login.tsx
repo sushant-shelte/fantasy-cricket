@@ -157,7 +157,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <div className="relative text-center text-indigo-400/40 text-xs py-4">
-        Built by Sushant & Rupesh
+        Built by Fantasy Cricket Team
       </div>
     </div>
   );

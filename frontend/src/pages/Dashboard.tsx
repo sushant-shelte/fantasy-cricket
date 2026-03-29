@@ -229,7 +229,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="text-center text-white/10 text-xs py-6">
-        Built by Sushant & Rupesh
+        Built by Fantasy Cricket Team
       </div>
     </div>
   );
