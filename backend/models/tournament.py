@@ -110,6 +110,38 @@ class Tournament:
             role = self.player_roles.get(pid)
             if role:
                 player_points[pid] = player.calculate_player_points(role)
+                if int(pid) == 86:
+                    print(
+                        "[DEBUG player 86]",
+                        {
+                            "match_id": match_id,
+                            "player_id": pid,
+                            "name": player.name,
+                            "team": player.team,
+                            "role": role,
+                            "played": player.played,
+                            "runs": player.runs,
+                            "balls": player.balls,
+                            "fours": player.fours,
+                            "sixes": player.sixes,
+                            "strike_rate": player.strike_rate,
+                            "overs": player.overs,
+                            "maidens": player.maidens,
+                            "runs_conceded": player.runs_conceded,
+                            "wickets": player.wickets,
+                            "dot_balls": player.dot_balls,
+                            "bowled": player.bowled,
+                            "lbw": player.lbw,
+                            "economy": player.economy,
+                            "catches": player.catches,
+                            "runout_direct": player.runout_direct,
+                            "runout_indirect": player.runout_indirect,
+                            "stumpings": player.stumpings,
+                            "dismissal": player.dismissal,
+                            "is_out": player.is_out,
+                            "points": player_points[pid],
+                        },
+                    )
         self.player_points[match_id] = player_points
 
     def compute_points_for_match(self, match_id):

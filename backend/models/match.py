@@ -67,6 +67,19 @@ class Match:
         valid_teams = {self.team1, self.team2}
         reverse_team_map = {short: full for full, short in TEAM_MAP.items() if len(short) <= 4}
 
+        def team_variants(team):
+            variants = {team.lower()}
+            full_name = reverse_team_map.get(team, team)
+            variants.add(full_name.lower())
+            return variants
+
+        # Reject scorecards whose visible title/header teams do not match this match.
+        joined_head = " ".join(lines[:80]).lower()
+        if not any(name in joined_head for name in team_variants(self.team1)):
+            return False
+        if not any(name in joined_head for name in team_variants(self.team2)):
+            return False
+
         def mark_player_played(name, team):
             cleaned = str(name).strip()
             cleaned = re.sub(r"^\d+\s*[.)-]?\s*", "", cleaned)
@@ -188,7 +201,7 @@ class Match:
             return get_batter_layout(index, end) is not None
 
         def looks_like_bowler_row(index, end):
-            if index + 5 >= end:
+            if index + 6 >= end:
                 return False
             name = lines[index]
             if name.upper() in {"BOWLING", "O", "M", "R", "W", "ECON", "0S", "4S", "6S", "WD", "NB"}:
@@ -196,8 +209,32 @@ class Match:
             return (
                 is_float_text(lines[index + 1]) and is_int_text(lines[index + 2]) and
                 is_int_text(lines[index + 3]) and is_int_text(lines[index + 4]) and
-                is_float_text(lines[index + 5])
+                is_float_text(lines[index + 5]) and is_int_text(lines[index + 6])
             )
+
+        def is_reasonable_bowling_row(index):
+            try:
+                overs = float(lines[index + 1])
+                maidens = int(lines[index + 2])
+                runs = int(lines[index + 3])
+                wickets = int(lines[index + 4])
+                dot_balls = int(lines[index + 6])
+            except Exception:
+                return False
+
+            # Defensive bounds for T20 bowling; reject obviously corrupted rows.
+            if overs < 0 or overs > 4.0:
+                return False
+            if maidens < 0 or maidens > 4:
+                return False
+            if runs < 0 or runs > 80:
+                return False
+            if wickets < 0 or wickets > 5:
+                return False
+            if dot_balls < 0 or dot_balls > 24:
+                return False
+
+            return True
 
         innings_headers = find_innings_headers()
         if not innings_headers:
@@ -261,6 +298,9 @@ class Match:
                 idx = bowling_idx + 1
                 while idx < section_end:
                     if looks_like_bowler_row(idx, section_end):
+                        if not is_reasonable_bowling_row(idx):
+                            idx += 1
+                            continue
                         name = clean_name(lines[idx])
                         pid = self.get_player_id(name, bowling_team)
                         if not pid:
@@ -276,7 +316,7 @@ class Match:
                         player.dot_balls = int(lines[idx + 6])
                         if player.overs > 0:
                             player.economy = round(player.runs_conceded / player.overs, 2)
-                        idx += 6
+                        idx += 7
                         continue
                     idx += 1
 
