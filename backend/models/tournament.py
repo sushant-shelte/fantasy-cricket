@@ -1,8 +1,9 @@
 import time
 import threading
+import traceback
 from datetime import datetime, timedelta
 
-from backend.config import IST, MATCH_CODE_OFFSET, ESPN_MATCH_ID_OFFSET
+from backend.config import IST, ESPN_MATCH_ID_OFFSET
 from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
@@ -110,7 +111,8 @@ class Tournament:
                     "Points": round(pts, 2),
                     "LastUpdated": now_str,
                 })
-        data_service.save_contestant_points(rows)
+        if rows:
+            data_service.save_contestant_points(rows)
 
     def persist_player_points_to_local(self):
         now_str = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
@@ -133,17 +135,25 @@ class Tournament:
                     "Points": round(points, 2),
                     "LastUpdated": now_str,
                 })
-        data_service.save_player_points(rows)
+        if rows:
+            data_service.save_player_points(rows)
 
     def start_scheduler(self):
         def run():
             while True:
                 try:
+                    print("\n--- Scheduler tick ---")
                     matches_data = data_service.get_cached_data("matches")
-                    computed = {
-                        (str(r["Mobile"]), str(r["MatchID"])): r["Points"]
-                        for r in data_service.get_contestant_points()
-                    }
+
+                    # Get already computed match IDs from player_points
+                    computed_matches = set()
+                    try:
+                        pp = data_service.get_player_points()
+                        computed_matches = {str(r["MatchID"]) for r in pp}
+                    except Exception:
+                        pass
+
+                    processed = 0
 
                     for m in matches_data:
                         match_id = str(m["MatchID"])
@@ -152,33 +162,43 @@ class Tournament:
                         if status == "future":
                             continue
 
-                        if status == "live":
-                            self.update_match_data(match_id)
-                            self.compute_player_points_for_match(match_id)
-                            self.compute_points_for_match(match_id)
-                            continue
-
-                        if status == "over":
-                            already = any(
-                                (c.mobile, match_id) in computed
-                                for c in self.contestants.values()
-                            )
-                            if already:
-                                for c in self.contestants.values():
-                                    key = (c.mobile, match_id)
-                                    if key in computed:
-                                        c.points[match_id] = computed[key]
-                            else:
+                        # Per-match error handling — one failure doesn't stop others
+                        try:
+                            if status == "live":
+                                print(f"  Match {match_id}: LIVE — fetching scores")
                                 self.update_match_data(match_id)
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
+                                processed += 1
 
-                    self.persist_to_local()
-                    self.persist_player_points_to_local()
+                            elif status == "over":
+                                if match_id in computed_matches:
+                                    # Already computed, skip scraping
+                                    continue
+
+                                print(f"  Match {match_id}: OVER — computing for first time")
+                                self.update_match_data(match_id)
+                                self.compute_player_points_for_match(match_id)
+                                self.compute_points_for_match(match_id)
+                                processed += 1
+
+                        except Exception as e:
+                            print(f"  Match {match_id}: ERROR — {e}")
+                            traceback.print_exc()
+                            continue  # Keep processing other matches
+
+                    # Only persist if we processed something
+                    if processed > 0:
+                        try:
+                            self.persist_player_points_to_local()
+                            self.persist_to_local()
+                            print(f"  Persisted {processed} matches")
+                        except Exception as e:
+                            print(f"  Persist ERROR: {e}")
+                            traceback.print_exc()
 
                 except Exception as e:
-                    import traceback
-                    print(f"Scheduler error: {e}")
+                    print(f"Scheduler outer error: {e}")
                     traceback.print_exc()
 
                 time.sleep(60)
