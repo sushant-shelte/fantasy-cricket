@@ -90,15 +90,16 @@ if os.path.isdir(STATIC_DIR):
     # Serve static assets (js, css, images)
     app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="static-assets")
 
-    # Serve other static files (favicon, etc)
-    @app.get("/favicon.svg")
-    async def favicon():
-        return FileResponse(os.path.join(STATIC_DIR, "favicon.svg"))
-
-    # Catch-all: serve index.html for React Router (must be LAST)
+    # Catch-all: serve static files if they exist, otherwise index.html for React Router
     @app.get("/{full_path:path}")
     async def serve_spa(request: Request, full_path: str):
-        # Don't intercept API routes
         if full_path.startswith("api/"):
             return {"detail": "Not found"}
+
+        # Check if it's a real file in dist/
+        file_path = os.path.join(STATIC_DIR, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+
+        # Otherwise serve index.html for React Router
         return FileResponse(os.path.join(STATIC_DIR, "index.html"))
