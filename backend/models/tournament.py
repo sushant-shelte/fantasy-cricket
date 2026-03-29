@@ -33,14 +33,18 @@ class Tournament:
             self.matches[match_id] = Match(match_id, m["Team1"], m["Team2"], self.registry)
 
         for row in teams_data:
-            mobile = str(row["Mobile"])
+            contestant_key = str(row.get("UserID") or row.get("Mobile") or row.get("User"))
             match_id = str(row["MatchID"])
             pid = int(row["PlayerID"])
 
-            if mobile not in self.contestants:
-                self.contestants[mobile] = Contestant(row["User"], mobile)
+            if contestant_key not in self.contestants:
+                self.contestants[contestant_key] = Contestant(
+                    row["User"],
+                    str(row.get("Mobile") or ""),
+                    row.get("UserID"),
+                )
 
-            contestant = self.contestants[mobile]
+            contestant = self.contestants[contestant_key]
             if match_id not in contestant.teams:
                 contestant.teams[match_id] = Team(match_id)
 
@@ -156,6 +160,7 @@ class Tournament:
         for contestant in self.contestants.values():
             for match_id, pts in contestant.points.items():
                 rows.append({
+                    "UserID": contestant.user_id,
                     "User": contestant.name,
                     "Mobile": contestant.mobile,
                     "MatchID": match_id,

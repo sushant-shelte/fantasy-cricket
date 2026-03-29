@@ -223,6 +223,7 @@ def get_teams() -> list[dict]:
     rows = db.execute(
         """
         SELECT
+            u.id     AS user_id,
             u.name   AS user_name,
             u.mobile AS mobile,
             ut.match_id,
@@ -238,6 +239,7 @@ def get_teams() -> list[dict]:
 
     return [
         {
+            "UserID": r["user_id"],
             "User": r["user_name"],
             "Mobile": r["mobile"] or "",
             "MatchID": str(r["match_id"]),
@@ -314,6 +316,7 @@ def get_contestant_points() -> list[dict]:
     rows = db.execute(
         """
         SELECT
+            u.id     AS user_id,
             u.name   AS user_name,
             u.mobile AS mobile,
             cp.match_id,
@@ -325,6 +328,7 @@ def get_contestant_points() -> list[dict]:
     ).fetchall()
     return [
         {
+            "UserID": r["user_id"],
             "User": r["user_name"],
             "Mobile": r["mobile"] or "",
             "MatchID": str(r["match_id"]),
@@ -345,14 +349,19 @@ def save_contestant_points(rows: list[dict]) -> None:
     db = get_db()
 
     for row in rows:
-        mobile = str(row["Mobile"])
+        user_id = row.get("UserID")
+        mobile = str(row.get("Mobile", ""))
         match_id = int(row["MatchID"])
         points = float(row["Points"])
         last_updated = row.get("LastUpdated", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-        user = db.execute(
-            "SELECT id FROM users WHERE mobile = ?", (mobile,)
-        ).fetchone()
+        user = None
+        if user_id is not None:
+            user = db.execute("SELECT id FROM users WHERE id = ?", (int(user_id),)).fetchone()
+        if not user and mobile:
+            user = db.execute(
+                "SELECT id FROM users WHERE mobile = ?", (mobile,)
+            ).fetchone()
         if not user:
             continue
 
