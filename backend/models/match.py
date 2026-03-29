@@ -172,6 +172,23 @@ class Match:
         def is_float_text(value):
             return bool(re.fullmatch(r"\d+(?:\.\d+)?", str(value).strip()))
 
+        def is_reasonable_batter_values(runs, balls, fours, sixes, strike_rate):
+            if runs < 0 or runs > 300:
+                return False
+            if balls < 0 or balls > 200:
+                return False
+            if fours < 0 or fours > 40:
+                return False
+            if sixes < 0 or sixes > 25:
+                return False
+            if strike_rate < 0 or strike_rate > 400:
+                return False
+            if balls > 0 and (fours > balls or sixes > balls):
+                return False
+            if runs >= 0 and (fours * 4 + sixes * 6 > runs + 36):
+                return False
+            return True
+
         def get_batter_layout(index, end):
             # 8-column layout (with minutes column)
             if index + 7 < end and (
@@ -179,14 +196,26 @@ class Match:
                 is_int_text(lines[index + 4]) and is_int_text(lines[index + 5]) and
                 is_int_text(lines[index + 6]) and is_float_text(lines[index + 7])
             ):
-                return {"step": 8, "runs_idx": 2, "balls_idx": 3, "fours_idx": 5, "sixes_idx": 6, "sr_idx": 7}
+                runs = int(lines[index + 2])
+                balls = int(lines[index + 3])
+                fours = int(lines[index + 5])
+                sixes = int(lines[index + 6])
+                strike_rate = float(lines[index + 7])
+                if is_reasonable_batter_values(runs, balls, fours, sixes, strike_rate):
+                    return {"step": 8, "runs_idx": 2, "balls_idx": 3, "fours_idx": 5, "sixes_idx": 6, "sr_idx": 7}
             # 7-column layout
             if index + 6 < end and (
                 is_int_text(lines[index + 2]) and is_int_text(lines[index + 3]) and
                 is_int_text(lines[index + 4]) and is_int_text(lines[index + 5]) and
                 is_float_text(lines[index + 6])
             ):
-                return {"step": 7, "runs_idx": 2, "balls_idx": 3, "fours_idx": 4, "sixes_idx": 5, "sr_idx": 6}
+                runs = int(lines[index + 2])
+                balls = int(lines[index + 3])
+                fours = int(lines[index + 4])
+                sixes = int(lines[index + 5])
+                strike_rate = float(lines[index + 6])
+                if is_reasonable_batter_values(runs, balls, fours, sixes, strike_rate):
+                    return {"step": 7, "runs_idx": 2, "balls_idx": 3, "fours_idx": 4, "sixes_idx": 5, "sr_idx": 6}
             return None
 
         def looks_like_batter_row(index, end):
