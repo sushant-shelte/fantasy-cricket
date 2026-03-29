@@ -52,6 +52,7 @@ export type PlayerScore = {
   maidens: number;
   runs_conceded: number;
   wickets: number;
+  dot_balls: number;
   bowled: number;
   lbw: number;
   economy: number;
