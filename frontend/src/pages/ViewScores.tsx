@@ -37,6 +37,9 @@ interface TeamDiffData {
 
 interface Contestant { id: number; name: string; }
 
+interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; }
+interface BreakdownData { user_name: string; total: number; players: BreakdownPlayer[]; error?: string; }
+
 const ROLE_SYMBOLS: Record<string, { symbol: string; label: string }> = {
   Batter: { symbol: '🏏', label: 'Batter' },
   Bowler: { symbol: '◎', label: 'Bowler' },
@@ -60,8 +63,6 @@ export default function ViewScoresPage() {
   const [tab, setTab] = useState<'scores' | 'myteam' | 'diff'>(initialTab);
 
   // Team breakdown state
-  interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; }
-  interface BreakdownData { user_name: string; total: number; players: BreakdownPlayer[]; error?: string; }
   const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
   const [breakdownLoading, setBreakdownLoading] = useState(false);
 
@@ -135,12 +136,13 @@ export default function ViewScoresPage() {
   }
 
   const sortedContestants = [...contestants].sort((a, b) => b.points - a.points);
-  const rankedContestants = sortedContestants.map((entry, i) => {
+  const rankedContestants: (ContestantScore & { rank: number })[] = [];
+  sortedContestants.forEach((entry, i) => {
     let rank = i + 1;
-    if (i > 0 && sortedContestants[i].points === sortedContestants[i - 1].points) {
+    if (i > 0 && entry.points === sortedContestants[i - 1].points) {
       rank = rankedContestants[i - 1].rank;
     }
-    return { ...entry, rank };
+    rankedContestants.push({ ...entry, rank });
   });
 
   const renderPlayerEntry = (entry: TeamDiffEntry | null, side: 'left' | 'right') => {
