@@ -37,6 +37,13 @@ interface TeamDiffData {
 
 interface Contestant { id: number; name: string; }
 
+const ROLE_SYMBOLS: Record<string, { symbol: string; label: string }> = {
+  Batter: { symbol: '🏏', label: 'Batter' },
+  Bowler: { symbol: '◎', label: 'Bowler' },
+  AllRounder: { symbol: '🏏◎', label: 'All-Rounder' },
+  Wicketkeeper: { symbol: '|||', label: 'Wicketkeeper' },
+};
+
 export default function ViewScoresPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const { profile } = useAuth();
@@ -129,6 +136,18 @@ export default function ViewScoresPage() {
     );
   };
 
+  const renderRoleSymbol = (role: string) => {
+    const config = ROLE_SYMBOLS[role] || { symbol: role.slice(0, 2).toUpperCase(), label: role };
+    return (
+      <span
+        title={config.label}
+        className="inline-flex min-w-[2.75rem] justify-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-indigo-200"
+      >
+        {config.symbol}
+      </span>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900">
       {/* Header */}
@@ -168,36 +187,47 @@ export default function ViewScoresPage() {
             {/* Player Stats */}
             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-white/10">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="text-white font-semibold">Player Statistics</h2>
-                  <span className="text-[11px] text-indigo-400 whitespace-nowrap">
-                    Scroll to view all columns
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-indigo-400">
+                    <span className="whitespace-nowrap">Scroll to view all columns</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">🏏 Batter</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">◎ Bowler</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">🏏◎ All-Rounder</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">||| WK</span>
+                  </div>
                 </div>
               </div>
-              <div className="max-h-[70vh] overflow-auto">
-                <table className="min-w-[1100px] w-full text-sm">
+              <div className="max-h-[72vh] overflow-auto">
+                <table className="min-w-[1600px] w-full text-sm">
                   <thead>
                     <tr className="bg-white/5 text-indigo-300 text-xs uppercase tracking-wider">
                       <th className="sticky top-0 left-0 bg-slate-900 z-20 px-4 py-3 text-left font-medium">Player</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Pts</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-left font-medium">Team</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-left font-medium">Role</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-center font-medium">Role</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-center font-medium">P</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-center font-medium">Out</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Runs</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Balls</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">4s</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">6s</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">SR</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Overs</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Mdns</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Runs Ag</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Wkts</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Dots</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Econ</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Ct</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">St</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">RO-D</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">RO-I</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {playerScores.length === 0 ? (
-                      <tr><td colSpan={14} className="px-4 py-8 text-center text-indigo-400">No scores available yet.</td></tr>
+                      <tr><td colSpan={20} className="px-4 py-8 text-center text-indigo-400">No scores available yet.</td></tr>
                     ) : (
                       playerScores.map((p, i) => {
                         const isMyPlayer = myTeam.has(p.name);
@@ -209,17 +239,24 @@ export default function ViewScoresPage() {
                             </td>
                             <td className="px-3 py-2.5 text-right font-bold text-green-400">{p.points}</td>
                             <td className="px-3 py-2.5 text-indigo-300">{p.team}</td>
-                            <td className="px-3 py-2.5 text-xs text-indigo-300">{p.role}</td>
+                            <td className="px-3 py-2.5 text-center">{renderRoleSymbol(p.role)}</td>
+                            <td className="px-3 py-2.5 text-center text-white">{p.played ? 'Y' : 'N'}</td>
+                            <td className="px-3 py-2.5 text-center text-white">{p.is_out ? 'Y' : 'N'}</td>
                             <td className="px-3 py-2.5 text-right text-white">{p.runs}</td>
                             <td className="px-3 py-2.5 text-right text-indigo-300">{p.balls}</td>
                             <td className="px-3 py-2.5 text-right text-indigo-300">{p.fours}</td>
                             <td className="px-3 py-2.5 text-right text-indigo-300">{p.sixes}</td>
                             <td className="px-3 py-2.5 text-right text-indigo-300">{p.strike_rate?.toFixed(1)}</td>
                             <td className="px-3 py-2.5 text-right text-indigo-300">{p.overs}</td>
+                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.maidens}</td>
+                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.runs_conceded}</td>
                             <td className="px-3 py-2.5 text-right text-white">{p.wickets}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{(p as any).dot_balls || 0}</td>
+                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.dot_balls}</td>
                             <td className="px-3 py-2.5 text-right text-indigo-300">{p.economy?.toFixed(1)}</td>
                             <td className="px-3 py-2.5 text-right text-indigo-300">{p.catches}</td>
+                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.stumpings}</td>
+                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.runout_direct}</td>
+                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.runout_indirect}</td>
                           </tr>
                         );
                       })

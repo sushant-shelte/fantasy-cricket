@@ -41,6 +41,8 @@ export type PlayerScore = {
   name: string;
   team: string;
   role: string;
+  played: boolean;
+  is_out: boolean;
   runs: number;
   balls: number;
   fours: number;

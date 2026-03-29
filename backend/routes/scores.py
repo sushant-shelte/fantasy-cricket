@@ -94,6 +94,8 @@ async def match_scores(
             "name": p.name,
             "team": p.team,
             "role": role,
+            "played": p.played,
+            "is_out": p.is_out,
             "runs": p.runs,
             "balls": p.balls,
             "fours": p.fours,
