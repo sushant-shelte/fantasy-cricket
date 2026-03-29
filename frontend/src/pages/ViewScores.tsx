@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -61,6 +61,7 @@ export default function ViewScoresPage() {
   // Tab state — read from URL param if present
   const initialTab = (searchParams.get('tab') as 'scores' | 'myteam' | 'diff') || 'scores';
   const [tab, setTab] = useState<'scores' | 'myteam' | 'diff'>(initialTab);
+  const [expandedPlayer, setExpandedPlayer] = useState<number | null>(null);
 
   // Team breakdown state
   const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
@@ -195,7 +196,7 @@ export default function ViewScoresPage() {
           </div>
           <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
             <button onClick={() => setTab('scores')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'scores' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>Scores</button>
-            <button onClick={() => setTab('myteam')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'myteam' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>My Team</button>
+            <button onClick={() => setTab('myteam')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'myteam' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>Team Analysis</button>
             <button onClick={() => setTab('diff')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'diff' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>Compare</button>
           </div>
         </div>
@@ -288,33 +289,63 @@ export default function ViewScoresPage() {
                     ) : (
                       playerScores.map((p, i) => {
                         const isMyPlayer = myTeam.has(p.name);
+                        const isExpanded = expandedPlayer === i;
+                        const bd = (p as any).breakdown || [];
                         return (
-                          <tr key={i} className={`transition-colors ${isMyPlayer ? 'bg-yellow-500/10 hover:bg-yellow-500/15' : 'hover:bg-white/5'}`}>
-                            <td className={`sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] ${isMyPlayer ? 'bg-slate-900' : 'bg-slate-900'}`}>
-                              {p.name}
-                              {isMyPlayer && <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
-                            </td>
-                            <td className="px-3 py-2.5 text-right font-bold text-green-400">{p.points}</td>
-                            <td className="px-3 py-2.5 text-indigo-300">{p.team}</td>
-                            <td className="px-3 py-2.5 text-center">{renderRoleSymbol(p.role)}</td>
-                            <td className="px-3 py-2.5 text-center text-white">{p.played ? 'Y' : 'N'}</td>
-                            <td className="px-3 py-2.5 text-center text-white">{p.is_out ? 'Y' : 'N'}</td>
-                            <td className="px-3 py-2.5 text-right text-white">{p.runs}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.balls}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.fours}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.sixes}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.strike_rate?.toFixed(1)}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.overs}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.maidens}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.runs_conceded}</td>
-                            <td className="px-3 py-2.5 text-right text-white">{p.wickets}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.dot_balls}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.economy?.toFixed(1)}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.catches}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.stumpings}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.runout_direct}</td>
-                            <td className="px-3 py-2.5 text-right text-indigo-300">{p.runout_indirect}</td>
-                          </tr>
+                          <React.Fragment key={i}>
+                            <tr
+                              onClick={() => setExpandedPlayer(isExpanded ? null : i)}
+                              className={`cursor-pointer transition-colors ${isMyPlayer ? 'bg-yellow-500/10 hover:bg-yellow-500/15' : 'hover:bg-white/5'}`}>
+                              <td className={`sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] bg-slate-900`}>
+                                <span className={`inline-block w-3 text-[10px] text-indigo-400 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
+                                {p.name}
+                                {isMyPlayer && <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-bold text-green-400">{p.points}</td>
+                              <td className="px-3 py-2.5 text-indigo-300">{p.team}</td>
+                              <td className="px-3 py-2.5 text-center">{renderRoleSymbol(p.role)}</td>
+                              <td className="px-3 py-2.5 text-center text-white">{p.played ? 'Y' : 'N'}</td>
+                              <td className="px-3 py-2.5 text-center text-white">{p.is_out ? 'Y' : 'N'}</td>
+                              <td className="px-3 py-2.5 text-right text-white">{p.runs}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.balls}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.fours}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.sixes}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.strike_rate?.toFixed(1)}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.overs}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.maidens}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.runs_conceded}</td>
+                              <td className="px-3 py-2.5 text-right text-white">{p.wickets}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.dot_balls}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.economy?.toFixed(1)}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.catches}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.stumpings}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.runout_direct}</td>
+                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.runout_indirect}</td>
+                            </tr>
+                            {isExpanded && bd.length > 0 && (
+                              <tr className="bg-indigo-950/50">
+                                <td colSpan={21} className="px-4 py-3">
+                                  <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Player Analysis</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {bd.map((item: { label: string; points: number }, j: number) => (
+                                      <span key={j}
+                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                                          item.points > 0
+                                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                            : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                        }`}>
+                                        {item.label}
+                                        <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                                      </span>
+                                    ))}
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/20">
+                                      Total: {p.points}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })
                     )}
@@ -362,48 +393,70 @@ export default function ViewScoresPage() {
               </div>
             ) : breakdown ? (
               <>
-                {/* Total */}
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-white/40 text-xs">Your Team Total</p>
-                    <p className="text-white text-2xl font-bold">{breakdown.total} <span className="text-sm text-white/40">pts</span></p>
+                {/* Ground Preview with Points */}
+                <div className="rounded-2xl overflow-hidden shadow-2xl max-w-md mx-auto"
+                  style={{ background: 'linear-gradient(180deg, #1a5e1a 0%, #2d8a2d 30%, #3da33d 50%, #2d8a2d 70%, #1a5e1a 100%)' }}>
+                  <div className="text-center pt-4 pb-2">
+                    <p className="text-white text-lg font-bold">{breakdown.total} <span className="text-sm text-white/60">pts</span></p>
+                    <p className="text-white/40 text-[10px] uppercase tracking-widest">Team Analysis</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-white/40 text-xs">{breakdown.players.length} Players</p>
+                  <div className="relative px-4 pb-5">
+                    <div className="absolute inset-x-8 inset-y-4 border-2 border-white/15 rounded-[50%]" />
+                    {(['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'] as const).map((role) => {
+                      const rolePlayers = breakdown.players.filter(p => p.role === role);
+                      if (rolePlayers.length === 0) return null;
+                      const roleLabel = role === 'AllRounder' ? 'All-Rounders' : role === 'Wicketkeeper' ? 'Wicketkeeper' : role + 's';
+                      return (
+                        <div key={role} className="relative z-10 mb-3">
+                          <p className="text-center text-white/30 text-[9px] uppercase tracking-widest mb-1.5">{roleLabel}</p>
+                          <div className="flex justify-center gap-2 flex-wrap">
+                            {rolePlayers.map((p, i) => (
+                              <div key={i} className="flex flex-col items-center">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg ${
+                                  p.tag === 'C' ? 'bg-amber-400 text-black ring-2 ring-amber-300' :
+                                  p.tag === 'VC' ? 'bg-sky-400 text-black ring-2 ring-sky-300' :
+                                  'bg-white text-green-900'
+                                }`}>
+                                  {p.tag || p.adjusted_points}
+                                </div>
+                                <p className="text-white text-[9px] font-medium mt-0.5 max-w-[55px] text-center truncate">{p.name.split(' ').pop()}</p>
+                                <p className="text-green-300 text-[9px] font-bold">{p.adjusted_points}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-center gap-4 pb-3 text-[9px] text-white/40">
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span> C (2x)</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span> VC (1.5x)</span>
                   </div>
                 </div>
 
-                {/* Player breakdown */}
+                {/* Player breakdown list */}
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-white/5">
+                    <h3 className="text-white font-semibold text-sm">Player Contributions</h3>
+                  </div>
                   <div className="divide-y divide-white/5">
                     {breakdown.players.map((p, i) => (
                       <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
-                        {/* Rank */}
                         <div className="w-6 text-center flex-shrink-0">
                           <span className="text-white/30 text-xs">{i + 1}</span>
                         </div>
-
-                        {/* Tag */}
                         <div className="w-8 flex-shrink-0 ml-1">
-                          {p.tag === 'C' && (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>
-                          )}
-                          {p.tag === 'VC' && (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>
-                          )}
+                          {p.tag === 'C' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>}
+                          {p.tag === 'VC' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>}
                         </div>
-
-                        {/* Player info */}
                         <div className="flex-1 min-w-0 ml-2">
                           <p className="text-white text-sm font-medium truncate">{p.name}</p>
                           <p className="text-white/30 text-xs">{p.team} &middot; {p.role}</p>
                         </div>
-
-                        {/* Points */}
                         <div className="text-right flex-shrink-0 ml-3">
                           <p className="text-green-400 font-bold text-sm">{p.adjusted_points}</p>
                           {p.multiplier > 1 && (
-                            <p className="text-white/30 text-[10px]">{p.base_points} × {p.multiplier}</p>
+                            <p className="text-white/30 text-[10px]">{p.base_points} &times; {p.multiplier}</p>
                           )}
                         </div>
                       </div>

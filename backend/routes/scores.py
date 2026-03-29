@@ -114,6 +114,7 @@ async def match_scores(
             "stumpings": p.stumpings,
             "runout_indirect": p.runout_indirect,
             "points": calculated_points if calculated_points or p.played else pp_lookup.get(pid_str, 0),
+            "breakdown": p.get_points_breakdown() if role else [],
         })
 
     result.sort(key=lambda x: x["points"], reverse=True)

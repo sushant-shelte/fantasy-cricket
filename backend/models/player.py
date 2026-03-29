@@ -205,3 +205,87 @@ class Player:
 
         self.points = points
         return points
+
+    def get_points_breakdown(self):
+        """Return detailed breakdown of how points were calculated."""
+        b = []
+        role = self.role or ""
+
+        if self.played:
+            b.append({"label": "Playing XI", "points": 4})
+
+        if self.runs > 0:
+            b.append({"label": f"Runs ({self.runs})", "points": self.runs})
+        if self.fours > 0:
+            b.append({"label": f"Fours ({self.fours})", "points": self.fours * 4})
+        if self.sixes > 0:
+            b.append({"label": f"Sixes ({self.sixes})", "points": self.sixes * 6})
+
+        if self.runs >= 100:
+            b.append({"label": "Century bonus", "points": 16})
+        elif self.runs >= 75:
+            b.append({"label": "75 runs bonus", "points": 12})
+        elif self.runs >= 50:
+            b.append({"label": "Half-century bonus", "points": 8})
+        elif self.runs >= 30:
+            b.append({"label": "30 runs bonus", "points": 4})
+
+        if self.runs == 0 and self.is_out and is_batting_role(role):
+            b.append({"label": "Duck", "points": -2})
+
+        if self.balls >= 10 and is_batting_role(role):
+            sr = self.strike_rate
+            if sr > 170:
+                b.append({"label": f"SR {sr} (>170)", "points": 6})
+            elif sr > 150:
+                b.append({"label": f"SR {sr} (>150)", "points": 4})
+            elif sr >= 130:
+                b.append({"label": f"SR {sr} (>=130)", "points": 2})
+            elif sr <= 50:
+                b.append({"label": f"SR {sr} (<=50)", "points": -6})
+            elif sr < 60:
+                b.append({"label": f"SR {sr} (<60)", "points": -4})
+            elif sr <= 70:
+                b.append({"label": f"SR {sr} (<=70)", "points": -2})
+
+        if self.wickets > 0:
+            b.append({"label": f"Wickets ({self.wickets})", "points": self.wickets * 30})
+        if self.wickets >= 5:
+            b.append({"label": "5-wicket haul", "points": 16})
+        elif self.wickets == 4:
+            b.append({"label": "4-wicket haul", "points": 8})
+        elif self.wickets == 3:
+            b.append({"label": "3-wicket haul", "points": 4})
+
+        if self.maidens > 0:
+            b.append({"label": f"Maidens ({self.maidens})", "points": self.maidens * 12})
+        if self.dot_balls > 0:
+            b.append({"label": f"Dot balls ({self.dot_balls})", "points": self.dot_balls})
+
+        if self.overs >= 2:
+            eco = self.economy
+            if eco < 5:
+                b.append({"label": f"Economy {eco} (<5)", "points": 6})
+            elif eco < 6:
+                b.append({"label": f"Economy {eco} (<6)", "points": 4})
+            elif eco <= 7:
+                b.append({"label": f"Economy {eco} (<=7)", "points": 2})
+            elif eco > 12:
+                b.append({"label": f"Economy {eco} (>12)", "points": -6})
+            elif eco > 11:
+                b.append({"label": f"Economy {eco} (>11)", "points": -4})
+            elif eco >= 10:
+                b.append({"label": f"Economy {eco} (>=10)", "points": -2})
+
+        if self.catches > 0:
+            b.append({"label": f"Catches ({self.catches})", "points": self.catches * 8})
+        if self.catches >= 3:
+            b.append({"label": "3+ catches bonus", "points": 4})
+        if self.stumpings > 0:
+            b.append({"label": f"Stumpings ({self.stumpings})", "points": self.stumpings * 12})
+        if self.runout_direct > 0:
+            b.append({"label": f"Direct run out ({self.runout_direct})", "points": self.runout_direct * 12})
+        if self.runout_indirect > 0:
+            b.append({"label": f"Indirect run out ({self.runout_indirect})", "points": self.runout_indirect * 6})
+
+        return b
