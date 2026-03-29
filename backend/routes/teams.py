@@ -56,6 +56,17 @@ async def my_team(
     return [dict(row) for row in rows]
 
 
+@router.get("/my-matches")
+async def my_team_matches(user: dict = Depends(get_current_user)):
+    """Returns list of match IDs where user has picked a team."""
+    db = get_db()
+    rows = db.execute(
+        "SELECT DISTINCT match_id FROM user_teams WHERE user_id = ?",
+        (user["id"],),
+    ).fetchall()
+    return [row["match_id"] for row in rows]
+
+
 @router.post("")
 async def submit_team(
     body: SubmitTeamBody,

@@ -14,21 +14,11 @@ export default function DashboardPage() {
   useEffect(() => {
     Promise.all([
       client.get('/api/matches'),
-      client.get('/api/matches').then(async (res) => {
-        // Check which matches user has picked a team for
-        const teamSet = new Set<number>();
-        for (const m of res.data) {
-          try {
-            const teamRes = await client.get(`/api/teams/my?match_id=${m.id}`);
-            if (teamRes.data && teamRes.data.length > 0) teamSet.add(m.id);
-          } catch { /* skip */ }
-        }
-        return teamSet;
-      }),
+      client.get('/api/teams/my-matches'),
     ])
-      .then(([matchRes, teamSet]) => {
+      .then(([matchRes, teamsRes]) => {
         setMatches(matchRes.data);
-        setMyTeams(teamSet);
+        setMyTeams(new Set(teamsRes.data));
       })
       .catch(() => {})
       .finally(() => setLoading(false));

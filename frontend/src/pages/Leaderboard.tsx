@@ -23,7 +23,7 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     fetchLeaderboard();
-    intervalRef.current = setInterval(fetchLeaderboard, 15000);
+    intervalRef.current = setInterval(fetchLeaderboard, 60000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
