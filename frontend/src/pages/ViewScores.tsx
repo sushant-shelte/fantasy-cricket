@@ -127,10 +127,10 @@ export default function ViewScoresPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-400 mx-auto mb-4" />
-          <p className="text-indigo-300 text-sm">Loading scores...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white mx-auto mb-4" />
+          <p className="text-white/50 text-sm">Loading scores...</p>
         </div>
       </div>
     );
@@ -147,20 +147,20 @@ export default function ViewScoresPage() {
   });
 
   const renderPlayerEntry = (entry: TeamDiffEntry | null, side: 'left' | 'right') => {
-    if (!entry) return <div className="flex-1 p-3 bg-white/5 rounded-xl text-center text-indigo-500 text-xs">—</div>;
-    const tagColor = entry.tag === 'C' ? 'bg-amber-500' : entry.tag === 'VC' ? 'bg-indigo-500' : '';
+    if (!entry) return <div className="flex-1 p-3 bg-white/5 rounded-xl text-center text-white/30 text-xs">—</div>;
+    const tagColor = entry.tag === 'C' ? 'bg-amber-500' : entry.tag === 'VC' ? 'bg-white/30' : '';
     return (
-      <div className={`flex-1 p-3 rounded-xl ${side === 'left' ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+      <div className={`flex-1 p-3 rounded-xl ${side === 'left' ? 'bg-white/10 border border-white/20' : 'bg-red-500/10 border border-red-500/20'}`}>
         <div className="flex items-center justify-between mb-1">
           <span className="text-white text-sm font-medium truncate">{entry.name}</span>
           {entry.tag && <span className={`text-[10px] text-white font-bold px-1.5 py-0.5 rounded ${tagColor}`}>{entry.tag}</span>}
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-indigo-400">{entry.team} &middot; {entry.role}</span>
+          <span className="text-white/40">{entry.team} &middot; {entry.role}</span>
           <span className="text-green-400 font-bold">{entry.adjusted_points} pts</span>
         </div>
         {entry.multiplier > 1 && (
-          <div className="text-[10px] text-indigo-500 mt-0.5">{entry.base_points} &times; {entry.multiplier}</div>
+          <div className="text-[10px] text-white/30 mt-0.5">{entry.base_points} &times; {entry.multiplier}</div>
         )}
       </div>
     );
@@ -171,7 +171,7 @@ export default function ViewScoresPage() {
     return (
       <span
         title={config.label}
-        className="inline-flex min-w-[2.75rem] justify-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-indigo-200"
+        className="inline-flex min-w-[2.75rem] justify-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/70"
       >
         {config.symbol}
       </span>
@@ -179,9 +179,9 @@ export default function ViewScoresPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900">
+    <div className="min-h-screen bg-black">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-lg border-b border-white/10">
+      <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-lg border-b border-white/10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
@@ -191,13 +191,13 @@ export default function ViewScoresPage() {
             </Link>
             <div>
               <h1 className="text-lg font-bold text-white">Match #{matchId}</h1>
-              {lastUpdated && <p className="text-xs text-indigo-400">Updated {lastUpdated.toLocaleTimeString()}</p>}
+              {lastUpdated && <p className="text-xs text-white/40">Updated {lastUpdated.toLocaleTimeString()}</p>}
             </div>
           </div>
           <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
-            <button onClick={() => setTab('scores')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'scores' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>Scores</button>
-            <button onClick={() => setTab('myteam')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'myteam' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>Team Analysis</button>
-            <button onClick={() => setTab('diff')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'diff' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>Compare</button>
+            <button onClick={() => setTab('scores')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'scores' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>Scores</button>
+            <button onClick={() => setTab('myteam')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'myteam' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>Team Analysis</button>
+            <button onClick={() => setTab('diff')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'diff' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>Compare</button>
           </div>
         </div>
       </header>
@@ -207,7 +207,7 @@ export default function ViewScoresPage() {
         {tab === 'scores' && (
           <>
             {/* Auto-refresh */}
-            <div className="flex items-center gap-2 text-xs text-indigo-400">
+            <div className="flex items-center gap-2 text-xs text-white/40">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
@@ -222,7 +222,7 @@ export default function ViewScoresPage() {
               </div>
               <div className="divide-y divide-white/5">
                 {sortedContestants.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-indigo-400">No contestant scores yet.</div>
+                  <div className="px-4 py-8 text-center text-white/40">No contestant scores yet.</div>
                 ) : (
                   sortedContestants.map((c, i) => (
                     <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
@@ -230,7 +230,7 @@ export default function ViewScoresPage() {
                         {i === 0 ? <span className="text-lg">&#x1F947;</span>
                           : i === 1 ? <span className="text-lg">&#x1F948;</span>
                           : i === 2 ? <span className="text-lg">&#x1F949;</span>
-                          : <span className="text-indigo-400 text-sm font-medium">{i + 1}</span>}
+                          : <span className="text-white/40 text-sm font-medium">{i + 1}</span>}
                       </div>
                       <div className="ml-3 min-w-0 flex-1">
                         <span className="text-white font-medium text-sm">{c.name}</span>
@@ -247,45 +247,45 @@ export default function ViewScoresPage() {
               <div className="px-4 py-3 border-b border-white/10">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="text-white font-semibold">Player Statistics</h2>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-indigo-400">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/40">
                     <span className="whitespace-nowrap">Tap player for analysis</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">🏏 Batter</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">◎ Bowler</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">🏏◎ All-Rounder</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">||| WK</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/70">🏏 Batter</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/70">◎ Bowler</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/70">🏏◎ All-Rounder</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/70">||| WK</span>
                   </div>
                 </div>
               </div>
               <div className="max-h-[72vh] overflow-auto">
                 <table className="min-w-[1600px] w-full text-sm">
                   <thead>
-                    <tr className="bg-white/5 text-indigo-300 text-xs uppercase tracking-wider">
-                      <th className="sticky top-0 left-0 z-20 min-w-[220px] border-r border-white/10 bg-slate-900 px-4 py-3 text-left font-medium shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)]">Player</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Pts</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-left font-medium">Team</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-center font-medium">Role</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-center font-medium">P</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-center font-medium">Out</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Runs</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Balls</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">4s</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">6s</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">SR</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Overs</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Mdns</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Runs Ag</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Wkts</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Dots</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Econ</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Ct</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">St</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">RO-D</th>
-                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">RO-I</th>
+                    <tr className="bg-white/5 text-white/50 text-xs uppercase tracking-wider">
+                      <th className="sticky top-0 left-0 z-20 min-w-[220px] border-r border-white/10 bg-black px-4 py-3 text-left font-medium shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)]">Player</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Pts</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-left font-medium">Team</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">Role</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">P</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">Out</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Runs</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Balls</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">4s</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">6s</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">SR</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Overs</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Mdns</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Runs Ag</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Wkts</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Dots</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Econ</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Ct</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">St</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">RO-D</th>
+                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">RO-I</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {playerScores.length === 0 ? (
-                      <tr><td colSpan={20} className="px-4 py-8 text-center text-indigo-400">No scores available yet.</td></tr>
+                      <tr><td colSpan={20} className="px-4 py-8 text-center text-white/40">No scores available yet.</td></tr>
                     ) : (
                       playerScores.map((p, i) => {
                         const isMyPlayer = myTeam.has(p.name);
@@ -296,34 +296,34 @@ export default function ViewScoresPage() {
                             <tr
                               onClick={() => setExpandedPlayer(isExpanded ? null : i)}
                               className={`cursor-pointer transition-colors ${isMyPlayer ? 'bg-yellow-500/10 hover:bg-yellow-500/15' : 'hover:bg-white/5'}`}>
-                              <td className={`sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] bg-slate-900`}>
-                                <span className={`inline-block w-3 text-[10px] text-indigo-400 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
+                              <td className={`sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] bg-black`}>
+                                <span className={`inline-block w-3 text-[10px] text-white/40 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
                                 {p.name}
                                 {isMyPlayer && <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
                               </td>
                               <td className="px-3 py-2.5 text-right font-bold text-green-400">{p.points}</td>
-                              <td className="px-3 py-2.5 text-indigo-300">{p.team}</td>
+                              <td className="px-3 py-2.5 text-white/50">{p.team}</td>
                               <td className="px-3 py-2.5 text-center">{renderRoleSymbol(p.role)}</td>
                               <td className="px-3 py-2.5 text-center text-white">{p.played ? 'Y' : 'N'}</td>
                               <td className="px-3 py-2.5 text-center text-white">{p.is_out ? 'Y' : 'N'}</td>
                               <td className="px-3 py-2.5 text-right text-white">{p.runs}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.balls}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.fours}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.sixes}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.strike_rate?.toFixed(1)}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.overs}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.maidens}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.runs_conceded}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.balls}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.fours}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.sixes}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.strike_rate?.toFixed(1)}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.overs}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.maidens}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.runs_conceded}</td>
                               <td className="px-3 py-2.5 text-right text-white">{p.wickets}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.dot_balls}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.economy?.toFixed(1)}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.catches}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.stumpings}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.runout_direct}</td>
-                              <td className="px-3 py-2.5 text-right text-indigo-300">{p.runout_indirect}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.dot_balls}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.economy?.toFixed(1)}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.catches}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.stumpings}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.runout_direct}</td>
+                              <td className="px-3 py-2.5 text-right text-white/50">{p.runout_indirect}</td>
                             </tr>
                             {isExpanded && bd.length > 0 && (
-                              <tr className="bg-indigo-950/50">
+                              <tr className="bg-white/5">
                                 <td colSpan={21} className="px-4 py-3">
                                   <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Player Analysis</p>
                                   <div className="flex flex-wrap gap-2">
@@ -361,7 +361,7 @@ export default function ViewScoresPage() {
               </div>
               <div className="divide-y divide-white/5">
                 {sortedContestants.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-indigo-400">No contestant scores yet.</div>
+                  <div className="px-4 py-8 text-center text-white/40">No contestant scores yet.</div>
                 ) : (
                   rankedContestants.map((c, i) => (
                     <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
@@ -369,7 +369,7 @@ export default function ViewScoresPage() {
                         {c.rank === 1 ? <span className="text-lg">&#x1F947;</span>
                           : c.rank === 2 ? <span className="text-lg">&#x1F948;</span>
                           : c.rank === 3 ? <span className="text-lg">&#x1F949;</span>
-                          : <span className="text-indigo-400 text-sm font-medium">{c.rank}</span>}
+                          : <span className="text-white/40 text-sm font-medium">{c.rank}</span>}
                       </div>
                       <div className="flex-1 ml-3"><span className="text-white font-medium text-sm">{c.name}</span></div>
                       <span className="text-green-400 font-bold text-sm">{c.points} pts</span>
@@ -385,10 +385,10 @@ export default function ViewScoresPage() {
           <div className="space-y-4">
             {breakdownLoading ? (
               <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
               </div>
             ) : breakdown?.error ? (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-indigo-400">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-white/40">
                 {breakdown.error}
               </div>
             ) : breakdown ? (
@@ -438,7 +438,7 @@ export default function ViewScoresPage() {
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
                     <h3 className="text-white font-semibold text-sm">Player Contributions</h3>
-                    <span className="text-indigo-400 text-[10px]">Tap player for analysis</span>
+                    <span className="text-white/40 text-[10px]">Tap player for analysis</span>
                   </div>
                   <div className="divide-y divide-white/5">
                     {breakdown.players.map((p, i) => {
@@ -450,7 +450,7 @@ export default function ViewScoresPage() {
                             onClick={() => setExpandedPlayer(isOpen ? null : 1000 + i)}
                             className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer">
                             <div className="w-6 text-center flex-shrink-0">
-                              <span className={`text-[10px] text-indigo-400 transition-transform inline-block ${isOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                              <span className={`text-[10px] text-white/40 transition-transform inline-block ${isOpen ? 'rotate-90' : ''}`}>&#9654;</span>
                             </div>
                             <div className="w-8 flex-shrink-0 ml-1">
                               {p.tag === 'C' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>}
@@ -491,7 +491,7 @@ export default function ViewScoresPage() {
                 </div>
               </>
             ) : (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-indigo-400">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-white/40">
                 No team data available.
               </div>
             )}
@@ -504,7 +504,7 @@ export default function ViewScoresPage() {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
               <h2 className="text-white font-semibold mb-3">Compare Teams</h2>
               {diffContestants.length === 0 ? (
-                <p className="text-indigo-400 text-sm">No other contestants have picked teams for this match yet.</p>
+                <p className="text-white/40 text-sm">No other contestants have picked teams for this match yet.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {diffContestants.map((c) => (
@@ -513,8 +513,8 @@ export default function ViewScoresPage() {
                       onClick={() => setSelectedOther(c.id)}
                       className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
                         selectedOther === c.id
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-white/10 text-indigo-300 hover:bg-white/20'
+                          ? 'bg-white text-black'
+                          : 'bg-white/10 text-white/50 hover:bg-white/20'
                       }`}
                     >
                       {c.name}
@@ -526,7 +526,7 @@ export default function ViewScoresPage() {
 
             {diffLoading && (
               <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
               </div>
             )}
 
@@ -534,12 +534,12 @@ export default function ViewScoresPage() {
               <>
                 {/* Score summary */}
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 text-center">
-                    <p className="text-blue-300 text-xs font-medium mb-1">You</p>
+                  <div className="bg-white/10 border border-white/20 rounded-2xl p-4 text-center">
+                    <p className="text-white/50 text-xs font-medium mb-1">You</p>
                     <p className="text-white text-2xl font-bold">{diffData.my_total}</p>
                   </div>
                   <div className={`${diffData.total_diff > 0 ? 'bg-red-500/10 border-red-500/20' : diffData.total_diff < 0 ? 'bg-green-500/10 border-green-500/20' : 'bg-white/5 border-white/10'} border rounded-2xl p-4 text-center`}>
-                    <p className="text-indigo-300 text-xs font-medium mb-1">Diff</p>
+                    <p className="text-white/50 text-xs font-medium mb-1">Diff</p>
                     <p className={`text-2xl font-bold ${diffData.total_diff > 0 ? 'text-red-400' : diffData.total_diff < 0 ? 'text-green-400' : 'text-white'}`}>
                       {diffData.total_diff > 0 ? '+' : ''}{diffData.total_diff}
                     </p>

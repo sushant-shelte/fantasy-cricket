@@ -75,7 +75,7 @@ export default function PointsTablePage() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
         </div>
       ) : data.length === 0 ? (
         <div className="text-center py-16 text-white/30">No points data available yet.</div>
@@ -85,13 +85,13 @@ export default function PointsTablePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-white/5">
-                  <th className="sticky left-0 z-20 bg-slate-900 px-4 py-3 text-left text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap border-r border-white/5 min-w-[7rem]">
+                  <th className="sticky left-0 z-20 bg-black px-4 py-3 text-left text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap border-r border-white/5 min-w-[7rem]">
                     Player
                   </th>
-                  <th className="sticky left-[7rem] z-20 bg-slate-900 px-2 py-3 text-center text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap border-r border-white/5 min-w-[4.5rem]">
+                  <th className="sticky left-[7rem] z-20 bg-black px-2 py-3 text-center text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap border-r border-white/5 min-w-[4.5rem]">
                     Total
                   </th>
-                  <th className="sticky left-[11.5rem] z-20 bg-slate-900 px-2 py-3 text-center text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap border-r border-white/5 min-w-[4.5rem]">
+                  <th className="sticky left-[11.5rem] z-20 bg-black px-2 py-3 text-center text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap border-r border-white/5 min-w-[4.5rem]">
                     ₹
                   </th>
                   {matchIds.map((mid) => (
@@ -106,17 +106,17 @@ export default function PointsTablePage() {
                   const isMe = c === currentUserName;
                   const bal = totalBalance[c];
                   return (
-                    <tr key={c} className={`transition-colors ${isMe ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}>
-                      <td className={`sticky left-0 z-10 px-4 py-3 text-white font-medium whitespace-nowrap border-r border-white/5 min-w-[7rem] ${isMe ? 'bg-indigo-950' : 'bg-slate-900'}`}>
+                    <tr key={c} className={`transition-colors ${isMe ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+                      <td className={`sticky left-0 z-10 px-4 py-3 text-white font-medium whitespace-nowrap border-r border-white/5 min-w-[7rem] ${isMe ? 'bg-black' : 'bg-black'}`}>
                         <div className="flex items-center gap-1.5">
                           <span className="truncate max-w-[5rem]">{c}</span>
-                          {isMe && <span className="px-1 py-0.5 text-[8px] font-bold bg-indigo-500/30 text-indigo-300 rounded">YOU</span>}
+                          {isMe && <span className="px-1 py-0.5 text-[8px] font-bold bg-white/20 text-white rounded">YOU</span>}
                         </div>
                       </td>
-                      <td className={`sticky left-[7rem] z-10 px-2 py-3 text-center font-bold text-white whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-indigo-950' : 'bg-slate-900'}`}>
+                      <td className={`sticky left-[7rem] z-10 px-2 py-3 text-center font-bold text-white whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-black' : 'bg-black'}`}>
                         {totalPoints[c]}
                       </td>
-                      <td className={`sticky left-[11.5rem] z-10 px-2 py-3 text-center font-bold whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-indigo-950' : 'bg-slate-900'} ${
+                      <td className={`sticky left-[11.5rem] z-10 px-2 py-3 text-center font-bold whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-black' : 'bg-black'} ${
                         bal > 0 ? 'text-green-400' : bal < 0 ? 'text-red-400' : 'text-white/30'
                       }`}>
                         {bal > 0 ? '+' : ''}{bal}

@@ -11,7 +11,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-gradient-to-r from-indigo-950 via-indigo-800 to-indigo-600 text-white shadow-lg sticky top-0 z-50">
+    <nav className="bg-black border-b border-white/10 text-white shadow-lg sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <Link
           to="/dashboard"
@@ -34,7 +34,7 @@ export default function Navbar() {
         </Link>
         {profile && (
           <div className="flex items-center gap-3">
-            <span className="text-sm text-indigo-200 hidden sm:block">
+            <span className="text-sm text-white/50 hidden sm:block">
               {profile.name}
             </span>
             {profile.role === 'admin' && (

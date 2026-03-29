@@ -71,7 +71,7 @@ export default function DashboardPage() {
       case 'over':
         return <span className="px-2.5 py-1 bg-slate-500/15 text-slate-400 text-xs font-semibold rounded-full border border-slate-500/20">COMPLETED</span>;
       default:
-        return <span className="px-2.5 py-1 bg-blue-500/15 text-blue-400 text-xs font-semibold rounded-full border border-blue-500/20">UPCOMING</span>;
+        return <span className="px-2.5 py-1 bg-white/10 text-white/60 text-xs font-semibold rounded-full border border-white/10">UPCOMING</span>;
     }
   };
 
@@ -81,8 +81,8 @@ export default function DashboardPage() {
         const hasTeam = myTeams.has(match.id);
         return (
           <Link to={`/select-team/${match.id}`}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-semibold rounded-xl transition-all ${
-              hasTeam ? 'bg-amber-500 hover:bg-amber-400 shadow-lg shadow-amber-500/20' : 'bg-indigo-500 hover:bg-indigo-400 shadow-lg shadow-indigo-500/20'
+            className={`inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all ${
+              hasTeam ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20' : 'bg-green-500 hover:bg-green-400 text-black shadow-lg shadow-green-500/20'
             }`}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               {hasTeam
@@ -138,7 +138,7 @@ export default function DashboardPage() {
       <div className="relative overflow-hidden rounded-b-3xl mb-6">
         <div className="absolute inset-0">
           <img src="/sachin.png" alt="" className="w-full h-full object-cover opacity-40" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-slate-900" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black" />
         </div>
         <div className="relative z-10 px-4 pt-10 pb-8">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
@@ -158,13 +158,13 @@ export default function DashboardPage() {
             <span className="text-amber-300 text-xs font-medium">Leaderboard</span>
           </Link>
           <Link to="/points-table"
-            className="flex flex-col items-center gap-2 p-3 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 rounded-2xl transition-all group">
-            <div className="w-9 h-9 bg-indigo-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            className="flex flex-col items-center gap-2 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all group">
+            <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <svg className="w-4 h-4 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
             </div>
-            <span className="text-indigo-300 text-xs font-medium">Points Table</span>
+            <span className="text-white/50 text-xs font-medium">Points Table</span>
           </Link>
           <Link to="/rules"
             className="flex flex-col items-center gap-2 p-3 bg-green-500/10 hover:bg-green-500/15 border border-green-500/20 rounded-2xl transition-all group">
@@ -186,8 +186,8 @@ export default function DashboardPage() {
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                 tab === t.key
-                  ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                  : 'text-indigo-300 hover:text-white hover:bg-white/5'
+                  ? 'bg-white text-black shadow-lg'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
               }`}>
               {t.label}
               <span className={`text-xs px-1.5 py-0.5 rounded-full ${
@@ -200,10 +200,10 @@ export default function DashboardPage() {
         {/* Match Cards */}
         {loading ? (
           <div className="flex justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
           </div>
         ) : currentMatches.length === 0 ? (
-          <div className="text-center py-12 text-indigo-400 text-sm">
+          <div className="text-center py-12 text-white/40 text-sm">
             {tab === 'today' ? "No matches today." : tab === 'upcoming' ? 'No upcoming matches.' : 'No completed matches yet.'}
           </div>
         ) : (
@@ -224,10 +224,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center justify-center gap-3 mb-2">
                   <span className="text-white font-bold text-lg">{match.team1}</span>
-                  <span className="text-indigo-400 text-sm font-medium px-2 py-0.5 bg-indigo-500/15 rounded-lg">vs</span>
+                  <span className="text-white/40 text-sm font-medium px-2 py-0.5 bg-white/5 rounded-lg">vs</span>
                   <span className="text-white font-bold text-lg">{match.team2}</span>
                 </div>
-                <p className="text-indigo-300/70 text-xs text-center mb-3">
+                <p className="text-white/40 text-xs text-center mb-3">
                   {formatDate(match.match_date, match.match_time)}
                 </p>
                 <div className="flex justify-center">{matchAction(match)}</div>

@@ -46,7 +46,7 @@ export default function LeaderboardPage() {
         <h2 className="text-xl font-bold text-white">Leaderboard</h2>
         <button onClick={handleRefresh} disabled={refreshing}
           className="p-2 hover:bg-white/10 rounded-xl transition-all disabled:opacity-50" title="Refresh">
-          <svg className={`w-5 h-5 text-indigo-300 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`w-5 h-5 text-white/50 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         </button>
@@ -54,10 +54,10 @@ export default function LeaderboardPage() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
         </div>
       ) : ranked.length === 0 ? (
-        <div className="text-center py-16 text-indigo-400">No leaderboard data yet.</div>
+        <div className="text-center py-16 text-white/40">No leaderboard data yet.</div>
       ) : (
         <>
           {ranked.length >= 3 && (
@@ -106,17 +106,17 @@ export default function LeaderboardPage() {
                 const bal = entry.balance || 0;
                 return (
                   <div key={i}
-                    className={`flex items-center px-4 py-3.5 transition-colors ${isMe ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}>
+                    className={`flex items-center px-4 py-3.5 transition-colors ${isMe ? 'bg-white/10' : 'hover:bg-white/5'}`}>
                     <div className="w-10 text-center flex-shrink-0">
                       {entry.rank === 1 ? <span className="text-lg">&#x1F947;</span>
                         : entry.rank === 2 ? <span className="text-lg">&#x1F948;</span>
                         : entry.rank === 3 ? <span className="text-lg">&#x1F949;</span>
-                        : <span className="text-indigo-400 font-semibold text-sm">{entry.rank}</span>}
+                        : <span className="text-white/50 font-semibold text-sm">{entry.rank}</span>}
                     </div>
                     <div className="flex-1 min-w-0 ml-2">
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-medium truncate ${isMe ? 'text-indigo-200' : 'text-white'}`}>{entry.name}</span>
-                        {isMe && <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-indigo-500/30 text-indigo-300 rounded-md border border-indigo-500/30">YOU</span>}
+                        <span className={`text-sm font-medium truncate ${isMe ? 'text-white' : 'text-white'}`}>{entry.name}</span>
+                        {isMe && <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-white/20 text-white rounded-md border border-white/20">YOU</span>}
                       </div>
                     </div>
                     <div className="w-20 text-right">

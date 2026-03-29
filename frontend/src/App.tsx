@@ -24,7 +24,14 @@ const ManageTeams = lazy(() => import('./pages/admin/ManageTeams'));
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
+    <div className="min-h-screen bg-[#0a0a0a]"
+      style={{
+        backgroundImage: `
+          radial-gradient(ellipse at 50% 0%, rgba(34,197,94,0.06) 0%, transparent 60%),
+          radial-gradient(ellipse at 50% 100%, rgba(34,197,94,0.03) 0%, transparent 50%),
+          repeating-linear-gradient(0deg, transparent, transparent 80px, rgba(255,255,255,0.015) 80px, rgba(255,255,255,0.015) 81px)
+        `
+      }}>
       <Navbar />
       <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
     </div>

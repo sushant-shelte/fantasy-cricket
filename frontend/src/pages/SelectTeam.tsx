@@ -15,8 +15,8 @@ interface PlayingXiState {
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  Wicketkeeper: { label: 'Wicket-Keeper', color: 'text-purple-300', bg: 'bg-purple-500/20', border: 'border-purple-500/30' },
-  Batter: { label: 'Batsman', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
+  Wicketkeeper: { label: 'Wicket-Keeper', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
+  Batter: { label: 'Batsman', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
   AllRounder: { label: 'All-Rounder', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
   Bowler: { label: 'Bowler', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
 };
@@ -202,16 +202,16 @@ export default function SelectTeamPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 pb-24">
+    <div className="min-h-screen bg-black pb-24">
       {/* Sticky header */}
-      <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-lg border-b border-white/10">
+      <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-lg border-b border-white/10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
@@ -221,14 +221,14 @@ export default function SelectTeamPage() {
             </Link>
             <div>
               <h1 className="text-lg font-bold text-white">Select Your Team</h1>
-              <p className="text-xs text-indigo-300">Match #{matchId}</p>
+              <p className="text-xs text-white/50">Match #{matchId}</p>
             </div>
           </div>
           <div
             className={`px-3 py-1.5 rounded-xl font-bold text-sm ${
               selectedCount === 11
                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                : 'bg-white/10 text-white/70 border border-white/20'
             }`}
           >
             {selectedCount}/11
@@ -238,7 +238,7 @@ export default function SelectTeamPage() {
           {teamsInMatch.map((team) => (
             <div
               key={team}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 text-indigo-100"
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 text-white/70"
             >
               {team}: <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
             </div>
@@ -259,7 +259,7 @@ export default function SelectTeamPage() {
         )}
 
         {/* Captain / VC legend */}
-        <div className="flex items-center gap-4 text-xs text-indigo-300">
+        <div className="flex items-center gap-4 text-xs text-white/50">
           <span className="flex items-center gap-1.5">
             <span className="w-5 h-5 bg-amber-500/30 border border-amber-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-amber-300">C</span>
             Captain (2x)
@@ -314,10 +314,10 @@ export default function SelectTeamPage() {
                     {role}
                   </span>
                   <span className="text-white font-medium text-sm">{config.label}</span>
-                  <span className="text-indigo-400 text-xs">({roleSelected} selected)</span>
+                  <span className="text-white/40 text-xs">({roleSelected} selected)</span>
                 </div>
                 <svg
-                  className={`w-4 h-4 text-indigo-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                  className={`w-4 h-4 text-white/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -339,7 +339,7 @@ export default function SelectTeamPage() {
                         key={player.id}
                         className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
                           isSelected
-                            ? 'bg-indigo-500/10'
+                            ? 'bg-white/10'
                             : player.is_playing_xi === false
                               ? 'bg-white/[0.03] hover:bg-white/[0.06]'
                               : 'hover:bg-white/5'
@@ -366,7 +366,7 @@ export default function SelectTeamPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium truncate">{player.name}</p>
                           <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="text-indigo-400">{player.team}</span>
+                            <span className="text-white/40">{player.team}</span>
                             <span className="text-emerald-300 font-semibold">
                               {(player.total_points || 0).toFixed(2)} pts
                             </span>
@@ -425,13 +425,13 @@ export default function SelectTeamPage() {
       </form>
 
       {/* Sticky submit bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-lg border-t border-white/10">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-black/90 backdrop-blur-lg border-t border-white/10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="text-sm min-w-0">
-            <span className={`font-bold ${selectedCount === 11 ? 'text-green-400' : 'text-indigo-300'}`}>
+            <span className={`font-bold ${selectedCount === 11 ? 'text-green-400' : 'text-white/70'}`}>
               {selectedCount}/11
             </span>
-            <span className="text-indigo-400 ml-2">
+            <span className="text-white/50 ml-2">
               {captainId ? 'C' : ''}{captainId && vcId ? ' / ' : ''}{vcId ? 'VC' : ''}
               {!captainId && !vcId && 'No C/VC'}
             </span>
@@ -577,7 +577,7 @@ export default function SelectTeamPage() {
             {/* Close button */}
             <button
               onClick={() => { setShowPreview(false); navigate('/dashboard'); }}
-              className="mt-4 w-full py-3 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold rounded-xl shadow-lg transition-all"
+              className="mt-4 w-full py-3 bg-white text-black hover:bg-white/90 font-semibold rounded-xl shadow-lg transition-all"
             >
               Go to Dashboard
             </button>

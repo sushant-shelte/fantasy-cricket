@@ -38,11 +38,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900 to-indigo-600 flex flex-col">
+    <div className="min-h-screen bg-black flex flex-col">
       {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-400/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
       </div>
 
       <div className="flex-1 flex items-center justify-center px-4 py-8">
@@ -73,7 +73,7 @@ export default function LoginPage() {
               </div>
               <h1 className="text-2xl font-bold text-white">Fantasy Cricket</h1>
             </div>
-            <p className="text-indigo-300 mt-1 text-sm">Hippies Mahasangram</p>
+            <p className="text-white/40 mt-1 text-sm">Hippies Mahasangram</p>
           </div>
 
           {/* Card */}
@@ -86,25 +86,25 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-indigo-200 mb-1.5">Email</label>
+                <label className="block text-sm font-medium text-white/70 mb-1.5">Email</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-indigo-300/50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all"
                   placeholder="you@example.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-indigo-200 mb-1.5">Password</label>
+                <label className="block text-sm font-medium text-white/70 mb-1.5">Password</label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-indigo-300/50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all"
                   placeholder="Enter your password"
                 />
               </div>
@@ -133,19 +133,19 @@ export default function LoginPage() {
                 <div className="w-full border-t border-white/20" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-3 bg-transparent text-indigo-300">or</span>
+                <span className="px-3 bg-transparent text-white/40">or</span>
               </div>
             </div>
 
             <button
               onClick={handleDevLogin}
               disabled={loading}
-              className="w-full py-3 bg-white/10 hover:bg-white/20 text-indigo-200 font-medium rounded-xl border border-white/20 transition-all duration-200 disabled:opacity-50"
+              className="w-full py-3 bg-white/10 hover:bg-white/20 text-white/70 font-medium rounded-xl border border-white/20 transition-all duration-200 disabled:opacity-50"
             >
               Dev Login (No Password)
             </button>
 
-            <p className="mt-5 text-center text-indigo-300 text-sm">
+            <p className="mt-5 text-center text-white/40 text-sm">
               Don't have an account?{' '}
               <Link to="/register" className="text-green-400 hover:text-green-300 font-medium transition-colors">
                 Register
@@ -156,7 +156,7 @@ export default function LoginPage() {
       </div>
 
       {/* Footer */}
-      <div className="relative text-center text-indigo-400/40 text-xs py-4">
+      <div className="relative text-center text-white/20 text-xs py-4">
         Built by Fantasy Cricket Team
       </div>
     </div>
