@@ -42,6 +42,7 @@ async def points_table(user: dict = Depends(get_current_user)):
         SELECT cp.user_id, u.name, cp.match_id, cp.points, cp.last_updated
         FROM contestant_points cp
         JOIN users u ON u.id = cp.user_id
+        WHERE u.is_active = 1
         ORDER BY cp.match_id, cp.points DESC
         """
     ).fetchall()

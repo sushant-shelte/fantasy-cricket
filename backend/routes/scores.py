@@ -4,7 +4,7 @@ from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
-from backend.services.scraper import fetch_scorecard_html
+from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html
 from backend.config import ESPN_MATCH_ID_OFFSET
 from bs4 import BeautifulSoup
 
@@ -58,6 +58,23 @@ async def match_scores(
     soup = BeautifulSoup(html_content, "html.parser")
     match_obj.parse_scorecard(soup)
 
+    players_rows = []
+    for row in players_data:
+        players_rows.append({
+            "id": row["PlayerID"],
+            "name": row["Name"],
+            "team": row["Team"],
+            "role": row["Role"],
+            "aliases": row["Aliases"],
+        })
+
+    playing_xi = fetch_playing_xi(match_id, clean_team_name(match_row["team1"]), clean_team_name(match_row["team2"]), players_rows)
+    for pid in playing_xi.get("player_ids", []):
+        player = match_obj.get_or_create_player(int(pid))
+        if player:
+            player.team = registry.players.get(int(pid), {}).get("Team")
+            player.played = True
+
     # Get stored player points for this match
     pp_rows = db.execute(
         "SELECT * FROM player_points WHERE match_id = ?", (match_id,)
@@ -71,10 +88,14 @@ async def match_scores(
     result = []
     for p in match_obj.players.values():
         pid_str = str(p.player_id)
+        role = role_lookup.get(pid_str) or registry.players.get(p.player_id, {}).get("Role")
+        calculated_points = p.calculate_player_points(role) if role else 0
         result.append({
             "name": p.name,
             "team": p.team,
-            "role": role_lookup.get(pid_str),
+            "role": role,
+            "played": p.played,
+            "is_out": p.is_out,
             "runs": p.runs,
             "balls": p.balls,
             "fours": p.fours,
@@ -92,7 +113,7 @@ async def match_scores(
             "runout_direct": p.runout_direct,
             "stumpings": p.stumpings,
             "runout_indirect": p.runout_indirect,
-            "points": pp_lookup.get(pid_str, 0),
+            "points": calculated_points if calculated_points or p.played else pp_lookup.get(pid_str, 0),
         })
 
     result.sort(key=lambda x: x["points"], reverse=True)
@@ -104,6 +125,7 @@ async def match_scores(
         FROM contestant_points cp
         JOIN users u ON u.id = cp.user_id
         WHERE cp.match_id = ?
+          AND u.is_active = 1
         ORDER BY cp.points DESC
         """,
         (match_id,),
@@ -230,6 +252,8 @@ async def team_diff(
     other_user = db.execute("SELECT * FROM users WHERE id = ?", (other_user_id,)).fetchone()
     if not other_user:
         return {"error": "Contestant not found"}
+    if not other_user["is_active"]:
+        return {"error": "Contestant is inactive"}
 
     my_entries, my_total = _build_team_snapshot(db, user["id"], match_id, match_obj, pp_lookup, role_lookup)
     other_entries, other_total = _build_team_snapshot(db, other_user_id, match_id, match_obj, pp_lookup, role_lookup)
@@ -311,6 +335,7 @@ async def match_contestants(
         FROM user_teams ut
         JOIN users u ON u.id = ut.user_id
         WHERE ut.match_id = ?
+          AND u.is_active = 1
         ORDER BY u.name
         """,
         (match_id,),

@@ -60,13 +60,74 @@ class Match:
 
     def parse_scorecard(self, soup):
         self.players = {}
-        if self.parse_espn_scorecard(soup):
-            return
-        self.parse_legacy_scorecard(soup)
+        self.parse_espn_scorecard(soup)
 
     def parse_espn_scorecard(self, soup):
         lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
         valid_teams = {self.team1, self.team2}
+        reverse_team_map = {short: full for full, short in TEAM_MAP.items() if len(short) <= 4}
+
+        def team_variants(team):
+            variants = {team.lower()}
+            full_name = reverse_team_map.get(team, team)
+            variants.add(full_name.lower())
+            return variants
+
+        # Reject scorecards whose visible title/header teams do not match this match.
+        joined_head = " ".join(lines[:80]).lower()
+        if not any(name in joined_head for name in team_variants(self.team1)):
+            return False
+        if not any(name in joined_head for name in team_variants(self.team2)):
+            return False
+
+        def mark_player_played(name, team):
+            cleaned = str(name).strip()
+            cleaned = re.sub(r"^\d+\s*[.)-]?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*\([^)]*\)\s*$", "", cleaned)
+            cleaned = clean_name(cleaned)
+            if not cleaned:
+                return False
+            pid = self.get_player_id(cleaned, team)
+            if not pid:
+                return False
+            player = self.get_or_create_player(pid)
+            player.team = team
+            player.played = True
+            return True
+
+        def mark_players_from_line(line, team):
+            found_any = False
+            for raw_name in re.split(r",|;|\u2022|\||\s{2,}", line):
+                if mark_player_played(raw_name, team):
+                    found_any = True
+            return found_any
+
+        def mark_team_section_line(line, team):
+            normalized_line = " " + clean_name(str(line)).lower() + " "
+            found_any = False
+
+            for pid, player_data in self.registry.players.items():
+                if player_data.get("Team") != team:
+                    continue
+
+                candidate_names = [player_data.get("Name", "")]
+                aliases = player_data.get("Aliases", "")
+                if aliases:
+                    candidate_names.extend(alias.strip() for alias in aliases.split(",") if alias.strip())
+
+                for candidate in candidate_names:
+                    normalized_candidate = clean_name(candidate).lower()
+                    if normalized_candidate and f" {normalized_candidate} " in normalized_line:
+                        player = self.get_or_create_player(pid)
+                        player.team = team
+                        player.played = True
+                        found_any = True
+                        break
+
+            if found_any:
+                return True
+
+            return mark_players_from_line(line, team)
 
         # Find innings headers like "Royal Challengers Bengaluru Innings"
         def find_innings_headers():
@@ -111,6 +172,23 @@ class Match:
         def is_float_text(value):
             return bool(re.fullmatch(r"\d+(?:\.\d+)?", str(value).strip()))
 
+        def is_reasonable_batter_values(runs, balls, fours, sixes, strike_rate):
+            if runs < 0 or runs > 300:
+                return False
+            if balls < 0 or balls > 200:
+                return False
+            if fours < 0 or fours > 40:
+                return False
+            if sixes < 0 or sixes > 25:
+                return False
+            if strike_rate < 0 or strike_rate > 400:
+                return False
+            if balls > 0 and (fours > balls or sixes > balls):
+                return False
+            if runs >= 0 and (fours * 4 + sixes * 6 > runs + 36):
+                return False
+            return True
+
         def get_batter_layout(index, end):
             # 8-column layout (with minutes column)
             if index + 7 < end and (
@@ -118,14 +196,26 @@ class Match:
                 is_int_text(lines[index + 4]) and is_int_text(lines[index + 5]) and
                 is_int_text(lines[index + 6]) and is_float_text(lines[index + 7])
             ):
-                return {"step": 8, "runs_idx": 2, "balls_idx": 3, "fours_idx": 5, "sixes_idx": 6, "sr_idx": 7}
+                runs = int(lines[index + 2])
+                balls = int(lines[index + 3])
+                fours = int(lines[index + 5])
+                sixes = int(lines[index + 6])
+                strike_rate = float(lines[index + 7])
+                if is_reasonable_batter_values(runs, balls, fours, sixes, strike_rate):
+                    return {"step": 8, "runs_idx": 2, "balls_idx": 3, "fours_idx": 5, "sixes_idx": 6, "sr_idx": 7}
             # 7-column layout
             if index + 6 < end and (
                 is_int_text(lines[index + 2]) and is_int_text(lines[index + 3]) and
                 is_int_text(lines[index + 4]) and is_int_text(lines[index + 5]) and
                 is_float_text(lines[index + 6])
             ):
-                return {"step": 7, "runs_idx": 2, "balls_idx": 3, "fours_idx": 4, "sixes_idx": 5, "sr_idx": 6}
+                runs = int(lines[index + 2])
+                balls = int(lines[index + 3])
+                fours = int(lines[index + 4])
+                sixes = int(lines[index + 5])
+                strike_rate = float(lines[index + 6])
+                if is_reasonable_batter_values(runs, balls, fours, sixes, strike_rate):
+                    return {"step": 7, "runs_idx": 2, "balls_idx": 3, "fours_idx": 4, "sixes_idx": 5, "sr_idx": 6}
             return None
 
         def looks_like_batter_row(index, end):
@@ -140,7 +230,7 @@ class Match:
             return get_batter_layout(index, end) is not None
 
         def looks_like_bowler_row(index, end):
-            if index + 5 >= end:
+            if index + 6 >= end:
                 return False
             name = lines[index]
             if name.upper() in {"BOWLING", "O", "M", "R", "W", "ECON", "0S", "4S", "6S", "WD", "NB"}:
@@ -148,8 +238,32 @@ class Match:
             return (
                 is_float_text(lines[index + 1]) and is_int_text(lines[index + 2]) and
                 is_int_text(lines[index + 3]) and is_int_text(lines[index + 4]) and
-                is_float_text(lines[index + 5])
+                is_float_text(lines[index + 5]) and is_int_text(lines[index + 6])
             )
+
+        def is_reasonable_bowling_row(index):
+            try:
+                overs = float(lines[index + 1])
+                maidens = int(lines[index + 2])
+                runs = int(lines[index + 3])
+                wickets = int(lines[index + 4])
+                dot_balls = int(lines[index + 6])
+            except Exception:
+                return False
+
+            # Defensive bounds for T20 bowling; reject obviously corrupted rows.
+            if overs < 0 or overs > 4.0:
+                return False
+            if maidens < 0 or maidens > 4:
+                return False
+            if runs < 0 or runs > 80:
+                return False
+            if wickets < 0 or wickets > 5:
+                return False
+            if dot_balls < 0 or dot_balls > 24:
+                return False
+
+            return True
 
         innings_headers = find_innings_headers()
         if not innings_headers:
@@ -196,7 +310,7 @@ class Match:
                     idx += 1
 
             # Parse DNB
-            dnb_idx = find_between(header_pos, section_end, ("Did not bat",))
+            dnb_idx = find_between(header_pos, section_end, ("Did not bat", "Yet to bat", "Yet To Bat"))
             bowling_idx = find_between(header_pos, section_end, ("Bowling", "BOWLING"))
             fow_idx = find_prefix_between(header_pos, section_end, "fall of wickets")
             dnb_end = min(idx for idx in (fow_idx, bowling_idx, section_end) if idx != -1)
@@ -206,22 +320,16 @@ class Match:
                     line = lines[idx]
                     if line == ":":
                         continue
-                    for raw_name in line.split(","):
-                        name = clean_name(re.sub(r"\s*\([^)]*\)\s*$", "", raw_name).strip())
-                        if not name:
-                            continue
-                        pid = self.get_player_id(name, batting_team)
-                        if not pid:
-                            continue
-                        player = self.get_or_create_player(pid)
-                        player.team = batting_team
-                        player.played = True
+                    mark_players_from_line(line, batting_team)
 
             # Parse bowlers
             if bowling_idx != -1:
                 idx = bowling_idx + 1
                 while idx < section_end:
                     if looks_like_bowler_row(idx, section_end):
+                        if not is_reasonable_bowling_row(idx):
+                            idx += 1
+                            continue
                         name = clean_name(lines[idx])
                         pid = self.get_player_id(name, bowling_team)
                         if not pid:
@@ -237,9 +345,27 @@ class Match:
                         player.dot_balls = int(lines[idx + 6])
                         if player.overs > 0:
                             player.economy = round(player.runs_conceded / player.overs, 2)
-                        idx += 6
+                        idx += 7
                         continue
                     idx += 1
+
+        for team in (self.team1, self.team2):
+            team_markers = {
+                f"{team} team".lower(),
+                f"{reverse_team_map.get(team, team)} team".lower(),
+            }
+            for idx, line in enumerate(lines):
+                normalized_line = " ".join(line.lower().split())
+                if not any(marker and marker in normalized_line for marker in team_markers):
+                    continue
+
+                for team_line in lines[idx + 1:idx + 50]:
+                    upper_line = team_line.upper()
+                    if upper_line in {"BATSMEN", "BATTING", "BOWLING", "EXTRAS", "TOTAL"}:
+                        continue
+                    if upper_line.endswith(" INNINGS") or upper_line.startswith("FALL OF WICKETS"):
+                        break
+                    mark_team_section_line(team_line, team)
 
         return True
 

@@ -24,6 +24,8 @@ export type Player = {
   team: string;
   role: string;
   aliases: string;
+  total_points?: number;
+  is_playing_xi?: boolean | null;
 };
 
 export type TeamSelection = {
@@ -39,6 +41,8 @@ export type PlayerScore = {
   name: string;
   team: string;
   role: string;
+  played: boolean;
+  is_out: boolean;
   runs: number;
   balls: number;
   fours: number;
@@ -48,6 +52,7 @@ export type PlayerScore = {
   maidens: number;
   runs_conceded: number;
   wickets: number;
+  dot_balls: number;
   bowled: number;
   lbw: number;
   economy: number;
@@ -74,4 +79,33 @@ export type PointsTableEntry = {
   match_id: number;
   points: number;
   last_updated: string;
+};
+
+export type AdminMatchWithTeamCount = {
+  id: number;
+  team1: string;
+  team2: string;
+  match_date: string;
+  match_time: string;
+  team_count: number;
+};
+
+export type AdminTeamPlayer = {
+  player_id: number;
+  player_name: string;
+  team: string;
+  role: string;
+  is_captain: boolean;
+  is_vice_captain: boolean;
+};
+
+export type AdminUserTeam = {
+  user_id: number;
+  user_name: string;
+  user_email?: string;
+  user_mobile?: string;
+  players: AdminTeamPlayer[];
+  team_counts: Record<string, number>;
+  captain_name?: string | null;
+  vice_captain_name?: string | null;
 };

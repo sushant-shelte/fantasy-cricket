@@ -458,6 +458,28 @@ try:
             CACHE["last_updated"] = now
     
         return CACHE[sheet_name]
+
+    def get_player_total_points():
+        totals = {}
+
+        try:
+            points_rows = sheet.worksheet("PlayerPoints").get_all_records()
+        except Exception:
+            return totals
+
+        for row in points_rows:
+            player_id = str(row.get("PlayerID", "")).strip()
+            if not player_id:
+                continue
+
+            try:
+                points = float(row.get("Points", 0) or 0)
+            except (TypeError, ValueError):
+                points = 0
+
+            totals[player_id] = totals.get(player_id, 0) + points
+
+        return totals
     
     # =============================
     # MATCH LOCK LOGIC (UNCHANGED)
@@ -1986,12 +2008,21 @@ try:
                 unique_players.append(p)
     
         players = unique_players
+        player_total_points = get_player_total_points()
+
+        for p in players:
+            p["TotalPoints"] = player_total_points.get(str(p["PlayerID"]).strip(), 0)
     
         grouped = {role: [] for role in ROLES}
     
         for p in players:
             if p["Role"] in grouped:
                 grouped[p["Role"]].append(p)
+
+        for role_players in grouped.values():
+            role_players.sort(
+                key=lambda player: (-player.get("TotalPoints", 0), player["Name"])
+            )
 
         html = f"""
         <h2>{team1} vs {team2}</h2>
@@ -2009,6 +2040,7 @@ try:
                     <th>C</th>
                     <th>VC</th>
                     <th>Player</th>
+                    <th>Total Points</th>
                 </tr>
             """
 
@@ -2030,6 +2062,7 @@ try:
                         <input type="radio" name="vice_captain" value="{p['PlayerID']}" id="mvc{p['PlayerID']}" disabled>
                     </td>
                     <td>{p['Name']} ({p['Team']})</td>
+                    <td>{p.get('TotalPoints', 0):.2f}</td>
                 </tr>
                 """
 

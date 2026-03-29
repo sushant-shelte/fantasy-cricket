@@ -9,6 +9,11 @@ interface SelectedPlayer {
   is_vice_captain: boolean;
 }
 
+interface PlayingXiState {
+  announced: boolean;
+  url: string | null;
+}
+
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   Wicketkeeper: { label: 'Wicket-Keeper', color: 'text-purple-300', bg: 'bg-purple-500/20', border: 'border-purple-500/30' },
   Batter: { label: 'Batsman', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
@@ -27,6 +32,7 @@ export default function SelectTeamPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [playingXi, setPlayingXi] = useState<PlayingXiState>({ announced: false, url: null });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -37,8 +43,15 @@ export default function SelectTeamPage() {
         ]);
         // API returns {Wicketkeeper: [...], Batter: [...], ...} — flatten to array
         const data = playersRes.data || {};
-        const flat = Array.isArray(data) ? data : Object.values(data).flat() as Player[];
+        const groupedPlayers = data.players || data;
+        const flat = Array.isArray(groupedPlayers)
+          ? groupedPlayers
+          : Object.values(groupedPlayers).flat() as Player[];
         setPlayers(flat);
+        setPlayingXi({
+          announced: Boolean(data.playing_xi?.announced),
+          url: data.playing_xi?.url || null,
+        });
 
         // Pre-select existing team
         const existing: TeamSelection[] = teamRes.data || [];
@@ -110,12 +123,31 @@ export default function SelectTeamPage() {
       if (!groups[role]) groups[role] = [];
       groups[role].push(p);
     });
+
+    Object.values(groups).forEach((group) => {
+      group.sort((a, b) => {
+        const playingDiff = Number(Boolean(b.is_playing_xi)) - Number(Boolean(a.is_playing_xi));
+        if (playingDiff !== 0) return playingDiff;
+        const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
+        if (pointsDiff !== 0) return pointsDiff;
+        return a.name.localeCompare(b.name);
+      });
+    });
+
     return groups;
   };
 
   const selectedCount = selected.size;
   const captainId = [...selected.values()].find((s) => s.is_captain)?.player_id;
   const vcId = [...selected.values()].find((s) => s.is_vice_captain)?.player_id;
+  const selectedByTeam: Record<string, number> = {};
+
+  players.forEach((player) => {
+    if (!selected.has(player.id)) return;
+    selectedByTeam[player.team] = (selectedByTeam[player.team] || 0) + 1;
+  });
+
+  const teamsInMatch = [...new Set(players.map((player) => player.team))].sort();
 
   const validate = (): string | null => {
     if (selectedCount !== 11) return `Select exactly 11 players (currently ${selectedCount}).`;
@@ -202,6 +234,16 @@ export default function SelectTeamPage() {
             {selectedCount}/11
           </div>
         </div>
+        <div className="max-w-3xl mx-auto px-4 pb-3 flex flex-wrap gap-2">
+          {teamsInMatch.map((team) => (
+            <div
+              key={team}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 text-indigo-100"
+            >
+              {team}: <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
+            </div>
+          ))}
+        </div>
       </header>
 
       <form onSubmit={handleSubmit} className="max-w-3xl mx-auto px-4 py-4 space-y-4">
@@ -226,6 +268,31 @@ export default function SelectTeamPage() {
             <span className="w-5 h-5 bg-sky-500/30 border border-sky-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-sky-300">VC</span>
             Vice Captain (1.5x)
           </span>
+        </div>
+
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${
+          playingXi.announced
+            ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100'
+            : 'bg-amber-500/10 border-amber-400/20 text-amber-100'
+        }`}>
+          <div className="font-semibold">
+            {playingXi.announced ? 'Playing XI announced' : 'Playing XI not announced yet'}
+          </div>
+          <div className="mt-1 text-xs opacity-90">
+            {playingXi.announced
+              ? 'Players tagged as Playing XI are from the current post-toss lineup.'
+              : 'The app starts checking ESPN around 30 minutes before match start and will highlight confirmed starters once they appear.'}
+          </div>
+          {playingXi.url && (
+            <a
+              href={playingXi.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-xs font-semibold text-cyan-300 hover:text-cyan-200"
+            >
+              Open ESPN playing XI page
+            </a>
+          )}
         </div>
 
         {sortedRoles.map((role) => {
@@ -271,7 +338,11 @@ export default function SelectTeamPage() {
                       <div
                         key={player.id}
                         className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
-                          isSelected ? 'bg-indigo-500/10' : 'hover:bg-white/5'
+                          isSelected
+                            ? 'bg-indigo-500/10'
+                            : player.is_playing_xi === false
+                              ? 'bg-white/[0.03] hover:bg-white/[0.06]'
+                              : 'hover:bg-white/5'
                         }`}
                       >
                         {/* Checkbox */}
@@ -294,7 +365,22 @@ export default function SelectTeamPage() {
                         {/* Player info */}
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium truncate">{player.name}</p>
-                          <span className="text-indigo-400 text-xs">{player.team}</span>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="text-indigo-400">{player.team}</span>
+                            <span className="text-emerald-300 font-semibold">
+                              {(player.total_points || 0).toFixed(2)} pts
+                            </span>
+                            {player.is_playing_xi === true && (
+                              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
+                                Playing XI
+                              </span>
+                            )}
+                            {player.is_playing_xi === false && (
+                              <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 font-semibold text-slate-300">
+                                Squad
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Captain radio */}
@@ -341,7 +427,7 @@ export default function SelectTeamPage() {
       {/* Sticky submit bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-lg border-t border-white/10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="text-sm">
+          <div className="text-sm min-w-0">
             <span className={`font-bold ${selectedCount === 11 ? 'text-green-400' : 'text-indigo-300'}`}>
               {selectedCount}/11
             </span>
@@ -349,6 +435,13 @@ export default function SelectTeamPage() {
               {captainId ? 'C' : ''}{captainId && vcId ? ' / ' : ''}{vcId ? 'VC' : ''}
               {!captainId && !vcId && 'No C/VC'}
             </span>
+            <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-300">
+              {teamsInMatch.map((team) => (
+                <span key={team}>
+                  {team}: <span className="text-emerald-300 font-semibold">{selectedByTeam[team] || 0}</span>
+                </span>
+              ))}
+            </div>
           </div>
           <button
             onClick={(e) => {

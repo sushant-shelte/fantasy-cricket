@@ -223,8 +223,10 @@ def get_teams() -> list[dict]:
     rows = db.execute(
         """
         SELECT
+            u.id     AS user_id,
             u.name   AS user_name,
             u.mobile AS mobile,
+            u.is_active AS user_is_active,
             ut.match_id,
             ut.player_id,
             p.name   AS player_name,
@@ -238,8 +240,10 @@ def get_teams() -> list[dict]:
 
     return [
         {
+            "UserID": r["user_id"],
             "User": r["user_name"],
             "Mobile": r["mobile"] or "",
+            "IsActive": bool(r["user_is_active"]),
             "MatchID": str(r["match_id"]),
             "PlayerID": r["player_id"],
             "Name": r["player_name"],
@@ -314,6 +318,7 @@ def get_contestant_points() -> list[dict]:
     rows = db.execute(
         """
         SELECT
+            u.id     AS user_id,
             u.name   AS user_name,
             u.mobile AS mobile,
             cp.match_id,
@@ -325,6 +330,7 @@ def get_contestant_points() -> list[dict]:
     ).fetchall()
     return [
         {
+            "UserID": r["user_id"],
             "User": r["user_name"],
             "Mobile": r["mobile"] or "",
             "MatchID": str(r["match_id"]),
@@ -345,14 +351,19 @@ def save_contestant_points(rows: list[dict]) -> None:
     db = get_db()
 
     for row in rows:
-        mobile = str(row["Mobile"])
+        user_id = row.get("UserID")
+        mobile = str(row.get("Mobile", ""))
         match_id = int(row["MatchID"])
         points = float(row["Points"])
         last_updated = row.get("LastUpdated", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-        user = db.execute(
-            "SELECT id FROM users WHERE mobile = ?", (mobile,)
-        ).fetchone()
+        user = None
+        if user_id is not None:
+            user = db.execute("SELECT id FROM users WHERE id = ?", (int(user_id),)).fetchone()
+        if not user and mobile:
+            user = db.execute(
+                "SELECT id FROM users WHERE mobile = ?", (mobile,)
+            ).fetchone()
         if not user:
             continue
 
@@ -365,6 +376,19 @@ def save_contestant_points(rows: list[dict]) -> None:
             (user["id"], match_id, points, last_updated),
         )
 
+    db.commit()
+
+
+def delete_inactive_contestant_points() -> None:
+    db = get_db()
+    db.execute(
+        """
+        DELETE FROM contestant_points
+        WHERE user_id IN (
+            SELECT id FROM users WHERE is_active = 0
+        )
+        """
+    )
     db.commit()
 
 

@@ -32,6 +32,15 @@ const navItems = [
     ),
   },
   {
+    to: '/admin/teams',
+    label: 'Teams',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5V8l-5-5H7L2 8v12h5m10 0v-6H7v6m10 0H7" />
+      </svg>
+    ),
+  },
+  {
     to: '/admin/users',
     label: 'Users',
     icon: (
