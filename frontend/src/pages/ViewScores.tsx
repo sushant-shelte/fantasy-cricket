@@ -32,6 +32,7 @@ interface TeamDiffData {
   common_role_diff_total: number;
   common_role_diff: TeamDiffRow[];
   common_players: TeamDiffRow[];
+  error?: string;
 }
 
 interface Contestant { id: number; name: string; }
@@ -359,9 +360,9 @@ export default function ViewScoresPage() {
               </>
             )}
 
-            {diffData && (diffData as any).error && (
+            {diffData?.error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-400 text-sm">
-                {(diffData as any).error}
+                {diffData.error}
               </div>
             )}
           </div>
