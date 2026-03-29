@@ -125,6 +125,14 @@ export default function SelectTeamPage() {
   const selectedCount = selected.size;
   const captainId = [...selected.values()].find((s) => s.is_captain)?.player_id;
   const vcId = [...selected.values()].find((s) => s.is_vice_captain)?.player_id;
+  const selectedByTeam: Record<string, number> = {};
+
+  players.forEach((player) => {
+    if (!selected.has(player.id)) return;
+    selectedByTeam[player.team] = (selectedByTeam[player.team] || 0) + 1;
+  });
+
+  const teamsInMatch = [...new Set(players.map((player) => player.team))].sort();
 
   const validate = (): string | null => {
     if (selectedCount !== 11) return `Select exactly 11 players (currently ${selectedCount}).`;
@@ -210,6 +218,16 @@ export default function SelectTeamPage() {
           >
             {selectedCount}/11
           </div>
+        </div>
+        <div className="max-w-3xl mx-auto px-4 pb-3 flex flex-wrap gap-2">
+          {teamsInMatch.map((team) => (
+            <div
+              key={team}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 text-indigo-100"
+            >
+              {team}: <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
+            </div>
+          ))}
         </div>
       </header>
 
@@ -355,7 +373,7 @@ export default function SelectTeamPage() {
       {/* Sticky submit bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-lg border-t border-white/10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="text-sm">
+          <div className="text-sm min-w-0">
             <span className={`font-bold ${selectedCount === 11 ? 'text-green-400' : 'text-indigo-300'}`}>
               {selectedCount}/11
             </span>
@@ -363,6 +381,13 @@ export default function SelectTeamPage() {
               {captainId ? 'C' : ''}{captainId && vcId ? ' / ' : ''}{vcId ? 'VC' : ''}
               {!captainId && !vcId && 'No C/VC'}
             </span>
+            <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-300">
+              {teamsInMatch.map((team) => (
+                <span key={team}>
+                  {team}: <span className="text-emerald-300 font-semibold">{selectedByTeam[team] || 0}</span>
+                </span>
+              ))}
+            </div>
           </div>
           <button
             onClick={(e) => {
