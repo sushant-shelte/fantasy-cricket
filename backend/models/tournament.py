@@ -7,7 +7,7 @@ from backend.config import IST, ESPN_MATCH_ID_OFFSET
 from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
-from backend.services.scraper import fetch_scorecard_html
+from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html
 from backend.services import data_service
 from bs4 import BeautifulSoup
 
@@ -59,11 +59,28 @@ class Tournament:
 
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
         html_text = fetch_scorecard_html(scorecard_id)
-        if not html_text:
-            return
+        if html_text:
+            soup = BeautifulSoup(html_text, "html.parser")
+            match.parse_scorecard(soup)
 
-        soup = BeautifulSoup(html_text, "html.parser")
-        match.parse_scorecard(soup)
+        players_rows = []
+        for pid, info in self.registry.players.items():
+            if info.get("Team") not in (match.team1, match.team2):
+                continue
+            players_rows.append({
+                "id": pid,
+                "name": info.get("Name", ""),
+                "team": info.get("Team", ""),
+                "role": info.get("Role", ""),
+                "aliases": info.get("Aliases", ""),
+            })
+
+        playing_xi = fetch_playing_xi(int(match_id), match.team1, match.team2, players_rows)
+        for pid in playing_xi.get("player_ids", []):
+            player = match.get_or_create_player(int(pid))
+            if player:
+                player.team = self.registry.players.get(int(pid), {}).get("Team")
+                player.played = True
 
     def get_match_status(self, match_row):
         try:
@@ -76,8 +93,10 @@ class Tournament:
 
         now = datetime.now(IST)
 
-        if now < match_datetime:
+        if now < match_datetime - timedelta(minutes=30):
             return "future"
+        elif now < match_datetime:
+            return "lineups"
         elif now < match_datetime + timedelta(hours=5):
             return "live"
         return "over"
@@ -164,8 +183,8 @@ class Tournament:
 
                         # Per-match error handling — one failure doesn't stop others
                         try:
-                            if status == "live":
-                                print(f"  Match {match_id}: LIVE — fetching scores")
+                            if status in ("lineups", "live"):
+                                print(f"  Match {match_id}: {status.upper()} — fetching scores")
                                 self.update_match_data(match_id)
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
