@@ -77,3 +77,32 @@ export type PointsTableEntry = {
   points: number;
   last_updated: string;
 };
+
+export type AdminMatchWithTeamCount = {
+  id: number;
+  team1: string;
+  team2: string;
+  match_date: string;
+  match_time: string;
+  team_count: number;
+};
+
+export type AdminTeamPlayer = {
+  player_id: number;
+  player_name: string;
+  team: string;
+  role: string;
+  is_captain: boolean;
+  is_vice_captain: boolean;
+};
+
+export type AdminUserTeam = {
+  user_id: number;
+  user_name: string;
+  user_email?: string;
+  user_mobile?: string;
+  players: AdminTeamPlayer[];
+  team_counts: Record<string, number>;
+  captain_name?: string | null;
+  vice_captain_name?: string | null;
+};
