@@ -40,7 +40,8 @@ export default function DashboardPage() {
   const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
   // Split matches into tabs
-  const todayMatches = matches.filter(m => m.match_date === todayIST);
+  // Today = today's matches + any live match (even if started yesterday)
+  const todayMatches = matches.filter(m => m.match_date === todayIST || m.status === 'live');
   const upcomingMatches = matches.filter(m => m.status === 'future' && m.match_date !== todayIST);
   const completedMatches = matches.filter(m => m.status === 'over');
 
