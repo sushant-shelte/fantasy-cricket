@@ -32,6 +32,7 @@ export default function SelectTeamPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
   const [playingXi, setPlayingXi] = useState<PlayingXiState>({ announced: false, url: null });
 
   useEffect(() => {
@@ -185,8 +186,7 @@ export default function SelectTeamPage() {
       };
       await client.post('/api/teams', payload);
       setSuccess('Team saved successfully!');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      setTimeout(() => navigate('/dashboard'), 2000);
+      setShowPreview(true);
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.response?.data?.error || 'Failed to save team.';
       setError(msg);
@@ -466,6 +466,124 @@ export default function SelectTeamPage() {
           </button>
         </div>
       </div>
+
+      {/* Team Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md relative">
+            {/* Ground */}
+            <div className="rounded-3xl overflow-hidden shadow-2xl"
+              style={{ background: 'linear-gradient(180deg, #1a5e1a 0%, #2d8a2d 30%, #3da33d 50%, #2d8a2d 70%, #1a5e1a 100%)' }}>
+
+              {/* Header */}
+              <div className="text-center pt-4 pb-2">
+                <p className="text-white/60 text-xs font-medium uppercase tracking-wider">Your Team</p>
+                <p className="text-white text-lg font-bold">Fantasy Cricket</p>
+              </div>
+
+              {/* Pitch lines */}
+              <div className="relative px-4 pb-6">
+                {/* Oval border */}
+                <div className="absolute inset-x-8 inset-y-4 border-2 border-white/15 rounded-[50%]" />
+
+                {/* Wicketkeeper */}
+                <div className="relative z-10 mb-4">
+                  <p className="text-center text-white/40 text-[10px] uppercase tracking-widest mb-2">Wicketkeeper</p>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    {players.filter(p => selected.has(p.id) && p.role === 'Wicketkeeper').map(p => (
+                      <div key={p.id} className="flex flex-col items-center">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-lg ${
+                          captainId === p.id ? 'bg-amber-400 text-black ring-2 ring-amber-300' :
+                          vcId === p.id ? 'bg-sky-400 text-black ring-2 ring-sky-300' :
+                          'bg-white text-green-900'
+                        }`}>
+                          {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}
+                        </div>
+                        <p className="text-white text-[10px] font-medium mt-1 max-w-[60px] text-center truncate">{p.name.split(' ').pop()}</p>
+                        <span className="text-white/40 text-[8px]">{p.team}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Batters */}
+                <div className="relative z-10 mb-4">
+                  <p className="text-center text-white/40 text-[10px] uppercase tracking-widest mb-2">Batters</p>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    {players.filter(p => selected.has(p.id) && p.role === 'Batter').map(p => (
+                      <div key={p.id} className="flex flex-col items-center">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-lg ${
+                          captainId === p.id ? 'bg-amber-400 text-black ring-2 ring-amber-300' :
+                          vcId === p.id ? 'bg-sky-400 text-black ring-2 ring-sky-300' :
+                          'bg-white text-green-900'
+                        }`}>
+                          {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}
+                        </div>
+                        <p className="text-white text-[10px] font-medium mt-1 max-w-[60px] text-center truncate">{p.name.split(' ').pop()}</p>
+                        <span className="text-white/40 text-[8px]">{p.team}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* All-Rounders */}
+                <div className="relative z-10 mb-4">
+                  <p className="text-center text-white/40 text-[10px] uppercase tracking-widest mb-2">All-Rounders</p>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    {players.filter(p => selected.has(p.id) && p.role === 'AllRounder').map(p => (
+                      <div key={p.id} className="flex flex-col items-center">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-lg ${
+                          captainId === p.id ? 'bg-amber-400 text-black ring-2 ring-amber-300' :
+                          vcId === p.id ? 'bg-sky-400 text-black ring-2 ring-sky-300' :
+                          'bg-white text-green-900'
+                        }`}>
+                          {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}
+                        </div>
+                        <p className="text-white text-[10px] font-medium mt-1 max-w-[60px] text-center truncate">{p.name.split(' ').pop()}</p>
+                        <span className="text-white/40 text-[8px]">{p.team}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bowlers */}
+                <div className="relative z-10">
+                  <p className="text-center text-white/40 text-[10px] uppercase tracking-widest mb-2">Bowlers</p>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    {players.filter(p => selected.has(p.id) && p.role === 'Bowler').map(p => (
+                      <div key={p.id} className="flex flex-col items-center">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-lg ${
+                          captainId === p.id ? 'bg-amber-400 text-black ring-2 ring-amber-300' :
+                          vcId === p.id ? 'bg-sky-400 text-black ring-2 ring-sky-300' :
+                          'bg-white text-green-900'
+                        }`}>
+                          {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}
+                        </div>
+                        <p className="text-white text-[10px] font-medium mt-1 max-w-[60px] text-center truncate">{p.name.split(' ').pop()}</p>
+                        <span className="text-white/40 text-[8px]">{p.team}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer legend */}
+              <div className="flex justify-center gap-4 pb-4 text-[10px] text-white/50">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-400"></span> Captain (2x)</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-sky-400"></span> Vice Captain (1.5x)</span>
+              </div>
+            </div>
+
+            {/* Close button */}
+            <button
+              onClick={() => { setShowPreview(false); navigate('/dashboard'); }}
+              className="mt-4 w-full py-3 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold rounded-xl shadow-lg transition-all"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
