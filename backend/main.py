@@ -64,6 +64,25 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/status")
+def status():
+    from backend.database import get_db
+    db = get_db()
+    try:
+        players = db.execute("SELECT COUNT(*) as cnt FROM players").fetchone()
+        matches = db.execute("SELECT COUNT(*) as cnt FROM matches").fetchone()
+        users = db.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
+        return {
+            "status": "ok",
+            "players": players["cnt"] if isinstance(players, dict) else players[0],
+            "matches": matches["cnt"] if isinstance(matches, dict) else matches[0],
+            "users": users["cnt"] if isinstance(users, dict) else users[0],
+            "scheduler": "running",
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
 # Serve React static files in production
 STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
 
