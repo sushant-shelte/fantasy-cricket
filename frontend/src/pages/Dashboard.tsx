@@ -116,17 +116,21 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white">
-          Welcome, <span className="text-green-400">{profile?.name || 'Player'}</span>
-        </h2>
-        <p className="text-indigo-300 text-sm mt-1">Pick your team and track live scores</p>
-      </div>
+    <div className="-mx-4 -mt-6">
+      {/* Hero with Sachin background */}
+      <div className="relative overflow-hidden rounded-b-3xl mb-6">
+        <div className="absolute inset-0">
+          <img src="/sachin.png" alt="" className="w-full h-full object-cover opacity-40" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-slate-900" />
+        </div>
+        <div className="relative z-10 px-4 pt-10 pb-8">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+            Welcome, <span className="text-green-400">{profile?.name || 'Player'}</span>
+          </h2>
+          <p className="text-white/40 text-sm mt-1">Hippies Mahasangram</p>
 
-      <div className="space-y-6">
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
+          {/* Quick Actions */}
+          <div className="grid grid-cols-2 gap-3 mt-6">
           <Link to="/leaderboard"
             className="flex flex-col items-center gap-2 p-4 bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/20 rounded-2xl transition-all group">
             <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -145,8 +149,11 @@ export default function DashboardPage() {
             </div>
             <span className="text-indigo-300 text-sm font-medium">Points Table</span>
           </Link>
+          </div>
         </div>
+      </div>
 
+      <div className="px-4 space-y-6">
         {/* Tabs */}
         <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
           {tabs.map(t => (
@@ -204,7 +211,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="text-center text-indigo-500/30 text-xs py-6">
+      <div className="text-center text-white/10 text-xs py-6">
         Built by Sushant & Rupesh
       </div>
     </div>
