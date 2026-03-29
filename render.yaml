@@ -1,14 +1,18 @@
+databases:
+  - name: fantasy-cricket-db
+    plan: free
+
 services:
   - type: web
     name: fantasy-cricket
     runtime: python
-    buildCommand: |
-      pip install -r backend/requirements.txt &&
-      curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
-      apt-get install -y nodejs &&
-      cd frontend && npm install && npm run build
+    buildCommand: bash build.sh
     startCommand: python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fantasy-cricket-db
+          property: connectionString
       - key: FIREBASE_CREDENTIALS
         sync: false
       - key: SECRET_KEY
