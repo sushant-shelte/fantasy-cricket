@@ -156,6 +156,82 @@ async def my_team_for_match(
     return [row["name"] for row in rows]
 
 
+@router.get("/{match_id}/team-breakdown")
+async def team_breakdown(
+    match_id: int,
+    user_id: int = None,
+    user: dict = Depends(get_current_user),
+):
+    """Get detailed breakdown of a user's team points for a match."""
+    db = get_db()
+    target_user_id = user_id or user["id"]
+
+    # Get user's team
+    team_rows = db.execute(
+        """
+        SELECT ut.player_id, ut.is_captain, ut.is_vice_captain,
+               p.name, p.team, p.role
+        FROM user_teams ut
+        JOIN players p ON p.id = ut.player_id
+        WHERE ut.user_id = ? AND ut.match_id = ?
+        """,
+        (target_user_id, match_id),
+    ).fetchall()
+
+    if not team_rows:
+        return {"error": "No team found for this match"}
+
+    # Get player points
+    pp_rows = db.execute(
+        "SELECT player_id, points FROM player_points WHERE match_id = ?",
+        (match_id,),
+    ).fetchall()
+    pp_lookup = {row["player_id"]: float(row["points"]) for row in pp_rows}
+
+    # Get user name
+    target_user = db.execute("SELECT name FROM users WHERE id = ?", (target_user_id,)).fetchone()
+
+    breakdown = []
+    total = 0.0
+
+    for row in team_rows:
+        pid = row["player_id"]
+        base_pts = pp_lookup.get(pid, 0)
+        is_captain = bool(row["is_captain"])
+        is_vc = bool(row["is_vice_captain"])
+
+        if is_captain:
+            multiplier = 2.0
+            tag = "C"
+        elif is_vc:
+            multiplier = 1.5
+            tag = "VC"
+        else:
+            multiplier = 1.0
+            tag = ""
+
+        adjusted = round(base_pts * multiplier, 2)
+        total += adjusted
+
+        breakdown.append({
+            "name": row["name"],
+            "team": row["team"],
+            "role": row["role"],
+            "base_points": base_pts,
+            "multiplier": multiplier,
+            "tag": tag,
+            "adjusted_points": adjusted,
+        })
+
+    breakdown.sort(key=lambda x: x["adjusted_points"], reverse=True)
+
+    return {
+        "user_name": target_user["name"] if target_user else "Unknown",
+        "total": round(total, 2),
+        "players": breakdown,
+    }
+
+
 def _load_match_and_points(db, match_id):
     """Shared helper: fetch scorecard, parse, get player points."""
     match_row = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()

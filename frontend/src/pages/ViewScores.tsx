@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { PlayerScore, ContestantScore } from '../types';
@@ -46,6 +46,7 @@ const ROLE_SYMBOLS: Record<string, { symbol: string; label: string }> = {
 
 export default function ViewScoresPage() {
   const { matchId } = useParams<{ matchId: string }>();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const [playerScores, setPlayerScores] = useState<PlayerScore[]>([]);
   const [contestants, setContestants] = useState<ContestantScore[]>([]);
@@ -54,8 +55,17 @@ export default function ViewScoresPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Tab state — read from URL param if present
+  const initialTab = (searchParams.get('tab') as 'scores' | 'myteam' | 'diff') || 'scores';
+  const [tab, setTab] = useState<'scores' | 'myteam' | 'diff'>(initialTab);
+
+  // Team breakdown state
+  interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; }
+  interface BreakdownData { user_name: string; total: number; players: BreakdownPlayer[]; error?: string; }
+  const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
+  const [breakdownLoading, setBreakdownLoading] = useState(false);
+
   // Team diff state
-  const [tab, setTab] = useState<'scores' | 'diff'>('scores');
   const [diffContestants, setDiffContestants] = useState<Contestant[]>([]);
   const [selectedOther, setSelectedOther] = useState<number | null>(null);
   const [diffData, setDiffData] = useState<TeamDiffData | null>(null);
@@ -74,6 +84,15 @@ export default function ViewScoresPage() {
       setLastUpdated(new Date());
     } catch { /* silent */ }
     finally { setLoading(false); }
+  };
+
+  const fetchBreakdown = async () => {
+    setBreakdownLoading(true);
+    try {
+      const res = await client.get(`/api/scores/${matchId}/team-breakdown`);
+      setBreakdown(res.data);
+    } catch { setBreakdown(null); }
+    finally { setBreakdownLoading(false); }
   };
 
   const fetchDiffContestants = async () => {
@@ -95,6 +114,7 @@ export default function ViewScoresPage() {
   useEffect(() => {
     fetchScores();
     fetchDiffContestants();
+    fetchBreakdown();
     intervalRef.current = setInterval(fetchScores, 30000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [matchId]);
@@ -173,6 +193,7 @@ export default function ViewScoresPage() {
           </div>
           <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
             <button onClick={() => setTab('scores')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'scores' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>Scores</button>
+            <button onClick={() => setTab('myteam')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'myteam' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>My Team</button>
             <button onClick={() => setTab('diff')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'diff' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'}`}>Compare</button>
           </div>
         </div>
@@ -325,6 +346,75 @@ export default function ViewScoresPage() {
               </div>
             </div>
           </>
+        )}
+
+        {tab === 'myteam' && (
+          <div className="space-y-4">
+            {breakdownLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+              </div>
+            ) : breakdown?.error ? (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-indigo-400">
+                {breakdown.error}
+              </div>
+            ) : breakdown ? (
+              <>
+                {/* Total */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-white/40 text-xs">Your Team Total</p>
+                    <p className="text-white text-2xl font-bold">{breakdown.total} <span className="text-sm text-white/40">pts</span></p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white/40 text-xs">{breakdown.players.length} Players</p>
+                  </div>
+                </div>
+
+                {/* Player breakdown */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                  <div className="divide-y divide-white/5">
+                    {breakdown.players.map((p, i) => (
+                      <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
+                        {/* Rank */}
+                        <div className="w-6 text-center flex-shrink-0">
+                          <span className="text-white/30 text-xs">{i + 1}</span>
+                        </div>
+
+                        {/* Tag */}
+                        <div className="w-8 flex-shrink-0 ml-1">
+                          {p.tag === 'C' && (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>
+                          )}
+                          {p.tag === 'VC' && (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>
+                          )}
+                        </div>
+
+                        {/* Player info */}
+                        <div className="flex-1 min-w-0 ml-2">
+                          <p className="text-white text-sm font-medium truncate">{p.name}</p>
+                          <p className="text-white/30 text-xs">{p.team} &middot; {p.role}</p>
+                        </div>
+
+                        {/* Points */}
+                        <div className="text-right flex-shrink-0 ml-3">
+                          <p className="text-green-400 font-bold text-sm">{p.adjusted_points}</p>
+                          {p.multiplier > 1 && (
+                            <p className="text-white/30 text-[10px]">{p.base_points} × {p.multiplier}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-indigo-400">
+                No team data available.
+              </div>
+            )}
+          </div>
         )}
 
         {tab === 'diff' && (

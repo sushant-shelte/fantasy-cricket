@@ -94,17 +94,33 @@ export default function DashboardPage() {
       }
       case 'live':
         return (
-          <Link to={`/view-scores/${match.id}`}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-500 hover:bg-green-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-green-500/20 transition-all">
-            Live Scores
-          </Link>
+          <div className="flex gap-2">
+            <Link to={`/view-scores/${match.id}`}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-green-500/20 transition-all">
+              Live Scores
+            </Link>
+            {myTeams.has(match.id) && (
+              <Link to={`/view-scores/${match.id}?tab=myteam`}
+                className="inline-flex items-center gap-1 px-3 py-2.5 bg-white/10 hover:bg-white/15 text-white/70 text-xs font-medium rounded-xl border border-white/10 transition-all">
+                My Team
+              </Link>
+            )}
+          </div>
         );
       case 'over':
         return (
-          <Link to={`/view-scores/${match.id}`}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-xl transition-all">
-            View Scores
-          </Link>
+          <div className="flex gap-2">
+            <Link to={`/view-scores/${match.id}`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-xl transition-all">
+              View Scores
+            </Link>
+            {myTeams.has(match.id) && (
+              <Link to={`/view-scores/${match.id}?tab=myteam`}
+                className="inline-flex items-center gap-1 px-3 py-2 bg-white/10 hover:bg-white/15 text-white/70 text-xs font-medium rounded-xl border border-white/10 transition-all">
+                My Team
+              </Link>
+            )}
+          </div>
         );
     }
   };
