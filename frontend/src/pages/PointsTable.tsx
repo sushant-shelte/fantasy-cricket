@@ -32,6 +32,22 @@ export default function PointsTablePage() {
   const contestants = Array.from(contestantSet);
   const matchIds = Array.from(matchMap.keys());
 
+  // Compute per-match ranks
+  const matchRanks = new Map<string, Record<string, number>>();
+  matchIds.forEach((mid) => {
+    const entries = Object.entries(matchMap.get(mid) || {});
+    entries.sort((a, b) => b[1] - a[1]);
+    const ranks: Record<string, number> = {};
+    entries.forEach(([name, pts], i) => {
+      if (i > 0 && pts === entries[i - 1][1]) {
+        ranks[name] = ranks[entries[i - 1][0]];
+      } else {
+        ranks[name] = i + 1;
+      }
+    });
+    matchRanks.set(mid, ranks);
+  });
+
   const totalPoints: Record<string, number> = {};
   const totalBalance: Record<string, number> = {};
   contestants.forEach((c) => {
@@ -45,6 +61,13 @@ export default function PointsTablePage() {
 
   const sortedContestants = [...contestants].sort((a, b) => totalPoints[b] - totalPoints[a]);
   const currentUserName = profile?.name || '';
+
+  const rankBadge = (rank: number) => {
+    if (rank === 1) return <span className="text-sm">🥇</span>;
+    if (rank === 2) return <span className="text-sm">🥈</span>;
+    if (rank === 3) return <span className="text-sm">🥉</span>;
+    return null;
+  };
 
   return (
     <div>
@@ -69,11 +92,11 @@ export default function PointsTablePage() {
                     Total
                   </th>
                   <th className="sticky left-[11.5rem] z-20 bg-slate-900 px-2 py-3 text-center text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap border-r border-white/5 min-w-[4.5rem]">
-                    Balance
+                    ₹
                   </th>
                   {matchIds.map((mid) => (
                     <th key={mid} className="px-2 py-3 text-center text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap min-w-[5rem]">
-                      <div>M{mid}</div>
+                      M{mid}
                     </th>
                   ))}
                 </tr>
@@ -84,32 +107,32 @@ export default function PointsTablePage() {
                   const bal = totalBalance[c];
                   return (
                     <tr key={c} className={`transition-colors ${isMe ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}>
-                      {/* Name */}
                       <td className={`sticky left-0 z-10 px-4 py-3 text-white font-medium whitespace-nowrap border-r border-white/5 min-w-[7rem] ${isMe ? 'bg-indigo-950' : 'bg-slate-900'}`}>
                         <div className="flex items-center gap-1.5">
                           <span className="truncate max-w-[5rem]">{c}</span>
                           {isMe && <span className="px-1 py-0.5 text-[8px] font-bold bg-indigo-500/30 text-indigo-300 rounded">YOU</span>}
                         </div>
                       </td>
-                      {/* Total Points */}
                       <td className={`sticky left-[7rem] z-10 px-2 py-3 text-center font-bold text-white whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-indigo-950' : 'bg-slate-900'}`}>
                         {totalPoints[c]}
                       </td>
-                      {/* Total Balance */}
                       <td className={`sticky left-[11.5rem] z-10 px-2 py-3 text-center font-bold whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-indigo-950' : 'bg-slate-900'} ${
                         bal > 0 ? 'text-green-400' : bal < 0 ? 'text-red-400' : 'text-white/30'
                       }`}>
                         {bal > 0 ? '+' : ''}{bal}
                       </td>
-                      {/* Per match: points + net */}
                       {matchIds.map((mid) => {
                         const pts = matchMap.get(mid)?.[c] || 0;
                         const net = netMap.get(mid)?.[c] || 0;
+                        const rank = matchRanks.get(mid)?.[c];
                         return (
-                          <td key={mid} className="px-2 py-3 text-center whitespace-nowrap min-w-[5rem]">
+                          <td key={mid} className="px-2 py-2 text-center whitespace-nowrap min-w-[5rem]">
                             {pts ? (
                               <div>
-                                <div className="text-white font-medium">{pts}</div>
+                                <div className="flex items-center justify-center gap-1">
+                                  {rankBadge(rank || 99)}
+                                  <span className="text-white font-medium">{pts}</span>
+                                </div>
                                 <div className={`text-[10px] ${net > 0 ? 'text-green-400' : net < 0 ? 'text-red-400' : 'text-white/20'}`}>
                                   {net > 0 ? '+' : ''}{net}
                                 </div>
