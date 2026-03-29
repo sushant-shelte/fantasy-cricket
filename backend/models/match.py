@@ -70,7 +70,10 @@ class Match:
         reverse_team_map = {short: full for full, short in TEAM_MAP.items() if len(short) <= 4}
 
         def mark_player_played(name, team):
-            cleaned = clean_name(re.sub(r"\s*\([^)]*\)\s*$", "", str(name)).strip())
+            cleaned = str(name).strip()
+            cleaned = re.sub(r"^\d+\s*[.)-]?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*\([^)]*\)\s*$", "", cleaned)
+            cleaned = clean_name(cleaned)
             if not cleaned:
                 return False
             pid = self.get_player_id(cleaned, team)
@@ -87,6 +90,33 @@ class Match:
                 if mark_player_played(raw_name, team):
                     found_any = True
             return found_any
+
+        def mark_team_section_line(line, team):
+            normalized_line = " " + clean_name(str(line)).lower() + " "
+            found_any = False
+
+            for pid, player_data in self.registry.players.items():
+                if player_data.get("Team") != team:
+                    continue
+
+                candidate_names = [player_data.get("Name", "")]
+                aliases = player_data.get("Aliases", "")
+                if aliases:
+                    candidate_names.extend(alias.strip() for alias in aliases.split(",") if alias.strip())
+
+                for candidate in candidate_names:
+                    normalized_candidate = clean_name(candidate).lower()
+                    if normalized_candidate and f" {normalized_candidate} " in normalized_line:
+                        player = self.get_or_create_player(pid)
+                        player.team = team
+                        player.played = True
+                        found_any = True
+                        break
+
+            if found_any:
+                return True
+
+            return mark_players_from_line(line, team)
 
         # Find innings headers like "Royal Challengers Bengaluru Innings"
         def find_innings_headers():
@@ -259,16 +289,16 @@ class Match:
             }
             for idx, line in enumerate(lines):
                 normalized_line = " ".join(line.lower().split())
-                if normalized_line not in team_markers:
+                if not any(marker and marker in normalized_line for marker in team_markers):
                     continue
 
-                for team_line in lines[idx + 1:idx + 35]:
+                for team_line in lines[idx + 1:idx + 50]:
                     upper_line = team_line.upper()
                     if upper_line in {"BATSMEN", "BATTING", "BOWLING", "EXTRAS", "TOTAL"}:
                         continue
                     if upper_line.endswith(" INNINGS") or upper_line.startswith("FALL OF WICKETS"):
                         break
-                    mark_players_from_line(team_line, team)
+                    mark_team_section_line(team_line, team)
 
         return True
 
