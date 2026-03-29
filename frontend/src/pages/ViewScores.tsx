@@ -229,7 +229,7 @@ export default function ViewScoresPage() {
                 <table className="min-w-[1600px] w-full text-sm">
                   <thead>
                     <tr className="bg-white/5 text-indigo-300 text-xs uppercase tracking-wider">
-                      <th className="sticky top-0 left-0 bg-slate-900 z-20 px-4 py-3 text-left font-medium">Player</th>
+                      <th className="sticky top-0 left-0 z-20 min-w-[220px] border-r border-white/10 bg-slate-900 px-4 py-3 text-left font-medium shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)]">Player</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Pts</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-left font-medium">Team</th>
                       <th className="sticky top-0 bg-slate-900 px-3 py-3 text-center font-medium">Role</th>
@@ -260,7 +260,7 @@ export default function ViewScoresPage() {
                         const isMyPlayer = myTeam.has(p.name);
                         return (
                           <tr key={i} className={`transition-colors ${isMyPlayer ? 'bg-yellow-500/10 hover:bg-yellow-500/15' : 'hover:bg-white/5'}`}>
-                            <td className={`sticky left-0 z-10 px-4 py-2.5 text-white font-medium whitespace-nowrap ${isMyPlayer ? 'bg-yellow-500/10' : 'bg-slate-900'}`}>
+                            <td className={`sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] ${isMyPlayer ? 'bg-slate-900' : 'bg-slate-900'}`}>
                               {p.name}
                               {isMyPlayer && <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
                             </td>
