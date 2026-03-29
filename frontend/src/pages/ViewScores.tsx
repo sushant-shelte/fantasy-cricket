@@ -108,6 +108,13 @@ export default function ViewScoresPage() {
   }
 
   const sortedContestants = [...contestants].sort((a, b) => b.points - a.points);
+  const rankedContestants = sortedContestants.map((entry, i) => {
+    let rank = i + 1;
+    if (i > 0 && sortedContestants[i].points === sortedContestants[i - 1].points) {
+      rank = rankedContestants[i - 1].rank;
+    }
+    return { ...entry, rank };
+  });
 
   const renderPlayerEntry = (entry: TeamDiffEntry | null, side: 'left' | 'right') => {
     if (!entry) return <div className="flex-1 p-3 bg-white/5 rounded-xl text-center text-indigo-500 text-xs">—</div>;
@@ -233,13 +240,13 @@ export default function ViewScoresPage() {
                 {sortedContestants.length === 0 ? (
                   <div className="px-4 py-8 text-center text-indigo-400">No contestant scores yet.</div>
                 ) : (
-                  sortedContestants.map((c, i) => (
+                  rankedContestants.map((c, i) => (
                     <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
                       <div className="w-8 text-center">
-                        {i === 0 ? <span className="text-lg">&#x1F947;</span>
-                          : i === 1 ? <span className="text-lg">&#x1F948;</span>
-                          : i === 2 ? <span className="text-lg">&#x1F949;</span>
-                          : <span className="text-indigo-400 text-sm font-medium">{i + 1}</span>}
+                        {c.rank === 1 ? <span className="text-lg">&#x1F947;</span>
+                          : c.rank === 2 ? <span className="text-lg">&#x1F948;</span>
+                          : c.rank === 3 ? <span className="text-lg">&#x1F949;</span>
+                          : <span className="text-indigo-400 text-sm font-medium">{c.rank}</span>}
                       </div>
                       <div className="flex-1 ml-3"><span className="text-white font-medium text-sm">{c.name}</span></div>
                       <span className="text-green-400 font-bold text-sm">{c.points} pts</span>

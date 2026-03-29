@@ -2,6 +2,19 @@ import { useEffect, useState } from 'react';
 import client from '../../api/client';
 import type { Match } from '../../types';
 
+interface Player {
+  id: number;
+  name: string;
+  team: string;
+  role: string;
+}
+
+interface UserInfo {
+  id: number;
+  name: string;
+  email: string;
+}
+
 const statusBadge = (status: string) => {
   switch (status) {
     case 'live':
@@ -39,6 +52,16 @@ export default function ScoreControl() {
   const [recalcAllLoading, setRecalcAllLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // Admin team submit state
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<number | ''>('');
+  const [selectedMatchId, setSelectedMatchId] = useState<number | ''>('');
+  const [selectedPlayers, setSelectedPlayers] = useState<Set<number>>(new Set());
+  const [captainId, setCaptainId] = useState<number | null>(null);
+  const [viceCaptainId, setViceCaptainId] = useState<number | null>(null);
+  const [submitTeamLoading, setSubmitTeamLoading] = useState(false);
+
   let toastId = 0;
 
   const addToast = (type: 'success' | 'error', message: string) => {
@@ -62,7 +85,52 @@ export default function ScoreControl() {
 
   useEffect(() => {
     fetchMatches();
+    client.get('/api/admin/users').then((res) => setUsers(res.data)).catch(() => {});
+    client.get('/api/admin/players').then((res) => setPlayers(res.data)).catch(() => {});
   }, []);
+
+  const togglePlayer = (pid: number) => {
+    setSelectedPlayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) {
+        next.delete(pid);
+        if (captainId === pid) setCaptainId(null);
+        if (viceCaptainId === pid) setViceCaptainId(null);
+      } else if (next.size < 11) {
+        next.add(pid);
+      }
+      return next;
+    });
+  };
+
+  const handleSubmitTeam = async () => {
+    if (!selectedUserId || !selectedMatchId) return;
+    if (selectedPlayers.size !== 11) return;
+    if (!captainId || !viceCaptainId) return;
+    if (captainId === viceCaptainId) return;
+
+    setSubmitTeamLoading(true);
+    try {
+      await client.post('/api/admin/teams/submit', {
+        user_id: selectedUserId,
+        match_id: selectedMatchId,
+        players: Array.from(selectedPlayers).map((pid) => ({
+          player_id: pid,
+          is_captain: pid === captainId,
+          is_vice_captain: pid === viceCaptainId,
+        })),
+      });
+      addToast('success', 'Team submitted successfully.');
+      setSelectedPlayers(new Set());
+      setCaptainId(null);
+      setViceCaptainId(null);
+    } catch (err) {
+      console.error(err);
+      addToast('error', 'Failed to submit team.');
+    } finally {
+      setSubmitTeamLoading(false);
+    }
+  };
 
   const recalculate = async (matchId: number) => {
     setRecalculating((prev) => ({ ...prev, [matchId]: true }));
@@ -201,6 +269,100 @@ export default function ScoreControl() {
             No matches found.
           </div>
         )}
+      </div>
+
+      {/* Admin Submit Team Section */}
+      <div className="mt-8 bg-white rounded-2xl shadow-sm p-5">
+        <h2 className="text-lg font-bold text-gray-800 mb-1">Submit Team for User</h2>
+        <p className="text-sm text-gray-500 mb-4">Pick 11 players, captain, and vice-captain on behalf of a user.</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">User</label>
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value ? Number(e.target.value) : '')}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Select user...</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Match</label>
+            <select
+              value={selectedMatchId}
+              onChange={(e) => setSelectedMatchId(e.target.value ? Number(e.target.value) : '')}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Select match...</option>
+              {matches.map((m) => (
+                <option key={m.id} value={m.id}>#{m.id} {m.team1} vs {m.team2}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mb-2 text-sm text-gray-600 font-medium">
+          Players ({selectedPlayers.size}/11 selected)
+        </div>
+        <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg mb-4">
+          {players.map((p) => {
+            const checked = selectedPlayers.has(p.id);
+            return (
+              <label
+                key={p.id}
+                className={`flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${checked ? 'bg-indigo-50' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => togglePlayer(p.id)}
+                  className="rounded text-indigo-600"
+                />
+                <span className="flex-1">{p.name}</span>
+                <span className="text-xs text-gray-400">{p.team} - {p.role}</span>
+                {checked && (
+                  <span className="flex items-center gap-2">
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="radio"
+                        name="captain"
+                        checked={captainId === p.id}
+                        onChange={() => setCaptainId(p.id)}
+                        className="text-indigo-600"
+                      />
+                      C
+                    </label>
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="radio"
+                        name="viceCaptain"
+                        checked={viceCaptainId === p.id}
+                        onChange={() => setViceCaptainId(p.id)}
+                        className="text-indigo-600"
+                      />
+                      VC
+                    </label>
+                  </span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={handleSubmitTeam}
+          disabled={submitTeamLoading || selectedPlayers.size !== 11 || !captainId || !viceCaptainId || captainId === viceCaptainId || !selectedUserId || !selectedMatchId}
+          className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+        >
+          {submitTeamLoading ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+          ) : null}
+          Submit Team
+        </button>
       </div>
     </div>
   );

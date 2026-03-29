@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
@@ -18,11 +18,15 @@ def compute_match_status(match_date: str, match_time: str):
         return "future", False
 
     now = datetime.now(IST)
+    today = now.date()
     locked = now >= match_datetime
 
-    if now < match_datetime:
+    parsed_date = datetime.strptime(match_date, "%Y-%m-%d").date()
+    if parsed_date < today:
+        status = "over"
+    elif now < match_datetime:
         status = "future"
-    elif now < match_datetime + timedelta(hours=5):
+    elif now < match_datetime + timedelta(hours=4):
         status = "live"
     else:
         status = "over"
@@ -35,6 +39,9 @@ async def list_matches(user: dict = Depends(get_current_user)):
     db = get_db()
     rows = db.execute("SELECT * FROM matches ORDER BY id").fetchall()
 
+    now = datetime.now(IST)
+    today = now.date()
+
     result = []
     for row in rows:
         match = dict(row)
@@ -43,4 +50,12 @@ async def list_matches(user: dict = Depends(get_current_user)):
         match["locked"] = locked
         result.append(match)
 
-    return result
+    today_matches = [m for m in result if datetime.strptime(m["match_date"], "%Y-%m-%d").date() == today]
+    future_matches = [m for m in result if m["status"] == "future" and datetime.strptime(m["match_date"], "%Y-%m-%d").date() != today]
+    over_matches = [m for m in result if m["status"] == "over" and datetime.strptime(m["match_date"], "%Y-%m-%d").date() != today]
+
+    today_matches.sort(key=lambda m: (m["match_date"], m["match_time"]))
+    future_matches.sort(key=lambda m: (m["match_date"], m["match_time"]))
+    over_matches.sort(key=lambda m: (m["match_date"], m["match_time"]), reverse=True)
+
+    return today_matches + future_matches + over_matches

@@ -22,10 +22,13 @@ export default function Navbar() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M8 12l2-6 4 6-2 6z" />
+            <circle cx="18" cy="6" r="3"/>
+            <path d="M14 10L4 20"/>
+            <path d="M6 16l4 4"/>
           </svg>
           Fantasy Cricket
         </Link>

@@ -1,7 +1,7 @@
 import time
 import threading
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 from backend.config import IST, ESPN_MATCH_ID_OFFSET
 from backend.models.match import Match
@@ -75,10 +75,14 @@ class Tournament:
             return None
 
         now = datetime.now(IST)
+        today = now.date()
+        parsed_date = datetime.strptime(match_row['Date'], "%Y-%m-%d").date()
 
+        if parsed_date < today:
+            return "over"
         if now < match_datetime:
             return "future"
-        elif now < match_datetime + timedelta(hours=5):
+        elif now < match_datetime + timedelta(hours=4):
             return "live"
         return "over"
 

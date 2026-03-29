@@ -22,10 +22,10 @@ const ScoreControl = lazy(() => import('./pages/admin/ScoreControl'));
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
       <Navbar />
       <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
-    </>
+    </div>
   );
 }
 

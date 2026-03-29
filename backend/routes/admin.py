@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 from backend.middleware.auth import require_admin
 from backend.database import get_db
@@ -376,3 +376,32 @@ async def clear_table(
     db.commit()
 
     return {"success": True, "message": f"Cleared all data from {table_name}"}
+
+
+# --- Admin Submit Team on Behalf of User ---
+
+class AdminTeamPlayer(BaseModel):
+    player_id: int
+    is_captain: bool = False
+    is_vice_captain: bool = False
+
+
+class AdminSubmitTeamBody(BaseModel):
+    user_id: int
+    match_id: int
+    players: List[AdminTeamPlayer]
+
+
+@router.post("/teams/submit")
+async def admin_submit_team(body: AdminSubmitTeamBody, user: dict = Depends(require_admin)):
+    db = get_db()
+    # Delete old team
+    db.execute("DELETE FROM user_teams WHERE user_id = ? AND match_id = ?", (body.user_id, body.match_id))
+    # Insert new
+    for p in body.players:
+        db.execute(
+            "INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain) VALUES (?, ?, ?, ?, ?)",
+            (body.user_id, body.match_id, p.player_id, int(p.is_captain), int(p.is_vice_captain)),
+        )
+    db.commit()
+    return {"success": True}

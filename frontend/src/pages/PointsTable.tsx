@@ -77,21 +77,29 @@ export default function PointsTablePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-white/5">
-                    <th className="sticky left-0 z-10 bg-slate-900 px-4 py-3 text-left text-xs font-medium text-indigo-300 uppercase tracking-wider whitespace-nowrap border-r border-white/10">
-                      Match
+                    <th className="sticky left-0 z-20 bg-slate-900 px-4 py-3 text-left text-xs font-medium text-indigo-300 uppercase tracking-wider whitespace-nowrap border-r border-white/10 min-w-[8rem]">
+                      Contestant
                     </th>
-                    {sortedContestants.map((c) => {
-                      const isMe = c === currentUserName;
-                      return (
-                        <th
-                          key={c}
-                          className={`px-3 py-3 text-center text-xs font-medium uppercase tracking-wider whitespace-nowrap ${
-                            isMe
-                              ? 'bg-indigo-500/15 text-indigo-200'
-                              : 'text-indigo-300'
-                          }`}
-                        >
-                          <div className="flex flex-col items-center gap-0.5">
+                    <th className="sticky left-[8rem] z-20 bg-slate-900 px-3 py-3 text-center text-xs font-medium text-indigo-300 uppercase tracking-wider whitespace-nowrap border-r border-white/10 min-w-[5rem]">
+                      Total
+                    </th>
+                    {matchIds.map((mid, i) => (
+                      <th
+                        key={mid}
+                        className="px-3 py-3 text-center text-xs font-medium text-indigo-300 uppercase tracking-wider whitespace-nowrap"
+                      >
+                        M{i + 1}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {sortedContestants.map((c) => {
+                    const isMe = c === currentUserName;
+                    return (
+                      <tr key={c} className={`hover:bg-white/5 transition-colors ${isMe ? 'bg-indigo-500/10' : ''}`}>
+                        <td className={`sticky left-0 z-10 px-4 py-3 text-white font-medium whitespace-nowrap border-r border-white/10 min-w-[8rem] ${isMe ? 'bg-indigo-950' : 'bg-slate-900'}`}>
+                          <div className="flex items-center gap-2">
                             <span className="truncate max-w-[6rem]">{c}</span>
                             {isMe && (
                               <span className="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-500/30 text-indigo-300 rounded border border-indigo-500/40">
@@ -99,53 +107,24 @@ export default function PointsTablePage() {
                               </span>
                             )}
                           </div>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {matchIds.map((matchId) => (
-                    <tr key={matchId} className="hover:bg-white/5 transition-colors">
-                      <td className="sticky left-0 z-10 bg-slate-900 px-4 py-3 text-white font-medium whitespace-nowrap border-r border-white/10">
-                        Match {matchId}
-                      </td>
-                      {sortedContestants.map((c) => {
-                        const pts = matchMap.get(matchId)?.[c] || 0;
-                        const isMe = c === currentUserName;
-                        return (
-                          <td
-                            key={c}
-                            className={`px-3 py-3 text-center font-medium ${
-                              isMe ? 'bg-indigo-500/10' : ''
-                            } ${pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-indigo-400'}`}
-                          >
-                            {pts}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-
-                  {/* Totals row */}
-                  <tr className="bg-white/5 border-t-2 border-white/20">
-                    <td className="sticky left-0 z-10 bg-slate-800 px-4 py-3 text-white font-bold whitespace-nowrap border-r border-white/10">
-                      TOTAL
-                    </td>
-                    {sortedContestants.map((c) => {
-                      const isMe = c === currentUserName;
-                      return (
-                        <td
-                          key={c}
-                          className={`px-3 py-3 text-center font-bold ${
-                            isMe ? 'bg-indigo-500/15 text-green-300' : 'text-green-400'
-                          }`}
-                        >
+                        </td>
+                        <td className={`sticky left-[8rem] z-10 px-3 py-3 text-center font-bold text-green-400 whitespace-nowrap border-r border-white/10 min-w-[5rem] ${isMe ? 'bg-indigo-950' : 'bg-slate-900'}`}>
                           {totals[c]}
                         </td>
-                      );
-                    })}
-                  </tr>
+                        {matchIds.map((mid) => {
+                          const pts = matchMap.get(mid)?.[c] || 0;
+                          return (
+                            <td
+                              key={mid}
+                              className={`px-3 py-3 text-center font-medium ${pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-indigo-400'}`}
+                            >
+                              {pts}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
