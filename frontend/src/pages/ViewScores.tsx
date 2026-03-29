@@ -168,26 +168,31 @@ export default function ViewScoresPage() {
             {/* Player Stats */}
             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-white/10">
-                <h2 className="text-white font-semibold">Player Statistics</h2>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-white font-semibold">Player Statistics</h2>
+                  <span className="text-[11px] text-indigo-400 whitespace-nowrap">
+                    Scroll to view all columns
+                  </span>
+                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="max-h-[70vh] overflow-auto">
+                <table className="min-w-[1100px] w-full text-sm">
                   <thead>
                     <tr className="bg-white/5 text-indigo-300 text-xs uppercase tracking-wider">
-                      <th className="sticky left-0 bg-slate-900 z-10 px-4 py-3 text-left font-medium">Player</th>
-                      <th className="px-3 py-3 text-right font-medium">Pts</th>
-                      <th className="px-3 py-3 text-left font-medium">Team</th>
-                      <th className="px-3 py-3 text-left font-medium">Role</th>
-                      <th className="px-3 py-3 text-right font-medium">Runs</th>
-                      <th className="px-3 py-3 text-right font-medium">Balls</th>
-                      <th className="px-3 py-3 text-right font-medium">4s</th>
-                      <th className="px-3 py-3 text-right font-medium">6s</th>
-                      <th className="px-3 py-3 text-right font-medium">SR</th>
-                      <th className="px-3 py-3 text-right font-medium">Overs</th>
-                      <th className="px-3 py-3 text-right font-medium">Wkts</th>
-                      <th className="px-3 py-3 text-right font-medium">Dots</th>
-                      <th className="px-3 py-3 text-right font-medium">Econ</th>
-                      <th className="px-3 py-3 text-right font-medium">Ct</th>
+                      <th className="sticky top-0 left-0 bg-slate-900 z-20 px-4 py-3 text-left font-medium">Player</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Pts</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-left font-medium">Team</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-left font-medium">Role</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Runs</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Balls</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">4s</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">6s</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">SR</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Overs</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Wkts</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Dots</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Econ</th>
+                      <th className="sticky top-0 bg-slate-900 px-3 py-3 text-right font-medium">Ct</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
