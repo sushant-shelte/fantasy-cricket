@@ -1,3 +1,4 @@
+import json
 import re
 import requests
 from bs4 import BeautifulSoup
@@ -82,6 +83,58 @@ def _build_team_player_lookup(players_rows: list[dict]) -> dict[str, dict[str, i
     return lookup
 
 
+def _extract_candidate_names_from_json(value, names: list[str]):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_normalized = str(key).lower()
+            if key_normalized in {"name", "longname", "full_name", "fullname", "cardlongname"} and isinstance(item, str):
+                names.append(item)
+            else:
+                _extract_candidate_names_from_json(item, names)
+        return
+
+    if isinstance(value, list):
+        for item in value:
+            _extract_candidate_names_from_json(item, names)
+
+
+def _extract_playing_xi_from_json(html: str, players_rows: list[dict]) -> set[int]:
+    player_lookup = _build_team_player_lookup(players_rows)
+    all_names: list[str] = []
+
+    script_matches = re.findall(
+        r'<script[^>]*type="application/json"[^>]*>(.*?)</script>|<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    for match in script_matches:
+        script_content = next((part for part in match if part), "")
+        if not script_content:
+            continue
+
+        try:
+            data = json.loads(script_content)
+        except Exception:
+            continue
+
+        _extract_candidate_names_from_json(data, all_names)
+
+    playing_ids: set[int] = set()
+    for raw_name in all_names:
+        normalized = _normalize_player_name(raw_name)
+        if not normalized:
+            continue
+
+        for team_lookup in player_lookup.values():
+            player_id = team_lookup.get(normalized)
+            if player_id:
+                playing_ids.add(player_id)
+                break
+
+    return playing_ids
+
+
 def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_rows: list[dict]) -> set[int]:
     soup = BeautifulSoup(html, "html.parser")
     lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
@@ -104,11 +157,19 @@ def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_row
             if normalized_line in next_team_markers and ids:
                 break
 
-            player_id = player_lookup.get(team, {}).get(normalized_line)
-            if player_id:
-                ids.add(player_id)
-                if len(ids) >= 11:
-                    break
+            segments = re.split(r",|;|\u2022|\||\s{2,}", line)
+            if len(segments) == 1:
+                segments = [line]
+
+            for segment in segments:
+                player_id = player_lookup.get(team, {}).get(_normalize_player_name(segment))
+                if player_id:
+                    ids.add(player_id)
+                    if len(ids) >= 11:
+                        break
+
+            if len(ids) >= 11:
+                break
 
         return ids
 
@@ -132,8 +193,18 @@ def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[d
         if res.status_code != 200:
             return {"announced": False, "url": url, "player_ids": []}
 
-        playing_ids = _extract_playing_xi_from_text(res.text, team1, team2, players_rows)
-        if len(playing_ids) < 18:
+        json_ids = _extract_playing_xi_from_json(res.text, players_rows)
+        text_ids = _extract_playing_xi_from_text(res.text, team1, team2, players_rows)
+        playing_ids = json_ids | text_ids
+
+        announced = (
+            len(text_ids) >= 18
+            or len(json_ids) >= 18
+            or len(playing_ids) >= 18
+            or "playing xi" in res.text.lower()
+        )
+
+        if not announced:
             return {"announced": False, "url": url, "player_ids": []}
 
         return {

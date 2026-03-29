@@ -81,11 +81,19 @@ async def list_players(
             playing_xi_data = fetch_playing_xi(match_id, team1, team2, players)
 
         playing_ids = set(playing_xi_data["player_ids"])
+        playing_ids_complete = len(playing_ids) >= 18
 
         # Group by role
         grouped = {role: [] for role in ROLES}
         for player in players:
-            player["is_playing_xi"] = player["id"] in playing_ids if playing_xi_data["announced"] else None
+            if not playing_xi_data["announced"]:
+                player["is_playing_xi"] = None
+            elif player["id"] in playing_ids:
+                player["is_playing_xi"] = True
+            elif playing_ids_complete:
+                player["is_playing_xi"] = False
+            else:
+                player["is_playing_xi"] = None
             if player["role"] in grouped:
                 grouped[player["role"]].append(player)
 
