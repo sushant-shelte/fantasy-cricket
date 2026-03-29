@@ -669,7 +669,7 @@ try:
         # PLAYER POINTS ENGINE
         # =============================
         def calculate_player_points(self, role: str):
-            debugPlayerID = 226
+            debugPlayerID = 0
             if self.player_id == debugPlayerID:
                 print("\n\nCurrent Player: ", self.name)
             points = 0
