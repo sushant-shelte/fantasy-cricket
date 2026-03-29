@@ -1,4 +1,47 @@
+# Python
 __pycache__/
-*.pyc
-.env
+*.py[cod]
+*.pyo
+*.egg-info/
+venv/
+.venv/
+
+# SQLite database (generated locally)
+backend/fantasy.db
+backend/fantasy.db-shm
+backend/fantasy.db-wal
+
+# Firebase credentials (NEVER commit these)
+backend/firebase-credentials.json
 credentials.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Vite cache
+frontend/node_modules/.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & temp
+*.log
+cookies.txt
+
+# Claude Code
+.claude/

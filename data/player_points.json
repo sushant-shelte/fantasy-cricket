@@ -1,0 +1,74 @@
+[
+  {
+    "MatchID": "1",
+    "PlayerID": 34,
+    "PlayerName": "Sunil Narine",
+    "Team": "KKR",
+    "Role": "AllRounder",
+    "Points": 126,
+    "LastUpdated": "2026-03-29 11:26:58"
+  },
+  {
+    "MatchID": "1",
+    "PlayerID": 39,
+    "PlayerName": "Venkatesh Iyer",
+    "Team": "KKR",
+    "Role": "AllRounder",
+    "Points": 14,
+    "LastUpdated": "2026-03-29 11:26:58"
+  },
+  {
+    "MatchID": "1",
+    "PlayerID": 40,
+    "PlayerName": "Rinku Singh",
+    "Team": "KKR",
+    "Role": "Batter",
+    "Points": 18,
+    "LastUpdated": "2026-03-29 11:26:58"
+  },
+  {
+    "MatchID": "1",
+    "PlayerID": 33,
+    "PlayerName": "Andre Russell",
+    "Team": "KKR",
+    "Role": "AllRounder",
+    "Points": 12,
+    "LastUpdated": "2026-03-29 11:26:58"
+  },
+  {
+    "MatchID": "1",
+    "PlayerID": 38,
+    "PlayerName": "Harshit Rana",
+    "Team": "KKR",
+    "Role": "Bowler",
+    "Points": 11,
+    "LastUpdated": "2026-03-29 11:26:58"
+  },
+  {
+    "MatchID": "1",
+    "PlayerID": 11,
+    "PlayerName": "Virat Kohli",
+    "Team": "RCB",
+    "Role": "Batter",
+    "Points": 109,
+    "LastUpdated": "2026-03-29 11:26:58"
+  },
+  {
+    "MatchID": "1",
+    "PlayerID": 19,
+    "PlayerName": "Rajat Patidar",
+    "Team": "RCB",
+    "Role": "Batter",
+    "Points": 74,
+    "LastUpdated": "2026-03-29 11:26:58"
+  },
+  {
+    "MatchID": "1",
+    "PlayerID": 36,
+    "PlayerName": "Varun Chakravarthy",
+    "Team": "KKR",
+    "Role": "Bowler",
+    "Points": 32,
+    "LastUpdated": "2026-03-29 11:26:58"
+  }
+]

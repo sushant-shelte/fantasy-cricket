@@ -1,0 +1,372 @@
+import { useState, useEffect, FormEvent } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import client from '../api/client';
+import type { Player, TeamSelection } from '../types';
+
+interface SelectedPlayer {
+  player_id: number;
+  is_captain: boolean;
+  is_vice_captain: boolean;
+}
+
+const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  WK: { label: 'Wicket-Keeper', color: 'text-purple-300', bg: 'bg-purple-500/20', border: 'border-purple-500/30' },
+  BAT: { label: 'Batsman', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
+  AR: { label: 'All-Rounder', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
+  BWL: { label: 'Bowler', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
+};
+
+export default function SelectTeamPage() {
+  const { matchId } = useParams<{ matchId: string }>();
+  const navigate = useNavigate();
+
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [selected, setSelected] = useState<Map<number, SelectedPlayer>>(new Map());
+  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set(['WK', 'BAT', 'AR', 'BWL']));
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [playersRes, teamRes] = await Promise.all([
+          client.get(`/api/players?match_id=${matchId}`),
+          client.get(`/api/teams/my?match_id=${matchId}`).catch(() => ({ data: [] })),
+        ]);
+        setPlayers(playersRes.data || []);
+
+        // Pre-select existing team
+        const existing: TeamSelection[] = teamRes.data || [];
+        if (existing.length > 0) {
+          const map = new Map<number, SelectedPlayer>();
+          existing.forEach((t) => {
+            map.set(t.player_id, {
+              player_id: t.player_id,
+              is_captain: t.is_captain,
+              is_vice_captain: t.is_vice_captain,
+            });
+          });
+          setSelected(map);
+        }
+      } catch {
+        setError('Failed to load players.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [matchId]);
+
+  const toggleRole = (role: string) => {
+    setExpandedRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  };
+
+  const togglePlayer = (playerId: number) => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(playerId)) {
+        next.delete(playerId);
+      } else {
+        next.set(playerId, { player_id: playerId, is_captain: false, is_vice_captain: false });
+      }
+      return next;
+    });
+  };
+
+  const setCaptain = (playerId: number) => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      next.forEach((v, k) => {
+        next.set(k, { ...v, is_captain: k === playerId });
+      });
+      return next;
+    });
+  };
+
+  const setViceCaptain = (playerId: number) => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      next.forEach((v, k) => {
+        next.set(k, { ...v, is_vice_captain: k === playerId });
+      });
+      return next;
+    });
+  };
+
+  const groupedPlayers = () => {
+    const groups: Record<string, Player[]> = {};
+    players.forEach((p) => {
+      const role = p.role || 'OTHER';
+      if (!groups[role]) groups[role] = [];
+      groups[role].push(p);
+    });
+    return groups;
+  };
+
+  const selectedCount = selected.size;
+  const captainId = [...selected.values()].find((s) => s.is_captain)?.player_id;
+  const vcId = [...selected.values()].find((s) => s.is_vice_captain)?.player_id;
+
+  const validate = (): string | null => {
+    if (selectedCount !== 11) return `Select exactly 11 players (currently ${selectedCount}).`;
+    if (!captainId) return 'Select a Captain.';
+    if (!vcId) return 'Select a Vice Captain.';
+    if (captainId === vcId) return 'Captain and Vice Captain must be different players.';
+
+    // Check at least 1 per role
+    const groups = groupedPlayers();
+    const roles = Object.keys(groups);
+    for (const role of roles) {
+      const count = groups[role].filter((p) => selected.has(p.id)).length;
+      if (count === 0) return `Select at least 1 ${ROLE_CONFIG[role]?.label || role}.`;
+    }
+
+    return null;
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        match_id: Number(matchId),
+        players: [...selected.values()],
+      };
+      await client.post('/api/teams', payload);
+      setSuccess('Team saved successfully!');
+      setTimeout(() => navigate('/dashboard'), 1500);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to save team.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const groups = groupedPlayers();
+  const roleOrder = ['WK', 'BAT', 'AR', 'BWL'];
+  const sortedRoles = [...new Set([...roleOrder, ...Object.keys(groups)])].filter((r) => groups[r]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 pb-24">
+      {/* Sticky header */}
+      <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-lg border-b border-white/10">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <div>
+              <h1 className="text-lg font-bold text-white">Select Your Team</h1>
+              <p className="text-xs text-indigo-300">Match #{matchId}</p>
+            </div>
+          </div>
+          <div
+            className={`px-3 py-1.5 rounded-xl font-bold text-sm ${
+              selectedCount === 11
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+            }`}
+          >
+            {selectedCount}/11
+          </div>
+        </div>
+      </header>
+
+      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto px-4 py-4 space-y-4">
+        {error && (
+          <div className="p-3 bg-red-500/20 border border-red-400/30 rounded-xl text-red-200 text-sm text-center">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="p-3 bg-green-500/20 border border-green-400/30 rounded-xl text-green-200 text-sm text-center">
+            {success}
+          </div>
+        )}
+
+        {/* Captain / VC legend */}
+        <div className="flex items-center gap-4 text-xs text-indigo-300">
+          <span className="flex items-center gap-1.5">
+            <span className="w-5 h-5 bg-amber-500/30 border border-amber-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-amber-300">C</span>
+            Captain (2x)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-5 h-5 bg-sky-500/30 border border-sky-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-sky-300">VC</span>
+            Vice Captain (1.5x)
+          </span>
+        </div>
+
+        {sortedRoles.map((role) => {
+          const config = ROLE_CONFIG[role] || { label: role, color: 'text-gray-300', bg: 'bg-gray-500/20', border: 'border-gray-500/30' };
+          const rolePlayers = groups[role];
+          const roleSelected = rolePlayers.filter((p) => selected.has(p.id)).length;
+          const isExpanded = expandedRoles.has(role);
+
+          return (
+            <div key={role} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+              {/* Role header */}
+              <button
+                type="button"
+                onClick={() => toggleRole(role)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 text-xs font-bold rounded-lg ${config.bg} ${config.color} ${config.border} border`}>
+                    {role}
+                  </span>
+                  <span className="text-white font-medium text-sm">{config.label}</span>
+                  <span className="text-indigo-400 text-xs">({roleSelected} selected)</span>
+                </div>
+                <svg
+                  className={`w-4 h-4 text-indigo-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Player rows */}
+              {isExpanded && (
+                <div className="border-t border-white/5">
+                  {rolePlayers.map((player) => {
+                    const isSelected = selected.has(player.id);
+                    const isCaptain = captainId === player.id;
+                    const isVC = vcId === player.id;
+
+                    return (
+                      <div
+                        key={player.id}
+                        className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
+                          isSelected ? 'bg-indigo-500/10' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        {/* Checkbox */}
+                        <button
+                          type="button"
+                          onClick={() => togglePlayer(player.id)}
+                          className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                            isSelected
+                              ? 'bg-green-500 border-green-500'
+                              : 'border-white/30 hover:border-white/50'
+                          }`}
+                        >
+                          {isSelected && (
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+
+                        {/* Player info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium truncate">{player.name}</p>
+                          <span className="text-indigo-400 text-xs">{player.team}</span>
+                        </div>
+
+                        {/* Captain radio */}
+                        <button
+                          type="button"
+                          onClick={() => isSelected && setCaptain(player.id)}
+                          disabled={!isSelected}
+                          className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
+                            isCaptain
+                              ? 'bg-amber-500 border-amber-500 text-white'
+                              : isSelected
+                              ? 'border-amber-500/50 text-amber-400/50 hover:border-amber-500 hover:text-amber-400'
+                              : 'border-white/10 text-white/10 cursor-not-allowed'
+                          }`}
+                        >
+                          C
+                        </button>
+
+                        {/* Vice Captain radio */}
+                        <button
+                          type="button"
+                          onClick={() => isSelected && setViceCaptain(player.id)}
+                          disabled={!isSelected}
+                          className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
+                            isVC
+                              ? 'bg-sky-500 border-sky-500 text-white'
+                              : isSelected
+                              ? 'border-sky-500/50 text-sky-400/50 hover:border-sky-500 hover:text-sky-400'
+                              : 'border-white/10 text-white/10 cursor-not-allowed'
+                          }`}
+                        >
+                          VC
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </form>
+
+      {/* Sticky submit bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/90 backdrop-blur-lg border-t border-white/10">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+          <div className="text-sm">
+            <span className={`font-bold ${selectedCount === 11 ? 'text-green-400' : 'text-indigo-300'}`}>
+              {selectedCount}/11
+            </span>
+            <span className="text-indigo-400 ml-2">
+              {captainId ? 'C' : ''}{captainId && vcId ? ' / ' : ''}{vcId ? 'VC' : ''}
+              {!captainId && !vcId && 'No C/VC'}
+            </span>
+          </div>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              const form = document.querySelector('form');
+              form?.requestSubmit();
+            }}
+            disabled={submitting}
+            className="px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl shadow-lg shadow-green-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? (
+              <span className="inline-flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Saving...
+              </span>
+            ) : (
+              'Save Team'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

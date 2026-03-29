@@ -1,0 +1,7 @@
+[
+    {"Mobile": "9876543210", "Name": "Rahul", "Password": "rahul123", "Allowed": "true"},
+    {"Mobile": "9876543211", "Name": "Priya", "Password": "priya123", "Allowed": "true"},
+    {"Mobile": "9876543212", "Name": "Amit", "Password": "amit123", "Allowed": "true"},
+    {"Mobile": "9876543213", "Name": "Sneha", "Password": "sneha123", "Allowed": "true"},
+    {"Mobile": "9876543214", "Name": "Vikas", "Password": "vikas123", "Allowed": "true"}
+]
