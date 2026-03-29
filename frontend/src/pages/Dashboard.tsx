@@ -4,10 +4,13 @@ import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Match } from '../types';
 
+type MatchTab = 'today' | 'upcoming' | 'completed';
+
 export default function DashboardPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [myTeams, setMyTeams] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<MatchTab>('today');
   const { profile } = useAuth();
 
   useEffect(() => {
@@ -33,6 +36,25 @@ export default function DashboardPage() {
     } catch { return `${dateStr} ${timeStr}`; }
   };
 
+  // Get today's date in IST
+  const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+  // Split matches into tabs
+  const todayMatches = matches.filter(m => m.match_date === todayIST);
+  const upcomingMatches = matches.filter(m => m.status === 'future' && m.match_date !== todayIST);
+  const completedMatches = matches.filter(m => m.status === 'over');
+
+  // Auto-select tab: if today has matches show today, else upcoming
+  useEffect(() => {
+    if (!loading) {
+      if (todayMatches.length > 0) setTab('today');
+      else if (upcomingMatches.length > 0) setTab('upcoming');
+      else setTab('completed');
+    }
+  }, [loading]);
+
+  const currentMatches = tab === 'today' ? todayMatches : tab === 'upcoming' ? upcomingMatches : completedMatches;
+
   const statusBadge = (status: Match['status']) => {
     switch (status) {
       case 'live':
@@ -57,19 +79,14 @@ export default function DashboardPage() {
       case 'future': {
         const hasTeam = myTeams.has(match.id);
         return (
-          <Link
-            to={`/select-team/${match.id}`}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-semibold rounded-xl transition-all duration-200 ${
-              hasTeam
-                ? 'bg-amber-500 hover:bg-amber-400 shadow-lg shadow-amber-500/20'
-                : 'bg-indigo-500 hover:bg-indigo-400 shadow-lg shadow-indigo-500/20'
-            }`}
-          >
+          <Link to={`/select-team/${match.id}`}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-semibold rounded-xl transition-all ${
+              hasTeam ? 'bg-amber-500 hover:bg-amber-400 shadow-lg shadow-amber-500/20' : 'bg-indigo-500 hover:bg-indigo-400 shadow-lg shadow-indigo-500/20'
+            }`}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               {hasTeam
                 ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              }
+                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />}
             </svg>
             {hasTeam ? 'Edit Team' : 'Pick Team'}
           </Link>
@@ -79,24 +96,27 @@ export default function DashboardPage() {
         return (
           <Link to={`/view-scores/${match.id}`}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-500 hover:bg-green-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-green-500/20 transition-all">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
             Live Scores
           </Link>
         );
       case 'over':
         return (
           <Link to={`/view-scores/${match.id}`}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-600 hover:bg-slate-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-slate-600/20 transition-all">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-xl transition-all">
             View Scores
           </Link>
         );
     }
   };
 
+  const tabs: { key: MatchTab; label: string; count: number }[] = [
+    { key: 'today', label: "Today", count: todayMatches.length },
+    { key: 'upcoming', label: 'Upcoming', count: upcomingMatches.length },
+    { key: 'completed', label: 'Completed', count: completedMatches.length },
+  ];
+
   return (
     <div>
-      {/* Welcome */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-white">
           Welcome, <span className="text-green-400">{profile?.name || 'Player'}</span>
@@ -127,46 +147,63 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Matches */}
-        <div>
-          <h2 className="text-lg font-semibold text-white mb-4">Matches</h2>
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
-            </div>
-          ) : matches.length === 0 ? (
-            <div className="text-center py-16 text-indigo-400">No matches available yet.</div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {matches.map((match) => (
-                <div key={match.id}
-                  className="bg-white/5 hover:bg-white/[0.08] border border-white/10 rounded-2xl p-5 transition-all duration-200 backdrop-blur-sm">
-                  <div className="flex items-center justify-between mb-3">
-                    {statusBadge(match.status)}
-                    {match.locked && (
-                      <span className="text-xs text-amber-400 flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                        Locked
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-center gap-3 mb-3">
-                    <span className="text-white font-bold text-lg">{match.team1}</span>
-                    <span className="text-indigo-400 text-sm font-medium px-2 py-0.5 bg-indigo-500/15 rounded-lg">vs</span>
-                    <span className="text-white font-bold text-lg">{match.team2}</span>
-                  </div>
-                  <p className="text-indigo-300/70 text-sm text-center mb-4">
-                    {formatDate(match.match_date, match.match_time)}
-                  </p>
-                  <div className="flex justify-center">{matchAction(match)}</div>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* Tabs */}
+        <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                tab === t.key
+                  ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                  : 'text-indigo-300 hover:text-white hover:bg-white/5'
+              }`}>
+              {t.label}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                tab === t.key ? 'bg-white/20' : 'bg-white/10'
+              }`}>{t.count}</span>
+            </button>
+          ))}
         </div>
+
+        {/* Match Cards */}
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400" />
+          </div>
+        ) : currentMatches.length === 0 ? (
+          <div className="text-center py-12 text-indigo-400 text-sm">
+            {tab === 'today' ? "No matches today." : tab === 'upcoming' ? 'No upcoming matches.' : 'No completed matches yet.'}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {currentMatches.map((match) => (
+              <div key={match.id}
+                className="bg-white/5 hover:bg-white/[0.08] border border-white/10 rounded-2xl p-5 transition-all duration-200 backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-3">
+                  {statusBadge(match.status)}
+                  {match.locked && (
+                    <span className="text-xs text-amber-400 flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      Locked
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-center gap-3 mb-2">
+                  <span className="text-white font-bold text-lg">{match.team1}</span>
+                  <span className="text-indigo-400 text-sm font-medium px-2 py-0.5 bg-indigo-500/15 rounded-lg">vs</span>
+                  <span className="text-white font-bold text-lg">{match.team2}</span>
+                </div>
+                <p className="text-indigo-300/70 text-xs text-center mb-3">
+                  {formatDate(match.match_date, match.match_time)}
+                </p>
+                <div className="flex justify-center">{matchAction(match)}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
       <div className="text-center text-indigo-500/30 text-xs py-6">
         Built by Sushant & Rupesh
       </div>
