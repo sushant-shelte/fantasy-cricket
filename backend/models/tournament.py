@@ -7,7 +7,7 @@ from backend.config import IST, ESPN_MATCH_ID_OFFSET
 from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
-from backend.services.scraper import fetch_scorecard_html
+from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html
 from backend.services import data_service
 from bs4 import BeautifulSoup
 
@@ -28,19 +28,31 @@ class Tournament:
         self.registry = PlayerRegistry(players_data)
         self.player_roles = build_player_role_map(players_data)
 
+        self.matches = {}
         for m in matches_data:
             match_id = str(m["MatchID"])
             self.matches[match_id] = Match(match_id, m["Team1"], m["Team2"], self.registry)
 
+        self.load_teams(teams_data)
+
+    def load_teams(self, teams_data):
+        self.contestants = {}
+
         for row in teams_data:
-            mobile = str(row["Mobile"])
+            contestant_key = str(row.get("UserID") or row.get("Mobile") or row.get("User"))
             match_id = str(row["MatchID"])
             pid = int(row["PlayerID"])
 
-            if mobile not in self.contestants:
-                self.contestants[mobile] = Contestant(row["User"], mobile)
+            if contestant_key not in self.contestants:
+                self.contestants[contestant_key] = Contestant(
+                    row["User"],
+                    str(row.get("Mobile") or ""),
+                    row.get("UserID"),
+                    bool(row.get("IsActive", True)),
+                )
 
-            contestant = self.contestants[mobile]
+            contestant = self.contestants[contestant_key]
+            contestant.is_active = bool(row.get("IsActive", True))
             if match_id not in contestant.teams:
                 contestant.teams[match_id] = Team(match_id)
 
@@ -59,11 +71,28 @@ class Tournament:
 
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
         html_text = fetch_scorecard_html(scorecard_id)
-        if not html_text:
-            return
+        if html_text:
+            soup = BeautifulSoup(html_text, "html.parser")
+            match.parse_scorecard(soup)
 
-        soup = BeautifulSoup(html_text, "html.parser")
-        match.parse_scorecard(soup)
+        players_rows = []
+        for pid, info in self.registry.players.items():
+            if info.get("Team") not in (match.team1, match.team2):
+                continue
+            players_rows.append({
+                "id": pid,
+                "name": info.get("Name", ""),
+                "team": info.get("Team", ""),
+                "role": info.get("Role", ""),
+                "aliases": info.get("Aliases", ""),
+            })
+
+        playing_xi = fetch_playing_xi(int(match_id), match.team1, match.team2, players_rows)
+        for pid in playing_xi.get("player_ids", []):
+            player = match.get_or_create_player(int(pid))
+            if player:
+                player.team = self.registry.players.get(int(pid), {}).get("Team")
+                player.played = True
 
     def get_match_status(self, match_row):
         try:
@@ -78,11 +107,11 @@ class Tournament:
         today = now.date()
         parsed_date = datetime.strptime(match_row['Date'], "%Y-%m-%d").date()
 
-        if parsed_date < today:
-            return "over"
-        if now < match_datetime:
+        if now < match_datetime - timedelta(minutes=30):
             return "future"
-        elif now < match_datetime + timedelta(hours=4):
+        elif now < match_datetime:
+            return "lineups"
+        elif now < match_datetime + timedelta(hours=5):
             return "live"
         return "over"
 
@@ -95,20 +124,59 @@ class Tournament:
             role = self.player_roles.get(pid)
             if role:
                 player_points[pid] = player.calculate_player_points(role)
+                if int(pid) == 86:
+                    print(
+                        "[DEBUG player 86]",
+                        {
+                            "match_id": match_id,
+                            "player_id": pid,
+                            "name": player.name,
+                            "team": player.team,
+                            "role": role,
+                            "played": player.played,
+                            "runs": player.runs,
+                            "balls": player.balls,
+                            "fours": player.fours,
+                            "sixes": player.sixes,
+                            "strike_rate": player.strike_rate,
+                            "overs": player.overs,
+                            "maidens": player.maidens,
+                            "runs_conceded": player.runs_conceded,
+                            "wickets": player.wickets,
+                            "dot_balls": player.dot_balls,
+                            "bowled": player.bowled,
+                            "lbw": player.lbw,
+                            "economy": player.economy,
+                            "catches": player.catches,
+                            "runout_direct": player.runout_direct,
+                            "runout_indirect": player.runout_indirect,
+                            "stumpings": player.stumpings,
+                            "dismissal": player.dismissal,
+                            "is_out": player.is_out,
+                            "points": player_points[pid],
+                        },
+                    )
         self.player_points[match_id] = player_points
 
     def compute_points_for_match(self, match_id):
         for contestant in self.contestants.values():
+            if not contestant.is_active:
+                contestant.points.pop(match_id, None)
+                continue
             match = self.matches.get(match_id)
             if match:
                 contestant.calculate_points_for_match(match, self.player_roles)
 
     def persist_to_local(self):
         now_str = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+        data_service.delete_inactive_contestant_points()
         rows = []
         for contestant in self.contestants.values():
+            if not contestant.is_active:
+                continue
             for match_id, pts in contestant.points.items():
                 rows.append({
+                    "UserID": contestant.user_id,
                     "User": contestant.name,
                     "Mobile": contestant.mobile,
                     "MatchID": match_id,
@@ -148,6 +216,8 @@ class Tournament:
                 try:
                     print("\n--- Scheduler tick ---")
                     matches_data = data_service.get_cached_data("matches")
+                    teams_data = data_service.get_teams()
+                    self.load_teams(teams_data)
 
                     # Get already computed match IDs from player_points
                     computed_matches = set()
@@ -168,8 +238,8 @@ class Tournament:
 
                         # Per-match error handling — one failure doesn't stop others
                         try:
-                            if status == "live":
-                                print(f"  Match {match_id}: LIVE — fetching scores")
+                            if status in ("lineups", "live"):
+                                print(f"  Match {match_id}: {status.upper()} — fetching scores")
                                 self.update_match_data(match_id)
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)

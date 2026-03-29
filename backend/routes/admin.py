@@ -1,9 +1,12 @@
+from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import List, Optional, List
 
 from backend.middleware.auth import require_admin
 from backend.database import get_db
+from backend.config import ROLES
+from backend.services import data_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -281,6 +284,8 @@ async def recalculate_match(
 
     match_id_str = str(match_id)
 
+    tournament_ref.load_teams(data_service.get_teams())
+
     # Fetch and parse scorecard, compute points
     tournament_ref.update_match_data(match_id_str)
     tournament_ref.compute_player_points_for_match(match_id_str)
@@ -293,28 +298,84 @@ async def recalculate_match(
 
 # --- View Submitted Teams ---
 
-@router.get("/teams")
-async def view_teams(
-    match_id: int = Query(...),
-    user: dict = Depends(require_admin),
-):
-    db = get_db()
+class AdminPlayerSelection(BaseModel):
+    player_id: int
+    is_captain: bool = False
+    is_vice_captain: bool = False
 
+
+class AdminUpdateTeamBody(BaseModel):
+    user_id: int
+    match_id: int
+    players: List[AdminPlayerSelection]
+
+
+def _validate_team_selection(db, match_id: int, selections: List[AdminPlayerSelection]):
+    if len(selections) != 11:
+        raise HTTPException(status_code=400, detail="Exactly 11 players required")
+
+    captains = [p for p in selections if p.is_captain]
+    vice_captains = [p for p in selections if p.is_vice_captain]
+
+    if len(captains) != 1:
+        raise HTTPException(status_code=400, detail="Exactly 1 captain required")
+    if len(vice_captains) != 1:
+        raise HTTPException(status_code=400, detail="Exactly 1 vice captain required")
+    if captains[0].player_id == vice_captains[0].player_id:
+        raise HTTPException(status_code=400, detail="Captain and Vice Captain cannot be the same player")
+
+    player_ids = [p.player_id for p in selections]
+    placeholders = ",".join("?" * len(player_ids))
+    players = db.execute(
+        f"""
+        SELECT *
+        FROM players
+        WHERE id IN ({placeholders})
+          AND team IN (
+            SELECT team1 FROM matches WHERE id = ?
+            UNION
+            SELECT team2 FROM matches WHERE id = ?
+          )
+        """,
+        [*player_ids, match_id, match_id],
+    ).fetchall()
+
+    if len(players) != 11:
+        raise HTTPException(status_code=400, detail="Some selected players are invalid for this match")
+
+    role_counts = {role: 0 for role in ROLES}
+    for player in players:
+        if player["role"] in role_counts:
+            role_counts[player["role"]] += 1
+
+    for role in ROLES:
+        if role_counts[role] < 1:
+            raise HTTPException(status_code=400, detail=f"At least 1 {role} required")
+
+
+def _fetch_match_team_snapshots(db, match_id: int):
     rows = db.execute(
         """
-        SELECT ut.user_id, u.name AS user_name, ut.player_id,
-               p.name AS player_name, p.team, p.role,
-               ut.is_captain, ut.is_vice_captain
+        SELECT
+            ut.user_id,
+            u.name AS user_name,
+            u.email AS user_email,
+            u.mobile AS user_mobile,
+            ut.player_id,
+            p.name AS player_name,
+            p.team,
+            p.role,
+            ut.is_captain,
+            ut.is_vice_captain
         FROM user_teams ut
         JOIN users u ON u.id = ut.user_id
         JOIN players p ON p.id = ut.player_id
         WHERE ut.match_id = ?
-        ORDER BY u.name, p.role, p.name
+        ORDER BY u.name, p.team, p.role, p.name
         """,
         (match_id,),
     ).fetchall()
 
-    # Group by user
     teams_by_user = {}
     for row in rows:
         uid = row["user_id"]
@@ -322,7 +383,10 @@ async def view_teams(
             teams_by_user[uid] = {
                 "user_id": uid,
                 "user_name": row["user_name"],
+                "user_email": row["user_email"],
+                "user_mobile": row["user_mobile"],
                 "players": [],
+                "team_counts": defaultdict(int),
             }
         teams_by_user[uid]["players"].append({
             "player_id": row["player_id"],
@@ -332,8 +396,91 @@ async def view_teams(
             "is_captain": bool(row["is_captain"]),
             "is_vice_captain": bool(row["is_vice_captain"]),
         })
+        teams_by_user[uid]["team_counts"][row["team"]] += 1
 
-    return list(teams_by_user.values())
+    result = []
+    for team in teams_by_user.values():
+        team["team_counts"] = dict(team["team_counts"])
+        team["captain_name"] = next((p["player_name"] for p in team["players"] if p["is_captain"]), None)
+        team["vice_captain_name"] = next((p["player_name"] for p in team["players"] if p["is_vice_captain"]), None)
+        result.append(team)
+
+    return result
+
+
+@router.get("/teams/matches")
+async def team_matches(user: dict = Depends(require_admin)):
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            m.id,
+            m.team1,
+            m.team2,
+            m.match_date,
+            m.match_time,
+            COUNT(DISTINCT ut.user_id) AS team_count
+        FROM matches m
+        LEFT JOIN user_teams ut ON ut.match_id = m.id
+        GROUP BY m.id, m.team1, m.team2, m.match_date, m.match_time
+        ORDER BY m.id
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+@router.get("/teams")
+async def view_teams(
+    match_id: int = Query(...),
+    user: dict = Depends(require_admin),
+):
+    db = get_db()
+    match = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    return {
+        "match": dict(match),
+        "teams": _fetch_match_team_snapshots(db, match_id),
+    }
+
+
+@router.put("/teams")
+async def update_team(
+    body: AdminUpdateTeamBody,
+    user: dict = Depends(require_admin),
+):
+    db = get_db()
+
+    existing_user = db.execute("SELECT id FROM users WHERE id = ?", (body.user_id,)).fetchone()
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    existing_match = db.execute("SELECT id FROM matches WHERE id = ?", (body.match_id,)).fetchone()
+    if not existing_match:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    _validate_team_selection(db, body.match_id, body.players)
+
+    db.execute(
+        "DELETE FROM user_teams WHERE user_id = ? AND match_id = ?",
+        (body.user_id, body.match_id),
+    )
+
+    for player in body.players:
+        db.execute(
+            """
+            INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (body.user_id, body.match_id, player.player_id, int(player.is_captain), int(player.is_vice_captain)),
+        )
+
+    db.commit()
+
+    return {
+        "success": True,
+        "teams": _fetch_match_team_snapshots(db, body.match_id),
+    }
 
 
 # --- Clear Table Data ---
