@@ -248,7 +248,7 @@ export default function ViewScoresPage() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="text-white font-semibold">Player Statistics</h2>
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-indigo-400">
-                    <span className="whitespace-nowrap">Scroll to view all columns</span>
+                    <span className="whitespace-nowrap">Tap player for analysis</span>
                     <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">🏏 Batter</span>
                     <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">◎ Bowler</span>
                     <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-indigo-200">🏏◎ All-Rounder</span>
@@ -436,31 +436,57 @@ export default function ViewScoresPage() {
 
                 {/* Player breakdown list */}
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-                  <div className="px-4 py-3 border-b border-white/5">
+                  <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
                     <h3 className="text-white font-semibold text-sm">Player Contributions</h3>
+                    <span className="text-indigo-400 text-[10px]">Tap player for analysis</span>
                   </div>
                   <div className="divide-y divide-white/5">
-                    {breakdown.players.map((p, i) => (
-                      <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
-                        <div className="w-6 text-center flex-shrink-0">
-                          <span className="text-white/30 text-xs">{i + 1}</span>
-                        </div>
-                        <div className="w-8 flex-shrink-0 ml-1">
-                          {p.tag === 'C' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>}
-                          {p.tag === 'VC' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>}
-                        </div>
-                        <div className="flex-1 min-w-0 ml-2">
-                          <p className="text-white text-sm font-medium truncate">{p.name}</p>
-                          <p className="text-white/30 text-xs">{p.team} &middot; {p.role}</p>
-                        </div>
-                        <div className="text-right flex-shrink-0 ml-3">
-                          <p className="text-green-400 font-bold text-sm">{p.adjusted_points}</p>
-                          {p.multiplier > 1 && (
-                            <p className="text-white/30 text-[10px]">{p.base_points} &times; {p.multiplier}</p>
+                    {breakdown.players.map((p, i) => {
+                      const isOpen = expandedPlayer === 1000 + i;
+                      const bd = (p as any).breakdown || [];
+                      return (
+                        <div key={i}>
+                          <div
+                            onClick={() => setExpandedPlayer(isOpen ? null : 1000 + i)}
+                            className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer">
+                            <div className="w-6 text-center flex-shrink-0">
+                              <span className={`text-[10px] text-indigo-400 transition-transform inline-block ${isOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                            </div>
+                            <div className="w-8 flex-shrink-0 ml-1">
+                              {p.tag === 'C' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>}
+                              {p.tag === 'VC' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>}
+                            </div>
+                            <div className="flex-1 min-w-0 ml-2">
+                              <p className="text-white text-sm font-medium truncate">{p.name}</p>
+                              <p className="text-white/30 text-xs">{p.team} &middot; {p.role}</p>
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-3">
+                              <p className="text-green-400 font-bold text-sm">{p.adjusted_points}</p>
+                              {p.multiplier > 1 && (
+                                <p className="text-white/30 text-[10px]">{p.base_points} &times; {p.multiplier}</p>
+                              )}
+                            </div>
+                          </div>
+                          {isOpen && bd.length > 0 && (
+                            <div className="px-4 pb-3 pt-1">
+                              <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1.5">Player Analysis</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {bd.map((item: { label: string; points: number }, j: number) => (
+                                  <span key={j}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                                      item.points > 0
+                                        ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                    }`}>
+                                    {item.label} <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </>

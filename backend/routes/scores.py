@@ -182,14 +182,35 @@ async def team_breakdown(
     if not team_rows:
         return {"error": "No team found for this match"}
 
-    # Get player points
+    # Get player points from DB
     pp_rows = db.execute(
         "SELECT player_id, points FROM player_points WHERE match_id = ?",
         (match_id,),
     ).fetchall()
     pp_lookup = {row["player_id"]: float(row["points"]) for row in pp_rows}
 
-    # Get user name
+    # Fetch scorecard for detailed breakdown
+    registry, _ = _build_registry(db)
+    match_row = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+    match_obj = None
+    if match_row:
+        match_obj = Match(
+            str(match_id),
+            clean_team_name(match_row["team1"]),
+            clean_team_name(match_row["team2"]),
+            registry,
+        )
+        scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
+        html_content = fetch_scorecard_html(scorecard_id)
+        if html_content:
+            soup = BeautifulSoup(html_content, "html.parser")
+            match_obj.parse_scorecard(soup)
+            # Calculate points so breakdown is available
+            for pid_key, player in match_obj.players.items():
+                role = registry.players.get(pid_key, {}).get("Role")
+                if role:
+                    player.calculate_player_points(role)
+
     target_user = db.execute("SELECT name FROM users WHERE id = ?", (target_user_id,)).fetchone()
 
     breakdown = []
@@ -214,6 +235,11 @@ async def team_breakdown(
         adjusted = round(base_pts * multiplier, 2)
         total += adjusted
 
+        # Get per-category breakdown
+        player_breakdown = []
+        if match_obj and pid in match_obj.players:
+            player_breakdown = match_obj.players[pid].get_points_breakdown()
+
         breakdown.append({
             "name": row["name"],
             "team": row["team"],
@@ -222,6 +248,7 @@ async def team_breakdown(
             "multiplier": multiplier,
             "tag": tag,
             "adjusted_points": adjusted,
+            "breakdown": player_breakdown,
         })
 
     breakdown.sort(key=lambda x: x["adjusted_points"], reverse=True)
