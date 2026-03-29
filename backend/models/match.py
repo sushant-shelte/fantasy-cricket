@@ -67,6 +67,26 @@ class Match:
     def parse_espn_scorecard(self, soup):
         lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
         valid_teams = {self.team1, self.team2}
+        reverse_team_map = {short: full for full, short in TEAM_MAP.items() if len(short) <= 4}
+
+        def mark_player_played(name, team):
+            cleaned = clean_name(re.sub(r"\s*\([^)]*\)\s*$", "", str(name)).strip())
+            if not cleaned:
+                return False
+            pid = self.get_player_id(cleaned, team)
+            if not pid:
+                return False
+            player = self.get_or_create_player(pid)
+            player.team = team
+            player.played = True
+            return True
+
+        def mark_players_from_line(line, team):
+            found_any = False
+            for raw_name in re.split(r",|;|\u2022|\||\s{2,}", line):
+                if mark_player_played(raw_name, team):
+                    found_any = True
+            return found_any
 
         # Find innings headers like "Royal Challengers Bengaluru Innings"
         def find_innings_headers():
@@ -196,7 +216,7 @@ class Match:
                     idx += 1
 
             # Parse DNB
-            dnb_idx = find_between(header_pos, section_end, ("Did not bat",))
+            dnb_idx = find_between(header_pos, section_end, ("Did not bat", "Yet to bat", "Yet To Bat"))
             bowling_idx = find_between(header_pos, section_end, ("Bowling", "BOWLING"))
             fow_idx = find_prefix_between(header_pos, section_end, "fall of wickets")
             dnb_end = min(idx for idx in (fow_idx, bowling_idx, section_end) if idx != -1)
@@ -206,16 +226,7 @@ class Match:
                     line = lines[idx]
                     if line == ":":
                         continue
-                    for raw_name in line.split(","):
-                        name = clean_name(re.sub(r"\s*\([^)]*\)\s*$", "", raw_name).strip())
-                        if not name:
-                            continue
-                        pid = self.get_player_id(name, batting_team)
-                        if not pid:
-                            continue
-                        player = self.get_or_create_player(pid)
-                        player.team = batting_team
-                        player.played = True
+                    mark_players_from_line(line, batting_team)
 
             # Parse bowlers
             if bowling_idx != -1:
@@ -240,6 +251,24 @@ class Match:
                         idx += 6
                         continue
                     idx += 1
+
+        for team in (self.team1, self.team2):
+            team_markers = {
+                f"{team} team".lower(),
+                f"{reverse_team_map.get(team, team)} team".lower(),
+            }
+            for idx, line in enumerate(lines):
+                normalized_line = " ".join(line.lower().split())
+                if normalized_line not in team_markers:
+                    continue
+
+                for team_line in lines[idx + 1:idx + 35]:
+                    upper_line = team_line.upper()
+                    if upper_line in {"BATSMEN", "BATTING", "BOWLING", "EXTRAS", "TOTAL"}:
+                        continue
+                    if upper_line.endswith(" INNINGS") or upper_line.startswith("FALL OF WICKETS"):
+                        break
+                    mark_players_from_line(team_line, team)
 
         return True
 
