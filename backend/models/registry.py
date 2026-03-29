@@ -9,6 +9,27 @@ class PlayerRegistry:
     def normalize(self, name):
         return " ".join(name.lower().replace(".", "").split())
 
+    def _extract_initials_and_surname(self, normalized_name):
+        parts = normalized_name.split()
+        if len(parts) < 2:
+            return [], None
+
+        surname = parts[-1]
+        initials = []
+
+        for part in parts[:-1]:
+            compact = part.replace(" ", "")
+            if not compact:
+                continue
+
+            # Support both "RG Sharma" and "R G Sharma" style abbreviations.
+            if len(compact) > 1 and compact.isalpha():
+                initials.extend(list(compact))
+            else:
+                initials.append(compact[0])
+
+        return [initial.lower() for initial in initials if initial], surname
+
     def build(self, players_data):
         for row in players_data:
             pid = int(row["PlayerID"])
@@ -52,6 +73,26 @@ class PlayerRegistry:
             last_name_matches = self.last_name_lookup.get((team, parts[0]), set())
             if len(last_name_matches) == 1:
                 return next(iter(last_name_matches))
+
+        initials, surname = self._extract_initials_and_surname(normalized_name)
+        if surname:
+            surname_matches = self.last_name_lookup.get((team, surname), set())
+            if len(surname_matches) == 1:
+                return next(iter(surname_matches))
+
+            if initials:
+                first_initial = initials[0]
+                matching_candidates = []
+                for pid in surname_matches:
+                    player_name = self.normalize(self.players.get(pid, {}).get("Name", ""))
+                    if not player_name:
+                        continue
+                    player_parts = player_name.split()
+                    if player_parts and player_parts[0].startswith(first_initial):
+                        matching_candidates.append(pid)
+
+                if len(matching_candidates) == 1:
+                    return matching_candidates[0]
 
         print(f"Player mapping not found: '{name}' (team: {team})")
         return None
