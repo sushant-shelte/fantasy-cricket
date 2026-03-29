@@ -9,6 +9,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 import gspread
+from gspread.exceptions import WorksheetNotFound
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 import pytz
@@ -28,13 +29,10 @@ try:
     # =============================
     # CONFIG
     # =============================
-    TEST_MODE = False
-    TEST_MODE_MONTH = 3
-    TEST_MODE_DATE = 22
-    TEST_MODE_TIME_HR = 20
-    TEST_MODE_TIME_MIN = 0
+    TEST_MODE = True
     
-    MATCH_CODE_OFFSET = 1107 if TEST_MODE else 1181
+    ESPN_SERIES_ID = 8048
+    ESPN_MATCH_ID_OFFSET = 1527673
     
     ROLES = ["Wicketkeeper", "Batter", "AllRounder", "Bowler"]
     
@@ -74,15 +72,12 @@ try:
     
     
     client = gspread.authorize(creds)
-    if (TEST_MODE):
-        sheet = client.open("FantasyCricket2025")
-    else:
-        sheet = client.open("FantasyCricket")
+    spreadsheet = client.open("FantasyCricket")
     
-    users_sheet = sheet.worksheet("Users")
-    players_sheet = sheet.worksheet("Players")
-    matches_sheet = sheet.worksheet("Matches")
-    teams_sheet = sheet.worksheet("Teams")
+    users_sheet = spreadsheet.worksheet("Users")
+    players_sheet = spreadsheet.worksheet("Players")
+    matches_sheet = spreadsheet.worksheet("Matches")
+    teams_sheet = spreadsheet.worksheet("Teams")
     
     # =============================
     # TIMEZONE
@@ -122,7 +117,9 @@ try:
         return name.lower().replace(".", "").strip()
     
     def clean_name(name):
-        return re.sub(r"[†*]", "", name).strip()
+        name = re.sub(r"[\u2020\u2021*]", "", str(name))
+        name = re.sub(r"\s*\((?:c|wk|sub)\)\s*$", "", name, flags=re.IGNORECASE)
+        return " ".join(name.split()).strip()
     
     def clean_team_name(name):
         # Remove anything in parentheses
@@ -140,6 +137,12 @@ try:
     
         return short
     
+    def get_or_create_worksheet(title, rows, cols):
+        try:
+            return spreadsheet.worksheet(title)
+        except WorksheetNotFound:
+            return spreadsheet.add_worksheet(title=title, rows=str(rows), cols=str(cols))
+
     def is_batting_role(role):
         return role in ["Batter", "Wicketkeeper", "AllRounder"]
     
@@ -472,16 +475,7 @@ try:
         except:
             return False
     
-        if TEST_MODE:
-            now = ist.localize(datetime(
-                2025,
-                TEST_MODE_MONTH,
-                TEST_MODE_DATE,
-                TEST_MODE_TIME_HR,
-                TEST_MODE_TIME_MIN
-            ))
-        else:
-            now = datetime.now(ist)
+        now = datetime.now(ist)
     
         return now >= match_datetime
     
@@ -494,27 +488,27 @@ try:
         except Exception:
             return False
     
-        if TEST_MODE:
-            now = ist.localize(datetime(
-                2025,
-                TEST_MODE_MONTH,
-                TEST_MODE_DATE,
-                TEST_MODE_TIME_HR,
-                TEST_MODE_TIME_MIN
-            ))
-        else:
-            now = datetime.now(ist)
+        now = datetime.now(ist)
     
         return now >= match_datetime
     
     # =============================
     # FETCH SCORECARD
     # =============================
-    def fetch_scorecard_html(match_code):
-        url = f"https://www.howstat.com/Cricket/Statistics/IPL/MatchScorecard.asp?MatchCode={match_code}"
+    def fetch_scorecard_html(scorecard_id):
+        url = f"https://www.espn.in/cricket/series/{ESPN_SERIES_ID}/scorecard/{scorecard_id}/utils"
     
         try:
-            res = requests.get(url)
+            session = requests.Session()
+            session.trust_env = False
+            res = session.get(
+                url,
+                timeout=20,
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept-Language": "en-US,en;q=0.9"
+                }
+            )
             if res.status_code != 200:
                 return None
             return res.text
@@ -545,6 +539,7 @@ try:
             self.maidens = 0
             self.runs_conceded = 0
             self.wickets = 0
+            self.dot_balls = 0
             self.bowled = 0
             self.lbw = 0
             self.economy = 0.0
@@ -571,7 +566,7 @@ try:
             f"Batting:\n"
             f"  Runs: {self.runs}, Balls: {self.balls}, 4s: {self.fours}, 6s: {self.sixes}, SR: {self.strike_rate}\n"
             f"Bowling:\n"
-            f"  Overs: {self.overs}, Maidens: {self.maidens}, Runs Conceded: {self.runs_conceded}, "
+            f"  Overs: {self.overs}, Maidens: {self.maidens}, Dot Balls: {self.dot_balls}, Runs Conceded: {self.runs_conceded}, "
             f"Wickets: {self.wickets}, Econ: {self.economy}\n"
             f"Fielding:\n"
             f"  Catches: {self.catches}, Runouts (Direct): {self.runout_direct}, "
@@ -674,7 +669,9 @@ try:
         # PLAYER POINTS ENGINE
         # =============================
         def calculate_player_points(self, role: str):
-            debugPlayerID = 0
+            debugPlayerID = 226
+            if self.player_id == debugPlayerID:
+                print("\n\nCurrent Player: ", self.name)
             points = 0
             self.role = role
             # -----------------------
@@ -707,6 +704,10 @@ try:
                 if self.player_id == debugPlayerID:
                     print("+100 runs points +", str(16))
                 points += 16
+            elif runs >= 75:
+                if self.player_id == debugPlayerID:
+                    print("+75 runs points +", str(12))
+                points += 12
             elif runs >= 50:
                 if self.player_id == debugPlayerID:
                     print("+50 runs points +", str(8))
@@ -778,6 +779,10 @@ try:
             points += self.maidens * 12
             if self.player_id == debugPlayerID:
                 print("Maidens points +", str(self.maidens * 12))
+
+            points += self.dot_balls
+            if self.player_id == debugPlayerID:
+                print("Dot balls points +", str(self.dot_balls))
     
             # Economy (min 2 overs)
             if self.overs >= 2:
@@ -832,8 +837,8 @@ try:
                 print("Runout indirect points +", str(self.runout_indirect * 6))
 
             self.points = points
-            if self.player_id == 39:
-                print(str(self))
+            if self.player_id == debugPlayerID:
+                print(str(self.points))
             return points
     
     # =============================
@@ -960,6 +965,248 @@ try:
         # PARSE SCORECARD
         # =============================
         def parse_scorecard(self, soup: BeautifulSoup):
+
+            # ✅ CLEAR OLD PLAYER DATA BEFORE PARSING NEW SCORECARD
+            self.players = {}
+
+            if self.parse_espn_scorecard(soup):
+                print(f"✅ Total players parsed: {len(self.players)}")
+                return
+
+            self.parse_legacy_scorecard(soup)
+            print(f"✅ Total players parsed: {len(self.players)}")
+
+        def parse_espn_scorecard(self, soup: BeautifulSoup):
+            lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
+            valid_teams = {self.team1, self.team2}
+
+            def find_innings_headers():
+                headers = []
+                seen = set()
+
+                for idx, line in enumerate(lines):
+                    match_obj = re.fullmatch(r"(.+?)\s+[Ii]nnings", line)
+                    if not match_obj:
+                        continue
+
+                    raw_team = match_obj.group(1).strip()
+                    if re.fullmatch(r"\d+(?:st|nd|rd|th)", raw_team.lower()):
+                        continue
+
+                    team = clean_team_name(raw_team)
+                    if team not in valid_teams or team in seen:
+                        continue
+
+                    next_window = lines[idx + 1: idx + 8]
+                    if not any(text.upper() in ("BATSMEN", "BATTING") for text in next_window):
+                        continue
+
+                    seen.add(team)
+                    headers.append((idx, team))
+
+                    if len(headers) == 2:
+                        break
+
+                return headers
+
+            def find_between(start, end, targets):
+                target_set = {item.upper() for item in targets}
+                for idx in range(start, end):
+                    if lines[idx].upper() in target_set:
+                        return idx
+                return -1
+
+            def find_prefix_between(start, end, prefix):
+                prefix = prefix.lower()
+                for idx in range(start, end):
+                    if lines[idx].lower().startswith(prefix):
+                        return idx
+                return -1
+
+            def is_int_text(value):
+                return bool(re.fullmatch(r"\d+", str(value).strip()))
+
+            def is_float_text(value):
+                return bool(re.fullmatch(r"\d+(?:\.\d+)?", str(value).strip()))
+
+            def get_batter_layout(index, end):
+                if index + 7 < end and (
+                    is_int_text(lines[index + 2]) and
+                    is_int_text(lines[index + 3]) and
+                    is_int_text(lines[index + 4]) and
+                    is_int_text(lines[index + 5]) and
+                    is_int_text(lines[index + 6]) and
+                    is_float_text(lines[index + 7])
+                ):
+                    return {
+                        "step": 8,
+                        "runs_idx": 2,
+                        "balls_idx": 3,
+                        "fours_idx": 5,
+                        "sixes_idx": 6,
+                        "sr_idx": 7,
+                    }
+
+                if index + 6 < end and (
+                    is_int_text(lines[index + 2]) and
+                    is_int_text(lines[index + 3]) and
+                    is_int_text(lines[index + 4]) and
+                    is_int_text(lines[index + 5]) and
+                    is_float_text(lines[index + 6])
+                ):
+                    return {
+                        "step": 7,
+                        "runs_idx": 2,
+                        "balls_idx": 3,
+                        "fours_idx": 4,
+                        "sixes_idx": 5,
+                        "sr_idx": 6,
+                    }
+
+                return None
+
+            def looks_like_batter_row(index, end):
+                if index + 6 >= end:
+                    return False
+
+                name = lines[index]
+                dismissal = lines[index + 1]
+
+                if name.upper() in {
+                    "BATSMEN", "BATTING", "R", "B", "4S", "6S", "SR",
+                    "EXTRAS", "TOTAL", "DID NOT BAT", "BOWLING"
+                }:
+                    return False
+
+                if dismissal.upper() in {"R", "B", "4S", "6S", "SR"}:
+                    return False
+
+                return get_batter_layout(index, end) is not None
+
+            def looks_like_bowler_row(index, end):
+                if index + 5 >= end:
+                    return False
+
+                name = lines[index]
+                if name.upper() in {"BOWLING", "O", "M", "R", "W", "ECON", "0S", "4S", "6S", "WD", "NB"}:
+                    return False
+
+                return (
+                    is_float_text(lines[index + 1]) and
+                    is_int_text(lines[index + 2]) and
+                    is_int_text(lines[index + 3]) and
+                    is_int_text(lines[index + 4]) and
+                    is_float_text(lines[index + 5])
+                )
+
+            innings_headers = find_innings_headers()
+            if not innings_headers:
+                return False
+
+            print("While parsing ESPN scoreboard - " + str(self.team1) + " vs " + str(self.team2))
+
+            for header_pos, batting_team in innings_headers:
+                next_header_positions = [pos for pos, _ in innings_headers if pos > header_pos]
+                section_end = next_header_positions[0] if next_header_positions else len(lines)
+                bowling_team = self.team2 if batting_team == self.team1 else self.team1
+
+                for stop_marker in ("Match Details", "Match Notes", "Match Coverage", "All Match News"):
+                    stop_idx = find_between(header_pos, section_end, (stop_marker,))
+                    if stop_idx != -1:
+                        section_end = stop_idx
+                        break
+
+                batting_header = find_between(header_pos, section_end, ("BATSMEN", "BATTING"))
+                extras_idx = find_between(header_pos, section_end, ("Extras", "EXTRAS"))
+
+                if batting_header != -1 and extras_idx != -1:
+                    idx = batting_header + 1
+                    while idx < extras_idx:
+                        if looks_like_batter_row(idx, extras_idx):
+                            layout = get_batter_layout(idx, extras_idx)
+                            name = clean_name(lines[idx])
+                            dismissal = lines[idx + 1]
+                            pid = self.get_player_id(name, batting_team)
+
+                            if not pid:
+                                print(f"❌ Missing ID (bat): {name} | {batting_team}")
+                                idx += 1
+                                continue
+
+                            player = self.get_or_create_player(pid)
+                            player.team = batting_team
+                            player.played = True
+                            player.runs = int(lines[idx + layout["runs_idx"]])
+                            player.balls = int(lines[idx + layout["balls_idx"]])
+                            player.fours = int(lines[idx + layout["fours_idx"]])
+                            player.sixes = int(lines[idx + layout["sixes_idx"]])
+
+                            if player.balls > 0:
+                                player.strike_rate = round((player.runs / player.balls) * 100, 2)
+
+                            player.apply_dismissal(dismissal, self, bowling_team)
+                            idx += layout["step"]
+                            continue
+
+                        idx += 1
+
+                dnb_idx = find_between(header_pos, section_end, ("Did not bat",))
+                bowling_idx = find_between(header_pos, section_end, ("Bowling", "BOWLING"))
+                fow_idx = find_prefix_between(header_pos, section_end, "fall of wickets")
+                dnb_end = min(idx for idx in (fow_idx, bowling_idx, section_end) if idx != -1)
+
+                if dnb_idx != -1:
+                    for idx in range(dnb_idx + 1, dnb_end):
+                        line = lines[idx]
+                        if line == ":":
+                            continue
+
+                        for raw_name in line.split(","):
+                            name = clean_name(re.sub(r"\s*\([^)]*\)\s*$", "", raw_name).strip())
+                            if not name:
+                                continue
+
+                            pid = self.get_player_id(name, batting_team)
+                            if not pid:
+                                print(f"❌ Missing ID (DNB): {name} | {batting_team}")
+                                continue
+
+                            player = self.get_or_create_player(pid)
+                            player.team = batting_team
+                            player.played = True
+
+                if bowling_idx != -1:
+                    idx = bowling_idx + 1
+                    while idx < section_end:
+                        if looks_like_bowler_row(idx, section_end):
+                            name = clean_name(lines[idx])
+                            pid = self.get_player_id(name, bowling_team)
+
+                            if not pid:
+                                print(f"❌ Missing ID (bowl): {name} | {bowling_team}")
+                                idx += 1
+                                continue
+
+                            player = self.get_or_create_player(pid)
+                            player.team = bowling_team
+                            player.played = True
+                            player.overs = float(lines[idx + 1])
+                            player.maidens = int(lines[idx + 2])
+                            player.runs_conceded = int(lines[idx + 3])
+                            player.wickets = int(lines[idx + 4])
+                            player.dot_balls = int(lines[idx + 6])
+
+                            if player.overs > 0:
+                                player.economy = round(player.runs_conceded / player.overs, 2)
+
+                            idx += 6
+                            continue
+
+                        idx += 1
+
+            return True
+
+        def parse_legacy_scorecard(self, soup: BeautifulSoup):
     
             # ✅ CLEAR OLD PLAYER DATA BEFORE PARSING NEW SCORECARD
             self.players = {}
@@ -1181,8 +1428,7 @@ try:
                         # ✅ Round to 2 decimals to avoid floating point precision issues
                         player.economy = round(player.runs_conceded / player.overs, 2)
     
-            print(f"✅ Total players parsed: {len(self.players)}")
-            
+
     # =============================
     # TEAM
     # =============================
@@ -1270,6 +1516,7 @@ try:
     
             # ✅ Role map
             self.player_roles = build_player_role_map(players_data)
+            self.matches = {}
     
             # -------------------------
             # CREATE MATCHES
@@ -1284,34 +1531,44 @@ try:
                     self.registry
                 )
     
-            # -------------------------
-            # CREATE CONTESTANTS + TEAMS
-            # -------------------------
+            self.sync_contestants(teams_data)
+    
+        def sync_contestants(self, teams_data):
+            existing_points = {
+                mobile: contestant.points.copy()
+                for mobile, contestant in self.contestants.items()
+            }
+
+            self.contestants = {}
+
             for row in teams_data:
                 mobile = str(row["Mobile"])
                 match_id = str(row["MatchID"])
                 pid = int(row["PlayerID"])
-    
+
                 if mobile not in self.contestants:
                     self.contestants[mobile] = Contestant(
                         row["User"],
                         mobile
                     )
-    
+
                 contestant = self.contestants[mobile]
-    
+
                 if match_id not in contestant.teams:
                     contestant.teams[match_id] = Team(match_id)
-    
+
                 team = contestant.teams[match_id]
                 team.player_ids.add(pid)
-    
+
                 if str(row["Captain"]).lower() == "true":
                     team.captain = pid
-    
+
                 if str(row["ViceCaptain"]).lower() == "true":
                     team.vice_captain = pid
-    
+
+            for mobile, points in existing_points.items():
+                if mobile in self.contestants:
+                    self.contestants[mobile].points.update(points)
 
         # -------------------------
         # UPDATE MATCH DATA
@@ -1325,8 +1582,8 @@ try:
     
             print(f"\n📊 Updating Match {match_id}")
     
-            match_code = int(match_id) + MATCH_CODE_OFFSET
-            html_text = fetch_scorecard_html(match_code)
+            scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
+            html_text = fetch_scorecard_html(scorecard_id)
     
             if not html_text:
                 print("❌ No scorecard")
@@ -1356,16 +1613,7 @@ try:
             except:
                 return None
     
-            if TEST_MODE:
-                now = ist.localize(datetime(
-                    2025,
-                    TEST_MODE_MONTH,
-                    TEST_MODE_DATE,
-                    TEST_MODE_TIME_HR,
-                    TEST_MODE_TIME_MIN
-                ))
-            else:
-                now = datetime.now(ist)
+            now = datetime.now(ist)
     
             if now < match_datetime:
                 return 'future'
@@ -1383,7 +1631,7 @@ try:
             """
             computed = {}
             try:
-                sheet = client.open("FantasyCricket").worksheet("ContestantPoints")
+                sheet = spreadsheet.worksheet("ContestantPoints")
                 records = sheet.get_all_records()
                 for row in records:
                     mobile = str(row["Mobile"])
@@ -1403,7 +1651,7 @@ try:
             """
             computed = {}
             try:
-                sheet = client.open("FantasyCricket").worksheet("PlayerPoints")
+                sheet = spreadsheet.worksheet("PlayerPoints")
                 records = sheet.get_all_records()
                 for row in records:
                     match_id = str(row["MatchID"])
@@ -1462,6 +1710,7 @@ try:
                     try:
                         print("\n🔄 Scheduler running...")
     
+                        self.sync_contestants(teams_sheet.get_all_records())
                         matches_data = get_cached_data("matches")
                         computed_points = self.get_computed_points()
     
@@ -1489,26 +1738,27 @@ try:
                             # COMPLETED MATCHES
                             # =============================
                             if status == 'over':
-                                # Check if already computed
-                                already_computed = False
+                                missing_contestants = []
                                 for contestant in self.contestants.values():
                                     key = (contestant.mobile, match_id)
                                     if key in computed_points:
-                                        already_computed = True
-                                        break
+                                        contestant.points[match_id] = computed_points[key]
+                                    elif match_id in contestant.teams:
+                                        missing_contestants.append(contestant)
     
-                                if already_computed:
+                                if not missing_contestants:
                                     print(f"    ✅ Already computed (skipping)")
-                                    # Load existing points
-                                    for contestant in self.contestants.values():
-                                        key = (contestant.mobile, match_id)
-                                        if key in computed_points:
-                                            contestant.points[match_id] = computed_points[key]
                                 else:
                                     print(f"    🔵 FINISHED - Computing points for first time")
                                     self.update_match_data(match_id)
                                     self.compute_player_points_for_match(match_id)
-                                    self.compute_points_for_match(match_id)
+                                    match = self.matches.get(match_id)
+                                    if match:
+                                        for contestant in missing_contestants:
+                                            contestant.calculate_points_for_match(
+                                                match,
+                                                self.player_roles
+                                            )
     
                         # =============================
                         # PERSIST TO SHEETS (EVERY LOOP)
@@ -1554,13 +1804,9 @@ try:
                 return
     
             try:
-                sheet = client.open("FantasyCricket").worksheet("ContestantPoints")
-            except:
-                sheet = client.open("FantasyCricket").add_worksheet(
-                    title="ContestantPoints",
-                    rows="1000",
-                    cols="10"
-                )
+                sheet = get_or_create_worksheet("ContestantPoints", rows=1000, cols=10)
+            except Exception:
+                raise
     
             # Header
             all_values = sheet.get_all_values()
@@ -1573,15 +1819,35 @@ try:
                     "LastUpdated"
                 ])
     
-            # Clear old data - delete all rows except header (row 1)
+            existing_rows = {}
+            try:
+                for row in sheet.get_all_records():
+                    key = (str(row["Mobile"]), str(row["MatchID"]))
+                    existing_rows[key] = [
+                        row["User"],
+                        str(row["Mobile"]),
+                        str(row["MatchID"]),
+                        round(float(row["Points"]), 2),
+                        str(row.get("LastUpdated", ""))
+                    ]
+            except Exception:
+                pass
+
+            for row in rows:
+                key = (str(row[1]), str(row[2]))
+                existing_rows[key] = row
+
+            merged_rows = list(existing_rows.values())
+            if not merged_rows:
+                print("No data to persist")
+                return
+
             if len(all_values) > 1:
                 sheet.delete_rows(2, len(all_values))
-    
-            # Write new data - append all new rows
-            if rows:
-                sheet.append_rows(rows)
-    
-            print(f"✅ Persisted {len(rows)} rows")
+
+            sheet.append_rows(merged_rows)
+
+            print(f"✅ Persisted {len(merged_rows)} rows")
     
         # -------------------------
         # SAVE PLAYER POINTS TO GOOGLE SHEETS
@@ -1622,13 +1888,9 @@ try:
                 return
     
             try:
-                sheet = client.open("FantasyCricket").worksheet("PlayerPoints")
-            except:
-                sheet = client.open("FantasyCricket").add_worksheet(
-                    title="PlayerPoints",
-                    rows="5000",
-                    cols="10"
-                )
+                sheet = get_or_create_worksheet("PlayerPoints", rows=5000, cols=10)
+            except Exception:
+                raise
     
             # Header
             all_values = sheet.get_all_values()
@@ -1925,7 +2187,7 @@ try:
             return RedirectResponse(url="/change-password?error=wrongpass", status_code=303)
     
         try:
-            sheet = client.open("FantasyCricket").worksheet("Users")
+            sheet = spreadsheet.worksheet("Users")
             sheet.update_cell(row_index, 4, new_password)
     
             return RedirectResponse(url="/dashboard?msg=passchanged", status_code=303)
@@ -1962,10 +2224,7 @@ try:
         except Exception as e:
             return f"<h3>❌ Invalid match time format: {e}</h3>"
     
-        if TEST_MODE:
-            now = ist.localize(datetime(2025, TEST_MODE_MONTH, TEST_MODE_DATE, TEST_MODE_TIME_HR, TEST_MODE_TIME_MIN))
-        else:
-            now = datetime.now(ist)
+        now = datetime.now(ist)
     
         if now >= match_datetime:
             return "<h3>⛔ Match locked</h3>"
@@ -2230,10 +2489,7 @@ try:
             f"{match['Date']} {match['Time']}",
             "%Y-%m-%d %H:%M"
         )
-        if TEST_MODE:
-            now = ist.localize(datetime(2025, TEST_MODE_MONTH, TEST_MODE_DATE, TEST_MODE_TIME_HR, TEST_MODE_TIME_MIN))
-        else:
-            now = datetime.now(ist)
+        now = datetime.now(ist)
     
         if now > ist.localize(match_time):
             return "<h3>⛔ Team submission closed (match started)</h3>"
@@ -2345,7 +2601,8 @@ try:
     tournament = Tournament()
         
     @app.get("/view-scores", response_class=HTMLResponse)
-    def view_scores(match_id: str):
+    def view_scores(request: Request, match_id: str):
+        current_user = request.session.get('name', '')
 
         body = f"""
         <h2>Match {match_id} Live Score</h2>
@@ -2353,7 +2610,10 @@ try:
         <div id="loader" class="message success" style="display:none;"></div>
         <div class="score-layout">
             <div id="players-container" class="panel-card">
-                <h3>Player Statistics</h3>
+                <div class="panel-header-row">
+                    <h3 id="players-panel-title">Player Statistics</h3>
+                    <button type="button" id="reset-view-btn" class="btn btn-secondary" style="display:none;">Show Player Stats</button>
+                </div>
                 <div id="players-table" class="table-scroll"></div>
             </div>
             <div id="contestants-container" class="panel-card">
@@ -2362,9 +2622,245 @@ try:
             </div>
         </div>
         <a class="back-link" href='/dashboard'>Back to dashboard</a>
+        <style>
+            .panel-header-row {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-bottom: 12px;
+            }}
+            .contestant-link {{
+                background: none;
+                border: none;
+                color: var(--primary);
+                cursor: pointer;
+                font: inherit;
+                padding: 0;
+                text-decoration: underline;
+            }}
+            .contestant-link:hover {{
+                color: var(--primary-dark);
+            }}
+            .diff-summary {{
+                display: grid;
+                gap: 12px;
+                margin-bottom: 16px;
+            }}
+            .diff-summary-card {{
+                border: 1px solid var(--border);
+                border-radius: 14px;
+                padding: 14px;
+                background: #f8fbff;
+            }}
+            .diff-summary-card strong {{
+                font-size: 1.1rem;
+            }}
+            .diff-section {{
+                margin-top: 18px;
+            }}
+            .diff-section h4 {{
+                margin: 0 0 8px;
+            }}
+            .diff-table {{
+                width: 100%;
+                border-collapse: collapse;
+            }}
+            .diff-table th, .diff-table td {{
+                border: 1px solid var(--border);
+                padding: 10px;
+                vertical-align: top;
+            }}
+            .diff-table th {{
+                background: #f4f7fb;
+                text-align: left;
+            }}
+            .diff-player-name {{
+                font-weight: 600;
+            }}
+            .diff-player-meta {{
+                color: var(--muted);
+                font-size: 0.9rem;
+                margin-top: 4px;
+            }}
+            .diff-delta {{
+                color: var(--warning);
+                font-weight: 600;
+                margin-bottom: 8px;
+            }}
+        </style>
         <script>
         let firstLoad = true;
         let userTeam = [];
+        let latestPlayers = [];
+        let activeComparison = null;
+        const currentUser = {json.dumps(current_user)};
+
+        function formatPoints(value) {{
+            return Number(value || 0).toFixed(2);
+        }}
+
+        function formatTeamEntry(entry) {{
+            if (!entry) return '';
+            let pointsText = formatPoints(entry.adjusted_points);
+            if (entry.multiplier === 2) {{
+                pointsText = `${{formatPoints(entry.base_points)}} x 2 = ${{formatPoints(entry.adjusted_points)}}`;
+            }} else if (entry.multiplier === 1.5) {{
+                pointsText = `${{formatPoints(entry.base_points)}} x 1.5 = ${{formatPoints(entry.adjusted_points)}}`;
+            }}
+
+            return `
+                <div class="diff-player-name">${{entry.name}}${{entry.tag ? ` (${{entry.tag}})` : ''}}</div>
+                <div class="diff-player-meta">${{entry.team || ''}}${{entry.role ? ` • ${{entry.role}}` : ''}}</div>
+                <div class="diff-player-meta">${{pointsText}}</div>
+            `;
+        }}
+
+        function renderDiffSection(title, diffValue, rows, leftTitle, rightTitle, showRowDiff = false) {{
+            let html = `<div class="diff-section"><h4>${{title}}</h4><div class="diff-delta">Diff: ${{formatPoints(diffValue)}}</div>`;
+            html += `<div class="table-scroll"><table class="diff-table"><thead><tr><th>${{leftTitle}}</th>`;
+            if (showRowDiff) html += '<th>Diff</th>';
+            html += `<th>${{rightTitle}}</th></tr></thead><tbody>`;
+
+            if (!rows.length) {{
+                html += `<tr><td colspan="${{showRowDiff ? 3 : 2}}">No entries</td></tr>`;
+            }} else {{
+                rows.forEach(row => {{
+                    html += '<tr>';
+                    html += `<td>${{formatTeamEntry(row.left)}}</td>`;
+                    if (showRowDiff) {{
+                        html += `<td>${{row.diff_points !== undefined ? formatPoints(row.diff_points) : '0.00'}}</td>`;
+                    }}
+                    html += `<td>${{formatTeamEntry(row.right)}}</td>`;
+                    html += '</tr>';
+                }});
+            }}
+
+            html += '</tbody></table></div></div>';
+            return html;
+        }}
+
+        function renderPlayerStats(players) {{
+            let playersHTML = `
+                              <table>
+                              <thead>
+                              <tr>
+                              <th>#</th>
+                              <th>Name</th>
+                              <th style="font-weight: bold; color: #2e7d32;">Points</th>
+                              <th>Team</th>
+                              <th>Role</th>
+                              <th>Runs</th>
+                              <th>Balls</th>
+                              <th>4s</th>
+                              <th>6s</th>
+                              <th>SR</th>
+                              <th>Overs</th>
+                              <th>Maidens</th>
+                              <th>Dots</th>
+                              <th>Wkts</th>
+                              <th>B/LBW</th>
+                              <th>Eco</th>
+                              <th>Catches</th>
+                              <th>RO+St</th>
+                              <th>RO Ind</th>
+                              </tr>
+                              </thead>
+                              <tbody>`;
+            players.forEach(p => {{
+                let rowClass = userTeam.includes(p.name) ? 'user-team' : '';
+                playersHTML += `<tr class="${{rowClass}}">
+                                <td>${{p.rank || ''}}</td>
+                                <td>${{p.name}}</td>
+                                <td style="font-weight: bold;">${{formatPoints(p.points)}}</td>
+                                <td>${{p.team}}</td>
+                                <td>${{p.role}}</td>
+                                <td>${{p.runs || 0}}</td>
+                                <td>${{p.balls || 0}}</td>
+                                <td>${{p.fours || 0}}</td>
+                                <td>${{p.sixes || 0}}</td>
+                                <td>${{p.strike_rate || 0}}</td>
+                                <td>${{p.overs || 0}}</td>
+                                <td>${{p.maidens || 0}}</td>
+                                <td>${{p.dot_balls || 0}}</td>
+                                <td>${{p.wickets || 0}}</td>
+                                <td>${{(p.bowled || 0) + (p.lbw || 0)}}</td>
+                                <td>${{p.economy || 0}}</td>
+                                <td>${{p.catches || 0}}</td>
+                                <td>${{(p.runout_direct || 0) + (p.stumpings || 0)}}</td>
+                                <td>${{p.runout_indirect || 0}}</td>
+                                </tr>`;
+            }});
+            playersHTML += '</tbody></table>';
+            document.getElementById("players-table").innerHTML = playersHTML;
+        }}
+
+        function renderContestantRankings(contestants) {{
+            let contestantsHTML = '<table><thead><tr><th>#</th><th>Contestant</th><th>Points</th></tr></thead><tbody>';
+            contestants.forEach(c => {{
+                const contestantCell = c.name === currentUser
+                    ? c.name
+                    : `<button type="button" class="contestant-link" onclick='showTeamDiff(${{JSON.stringify(String(c.mobile || ""))}}, ${{JSON.stringify(String(c.name || ""))}})'>${{c.name}}</button>`;
+                contestantsHTML += `<tr><td>${{c.rank || ''}}</td><td>${{contestantCell}}</td><td>${{formatPoints(c.points)}}</td></tr>`;
+            }});
+            contestantsHTML += '</tbody></table>';
+            document.getElementById("contestants-table").innerHTML = contestantsHTML;
+        }}
+
+        async function showTeamDiff(otherMobile, otherName) {{
+            activeComparison = {{ mobile: otherMobile, name: otherName }};
+            document.getElementById('players-panel-title').textContent = `Team Diff vs ${{otherName}}`;
+            document.getElementById('reset-view-btn').style.display = 'inline-flex';
+
+            const res = await fetch(`/team-diff-data?match_id={match_id}&other_mobile=${{encodeURIComponent(otherMobile)}}`);
+            const data = await res.json();
+
+            if (data.error) {{
+                document.getElementById("players-table").innerHTML = `<p>${{data.error}}</p>`;
+                return;
+            }}
+
+            let html = `
+                <div class="diff-summary">
+                    <div class="diff-summary-card">
+                        <div><strong>Total Diff: ${{formatPoints(data.total_diff)}}</strong></div>
+                        <div>${{data.current_user}}: ${{formatPoints(data.my_total)}} | ${{data.other_user}}: ${{formatPoints(data.other_total)}}</div>
+                    </div>
+                </div>
+            `;
+
+            html += renderDiffSection(
+                'Different Players',
+                data.different_players_diff,
+                data.different_players,
+                data.current_user,
+                data.other_user
+            );
+            html += renderDiffSection(
+                'Common Players With Different C/VC',
+                data.common_role_diff_total,
+                data.common_role_diff,
+                data.current_user,
+                data.other_user,
+                true
+            );
+            html += renderDiffSection(
+                'Common Players',
+                0,
+                data.common_players,
+                data.current_user,
+                data.other_user
+            );
+
+            document.getElementById("players-table").innerHTML = html;
+        }}
+
+        function resetPlayerStatsView() {{
+            activeComparison = null;
+            document.getElementById('players-panel-title').textContent = 'Player Statistics';
+            document.getElementById('reset-view-btn').style.display = 'none';
+            renderPlayerStats(latestPlayers);
+        }}
 
         async function loadScores() {{
             const loader = document.getElementById('loader');
@@ -2393,61 +2889,14 @@ try:
                     return;
                 }}
 
-                let playersHTML = `
-                                  <table>
-                                  <thead>
-                                  <tr>
-                                  <th>Name</th>
-                                  <th style="font-weight: bold; color: #2e7d32;">Points</th>
-                                  <th>Team</th>
-                                  <th>Role</th>
-                                  <th>Runs</th>
-                                  <th>Balls</th>
-                                  <th>4s</th>
-                                  <th>6s</th>
-                                  <th>SR</th>
-                                  <th>Overs</th>
-                                  <th>Maidens</th>
-                                  <th>Wkts</th>
-                                  <th>B/LBW</th>
-                                  <th>Eco</th>
-                                  <th>Catches</th>
-                                  <th>RO+St</th>
-                                  <th>RO Ind</th>
-                                  </tr>
-                                  </thead>
-                                  <tbody>`;
-                data.players.forEach(p => {{
-                    let rowClass = userTeam.includes(p.name) ? 'user-team' : '';
-                    playersHTML += `<tr class="${{rowClass}}">
-                                    <td>${{p.name}}</td>
-                                    <td style="font-weight: bold;">${{p.points.toFixed(2)}}</td>
-                                    <td>${{p.team}}</td>
-                                    <td>${{p.role}}</td>
-                                    <td>${{p.runs || 0}}</td>
-                                    <td>${{p.balls || 0}}</td>
-                                    <td>${{p.fours || 0}}</td>
-                                    <td>${{p.sixes || 0}}</td>
-                                    <td>${{p.strike_rate || 0}}</td>
-                                    <td>${{p.overs || 0}}</td>
-                                    <td>${{p.maidens || 0}}</td>
-                                    <td>${{p.wickets || 0}}</td>
-                                    <td>${{(p.bowled || 0) + (p.lbw || 0)}}</td>
-                                    <td>${{p.economy || 0}}</td>
-                                    <td>${{p.catches || 0}}</td>
-                                    <td>${{(p.runout_direct || 0) + (p.stumpings || 0)}}</td>
-                                    <td>${{p.runout_indirect || 0}}</td>
-                                    </tr>`;
-                }});
-                playersHTML += '</tbody></table>';
-                document.getElementById("players-table").innerHTML = playersHTML;
+                latestPlayers = data.players || [];
+                renderContestantRankings(data.contestants || []);
 
-                let contestantsHTML = '<table><thead><tr><th>Contestant</th><th>Points</th></tr></thead><tbody>';
-                data.contestants.forEach(c => {{
-                    contestantsHTML += `<tr><td>${{c.name}}</td><td>${{c.points.toFixed(2)}}</td></tr>`;
-                }});
-                contestantsHTML += '</tbody></table>';
-                document.getElementById("contestants-table").innerHTML = contestantsHTML;
+                if (activeComparison) {{
+                    await showTeamDiff(activeComparison.mobile, activeComparison.name);
+                }} else {{
+                    resetPlayerStatsView();
+                }}
 
                 loader.style.display = 'none';
 
@@ -2464,6 +2913,7 @@ try:
             }}
         }}
 
+        document.getElementById('reset-view-btn').addEventListener('click', resetPlayerStatsView);
         loadScores();
         setInterval(loadScores, 30000);
         </script>
@@ -2993,17 +3443,112 @@ try:
     @app.get('/points-table-data')
     def points_table_data():
         try:
-            sheet = client.open('FantasyCricket').worksheet('ContestantPoints')
+            sheet = spreadsheet.worksheet('ContestantPoints')
             data = sheet.get_all_records()
             return JSONResponse(data)
         except Exception:
             return JSONResponse([])
+
+    def ensure_match_scorecard_loaded(match_id: str):
+        matches = get_cached_data("matches")
+        match_row = next((m for m in matches if str(m["MatchID"]) == str(match_id)), None)
+
+        if not match_row:
+            return None, None, "Match not found"
+
+        match_obj = tournament.matches.get(str(match_id))
+
+        if not match_obj or not match_obj.players:
+            players_data = get_cached_data("players")
+            registry = PlayerRegistry(players_data)
+
+            match_obj = Match(
+                match_id,
+                clean_team_name(match_row["Team1"]),
+                clean_team_name(match_row["Team2"]),
+                registry
+            )
+
+            scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
+            html_content = fetch_scorecard_html(scorecard_id)
+
+            if not html_content:
+                return match_row, None, "No data"
+
+            soup = BeautifulSoup(html_content, "html.parser")
+            match_obj.parse_scorecard(soup)
+            tournament.matches[str(match_id)] = match_obj
+
+        return match_row, match_obj, None
+
+    def get_match_player_points_data(match_id: str):
+        player_points = {}
+        player_role = {}
+
+        for pid, points in tournament.player_points.get(str(match_id), {}).items():
+            player_points[str(pid)] = float(points)
+
+        for pid, role in tournament.player_roles.items():
+            player_role[str(pid)] = role
+
+        return player_points, player_role
+
+    def refresh_live_match_points(match_id: str):
+        match_row, match_obj, error = ensure_match_scorecard_loaded(match_id)
+        if error:
+            return match_row, match_obj, error
+
+        tournament.update_match_data(str(match_id))
+        tournament.compute_player_points_for_match(str(match_id))
+        tournament.compute_points_for_match(str(match_id))
+
+        return match_row, tournament.matches.get(str(match_id)), None
+
+    def build_team_snapshot(team: Team, match_obj: Match, player_points, player_role):
+        entries = {}
+        total_points = 0.0
+
+        if not team:
+            return entries, total_points
+
+        for pid in sorted(team.player_ids):
+            player = match_obj.players.get(pid)
+            player_info = tournament.registry.players.get(pid, {})
+            name = player.name if player else player_info.get("Name", f"Player {pid}")
+            team_name = player.team if player else player_info.get("Team", "")
+            role = player_role.get(str(pid), player_info.get("Role"))
+            base_points = float(player_points.get(str(pid), 0))
+
+            multiplier = 1.0
+            tag = ""
+            if pid == team.captain:
+                multiplier = 2.0
+                tag = "C"
+            elif pid == team.vice_captain:
+                multiplier = 1.5
+                tag = "VC"
+
+            adjusted_points = round(base_points * multiplier, 2)
+            total_points += adjusted_points
+
+            entries[pid] = {
+                "player_id": pid,
+                "name": name,
+                "team": team_name,
+                "role": role,
+                "base_points": round(base_points, 2),
+                "multiplier": multiplier,
+                "adjusted_points": adjusted_points,
+                "tag": tag,
+            }
+
+        return entries, round(total_points, 2)
     
     @app.get("/leaderboard-data")
     def leaderboard_data():
     
         try:
-            sheet = client.open("FantasyCricket").worksheet("ContestantPoints")
+            sheet = spreadsheet.worksheet("ContestantPoints")
             data = sheet.get_all_records()
         except:
             return JSONResponse([])
@@ -3035,7 +3580,7 @@ try:
             return JSONResponse([])
         
         try:
-            teams_sheet = client.open("FantasyCricket").worksheet("Teams")
+            teams_sheet = spreadsheet.worksheet("Teams")
             teams_data = teams_sheet.get_all_records()
         except:
             return JSONResponse([])
@@ -3046,53 +3591,101 @@ try:
                 user_team.append(row["Name"])
         
         return JSONResponse(user_team)
+
+    @app.get("/team-diff-data")
+    def team_diff_data(request: Request, match_id: str, other_mobile: str):
+        current_mobile = request.session.get('mobile')
+        current_name = request.session.get('name', 'My Team')
+
+        if not current_mobile:
+            return JSONResponse({"error": "Not logged in"})
+
+        if str(current_mobile) == str(other_mobile):
+            return JSONResponse({"error": "Select another contestant to compare"})
+
+        _, match_obj, error = refresh_live_match_points(match_id)
+        if error:
+            return JSONResponse({"error": error})
+
+        player_points, player_role = get_match_player_points_data(match_id)
+
+        current_contestant = tournament.contestants.get(str(current_mobile))
+        other_contestant = tournament.contestants.get(str(other_mobile))
+
+        if not current_contestant or not other_contestant:
+            return JSONResponse({"error": "Contestant not found"})
+
+        my_team = current_contestant.teams.get(str(match_id))
+        other_team = other_contestant.teams.get(str(match_id))
+
+        if not my_team or not other_team:
+            return JSONResponse({"error": "One of the teams is not available for this match"})
+
+        my_entries, my_total = build_team_snapshot(my_team, match_obj, player_points, player_role)
+        other_entries, other_total = build_team_snapshot(other_team, match_obj, player_points, player_role)
+
+        def pair_rows(left_entries, right_entries):
+            max_len = max(len(left_entries), len(right_entries))
+            rows = []
+            for index in range(max_len):
+                rows.append({
+                    "left": left_entries[index] if index < len(left_entries) else None,
+                    "right": right_entries[index] if index < len(right_entries) else None,
+                })
+            return rows
+
+        my_ids = set(my_entries.keys())
+        other_ids = set(other_entries.keys())
+
+        my_only = [my_entries[pid] for pid in sorted(my_ids - other_ids, key=lambda pid: my_entries[pid]["adjusted_points"], reverse=True)]
+        other_only = [other_entries[pid] for pid in sorted(other_ids - my_ids, key=lambda pid: other_entries[pid]["adjusted_points"], reverse=True)]
+
+        different_players_diff = round(
+            sum(entry["adjusted_points"] for entry in other_only) -
+            sum(entry["adjusted_points"] for entry in my_only),
+            2
+        )
+
+        common_role_diff = []
+        common_same = []
+        role_diff_total = 0.0
+
+        for pid in sorted(my_ids & other_ids, key=lambda item: my_entries[item]["adjusted_points"], reverse=True):
+            left = my_entries[pid]
+            right = other_entries[pid]
+            row = {"left": left, "right": right}
+
+            if left["tag"] != right["tag"] or left["multiplier"] != right["multiplier"]:
+                diff_points = round(right["adjusted_points"] - left["adjusted_points"], 2)
+                row["diff_points"] = diff_points
+                role_diff_total += diff_points
+                common_role_diff.append(row)
+            else:
+                common_same.append(row)
+
+        response = {
+            "current_user": current_name,
+            "other_user": other_contestant.name,
+            "my_total": my_total,
+            "other_total": other_total,
+            "total_diff": round(other_total - my_total, 2),
+            "different_players_diff": different_players_diff,
+            "different_players": pair_rows(my_only, other_only),
+            "common_role_diff_total": round(role_diff_total, 2),
+            "common_role_diff": common_role_diff,
+            "common_players": common_same,
+        }
+
+        return JSONResponse(response)
     
     @app.get("/match-score-data")
     def match_score_data(match_id: str):
-        #tournament.compute_player_points_for_match(match_id)
-        matches = get_cached_data("matches")
-        match_row = next((m for m in matches if str(m["MatchID"]) == str(match_id)), None)
-    
-        if not match_row:
-            return JSONResponse({"error": "Match not found"})
-    
-        players_data = get_cached_data("players")
-        registry = PlayerRegistry(players_data)
-    
-        match_obj = Match(
-            match_id,
-            clean_team_name(match_row["Team1"]),
-            clean_team_name(match_row["Team2"]),
-            registry
-        )
-        print("Parsed players:", len(match_obj.players))
-    
-    
-        match_code = int(match_id) + MATCH_CODE_OFFSET
-        html_content = fetch_scorecard_html(match_code)
-    
-        if not html_content:
-            return JSONResponse({"error": "No data"})
-    
-        # ✅ FIX HERE
-        soup = BeautifulSoup(html_content, "html.parser")
-        match_obj.parse_scorecard(soup)
-    
+        match_row, match_obj, error = refresh_live_match_points(match_id)
+        if error:
+            return JSONResponse({"error": error})
+
         players = match_obj.players
-        
-        # Get player points for this match
-        player_points = {}
-        player_role = {}
-        try:
-            points_sheet = client.open("FantasyCricket").worksheet("PlayerPoints")
-            points_data = points_sheet.get_all_records()
-            for row in points_data:
-                if str(row["MatchID"]) == str(match_id):
-                    pid = str(row["PlayerID"]).strip()
-                    player_points[pid] = float(row["Points"])
-                    player_role[pid] = row["Role"]
-        except:
-            pass
+        player_points, player_role = get_match_player_points_data(match_id)
         
         result = []
     
@@ -3111,6 +3704,7 @@ try:
                     "strike_rate": p.strike_rate,
                     "overs": p.overs,
                     "maidens": p.maidens,
+                    "dot_balls": p.dot_balls,
                     "runs_conceded": p.runs_conceded,
                     "wickets": p.wickets,
                     "bowled": p.bowled,
@@ -3125,23 +3719,24 @@ try:
         
         # Sort players by points descending
         result.sort(key=lambda x: x["points"], reverse=True)
+        for index, player in enumerate(result, start=1):
+            player["rank"] = index
         
         # Get contestants for this match
-        contestants = []
-        try:
-            sheet = client.open('FantasyCricket').worksheet('ContestantPoints')
-            all_points = sheet.get_all_records()
-            for row in all_points:
-                if str(row['MatchID']) == str(match_id):
-                    contestants.append({
-                        'name': row['User'],
-                        'points': float(row['Points'])
-                    })
-        except:
-            pass
-        
+        contestants = [
+            {
+                'name': contestant.name,
+                'mobile': contestant.mobile,
+                'points': float(contestant.points[match_id])
+            }
+            for contestant in tournament.contestants.values()
+            if match_id in contestant.points
+        ]
+
         # Sort contestants by points descending
         contestants.sort(key=lambda x: x['points'], reverse=True)
+        for index, contestant in enumerate(contestants, start=1):
+            contestant["rank"] = index
         
         return JSONResponse({"players": result, "contestants": contestants})
         
