@@ -49,10 +49,14 @@ async def register(body: RegisterBody, authorization: str = Header(default=None)
                 user = db.execute("SELECT * FROM users WHERE id = ?", (existing_email["id"],)).fetchone()
                 return dict(user)
 
-            # Create new user
+            # Create new user — first user becomes admin
+            user_count = db.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
+            count = user_count["cnt"] if isinstance(user_count, dict) else user_count[0]
+            role = "admin" if count == 0 else "user"
+
             db.execute(
-                "INSERT INTO users (firebase_uid, email, name, mobile) VALUES (?, ?, ?, ?)",
-                (firebase_uid, email, body.name, body.mobile or ""),
+                "INSERT INTO users (firebase_uid, email, name, mobile, role) VALUES (?, ?, ?, ?, ?)",
+                (firebase_uid, email, body.name, body.mobile or "", role),
             )
             db.commit()
 

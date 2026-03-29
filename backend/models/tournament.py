@@ -2,7 +2,7 @@ import time
 import threading
 from datetime import datetime, timedelta
 
-from backend.config import IST, MATCH_CODE_OFFSET
+from backend.config import IST, MATCH_CODE_OFFSET, ESPN_MATCH_ID_OFFSET
 from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
@@ -56,8 +56,8 @@ class Tournament:
         if not match:
             return
 
-        match_code = int(match_id) + MATCH_CODE_OFFSET
-        html_text = fetch_scorecard_html(match_code)
+        scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
+        html_text = fetch_scorecard_html(scorecard_id)
         if not html_text:
             return
 

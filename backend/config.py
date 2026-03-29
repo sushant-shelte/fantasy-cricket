@@ -5,6 +5,9 @@ TEST_MODE = False
 
 MATCH_CODE_OFFSET = 1181
 
+ESPN_SERIES_ID = 8048
+ESPN_MATCH_ID_OFFSET = 1527673
+
 ROLES = ["Wicketkeeper", "Batter", "AllRounder", "Bowler"]
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "fantasy-cricket-dev-secret-key")

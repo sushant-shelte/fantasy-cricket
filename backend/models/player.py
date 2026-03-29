@@ -25,6 +25,7 @@ class Player:
         self.maidens = 0
         self.runs_conceded = 0
         self.wickets = 0
+        self.dot_balls = 0
         self.bowled = 0
         self.lbw = 0
         self.economy = 0.0
@@ -134,6 +135,8 @@ class Player:
         # Milestones
         if self.runs >= 100:
             points += 16
+        elif self.runs >= 75:
+            points += 12
         elif self.runs >= 50:
             points += 8
         elif self.runs >= 30:
@@ -172,6 +175,9 @@ class Player:
 
         # Maidens
         points += self.maidens * 12
+
+        # Dot balls
+        points += self.dot_balls
 
         # Economy (min 2 overs)
         if self.overs >= 2:

@@ -5,7 +5,7 @@ from backend.database import get_db
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services.scraper import fetch_scorecard_html
-from backend.config import MATCH_CODE_OFFSET
+from backend.config import ESPN_MATCH_ID_OFFSET
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
@@ -49,8 +49,8 @@ async def match_scores(
         registry,
     )
 
-    match_code = match_id + MATCH_CODE_OFFSET
-    html_content = fetch_scorecard_html(match_code)
+    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
+    html_content = fetch_scorecard_html(scorecard_id)
 
     if not html_content:
         raise HTTPException(status_code=404, detail="No scorecard data available")
@@ -87,6 +87,7 @@ async def match_scores(
             "bowled": p.bowled,
             "lbw": p.lbw,
             "economy": p.economy,
+            "dot_balls": p.dot_balls,
             "catches": p.catches,
             "runout_direct": p.runout_direct,
             "stumpings": p.stumpings,
@@ -131,3 +132,187 @@ async def my_team_for_match(
     ).fetchall()
 
     return [row["name"] for row in rows]
+
+
+def _load_match_and_points(db, match_id):
+    """Shared helper: fetch scorecard, parse, get player points."""
+    match_row = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+    if not match_row:
+        return None, None, {}, {}
+
+    registry, _ = _build_registry(db)
+    match_obj = Match(
+        str(match_id),
+        clean_team_name(match_row["team1"]),
+        clean_team_name(match_row["team2"]),
+        registry,
+    )
+
+    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
+    html_content = fetch_scorecard_html(scorecard_id)
+    if html_content:
+        soup = BeautifulSoup(html_content, "html.parser")
+        match_obj.parse_scorecard(soup)
+
+    pp_rows = db.execute("SELECT * FROM player_points WHERE match_id = ?", (match_id,)).fetchall()
+    pp_lookup = {str(row["player_id"]): float(row["points"]) for row in pp_rows}
+    role_lookup = {str(row["player_id"]): row["role"] for row in pp_rows}
+
+    return match_row, match_obj, pp_lookup, role_lookup
+
+
+def _build_team_snapshot(db, user_id, match_id, match_obj, pp_lookup, role_lookup):
+    """Build a snapshot of a user's team with points and multipliers."""
+    rows = db.execute(
+        """
+        SELECT ut.player_id, ut.is_captain, ut.is_vice_captain, p.name, p.team, p.role
+        FROM user_teams ut
+        JOIN players p ON p.id = ut.player_id
+        WHERE ut.user_id = ? AND ut.match_id = ?
+        """,
+        (user_id, match_id),
+    ).fetchall()
+
+    entries = {}
+    total = 0.0
+
+    for row in rows:
+        pid = row["player_id"]
+        pid_str = str(pid)
+        base_points = pp_lookup.get(pid_str, 0)
+
+        is_captain = bool(row["is_captain"])
+        is_vice_captain = bool(row["is_vice_captain"])
+
+        if is_captain:
+            multiplier = 2.0
+            tag = "C"
+        elif is_vice_captain:
+            multiplier = 1.5
+            tag = "VC"
+        else:
+            multiplier = 1.0
+            tag = ""
+
+        adjusted = round(base_points * multiplier, 2)
+        total += adjusted
+
+        entries[pid] = {
+            "player_id": pid,
+            "name": row["name"],
+            "team": row["team"],
+            "role": role_lookup.get(pid_str, row["role"]),
+            "base_points": base_points,
+            "multiplier": multiplier,
+            "tag": tag,
+            "adjusted_points": adjusted,
+        }
+
+    return entries, round(total, 2)
+
+
+@router.get("/{match_id}/team-diff")
+async def team_diff(
+    match_id: int,
+    other_user_id: int,
+    user: dict = Depends(get_current_user),
+):
+    db = get_db()
+
+    if user["id"] == other_user_id:
+        return {"error": "Select another contestant to compare"}
+
+    match_row, match_obj, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
+    if not match_row:
+        return {"error": "Match not found"}
+
+    # Get other user's name
+    other_user = db.execute("SELECT * FROM users WHERE id = ?", (other_user_id,)).fetchone()
+    if not other_user:
+        return {"error": "Contestant not found"}
+
+    my_entries, my_total = _build_team_snapshot(db, user["id"], match_id, match_obj, pp_lookup, role_lookup)
+    other_entries, other_total = _build_team_snapshot(db, other_user_id, match_id, match_obj, pp_lookup, role_lookup)
+
+    if not my_entries:
+        return {"error": "You haven't picked a team for this match"}
+    if not other_entries:
+        return {"error": f"{other_user['name']} hasn't picked a team for this match"}
+
+    my_ids = set(my_entries.keys())
+    other_ids = set(other_entries.keys())
+
+    # Players only in my team vs only in their team
+    my_only = sorted(
+        [my_entries[pid] for pid in my_ids - other_ids],
+        key=lambda x: x["adjusted_points"], reverse=True,
+    )
+    other_only = sorted(
+        [other_entries[pid] for pid in other_ids - my_ids],
+        key=lambda x: x["adjusted_points"], reverse=True,
+    )
+
+    different_players_diff = round(
+        sum(e["adjusted_points"] for e in other_only) - sum(e["adjusted_points"] for e in my_only), 2
+    )
+
+    # Common players with different roles (C/VC difference)
+    common_role_diff = []
+    common_same = []
+    role_diff_total = 0.0
+
+    for pid in sorted(my_ids & other_ids, key=lambda p: my_entries[p]["adjusted_points"], reverse=True):
+        left = my_entries[pid]
+        right = other_entries[pid]
+        row = {"left": left, "right": right}
+
+        if left["tag"] != right["tag"] or left["multiplier"] != right["multiplier"]:
+            diff_points = round(right["adjusted_points"] - left["adjusted_points"], 2)
+            row["diff_points"] = diff_points
+            role_diff_total += diff_points
+            common_role_diff.append(row)
+        else:
+            common_same.append(row)
+
+    # Pair different players side by side
+    max_len = max(len(my_only), len(other_only), 1)
+    different_players = [
+        {
+            "left": my_only[i] if i < len(my_only) else None,
+            "right": other_only[i] if i < len(other_only) else None,
+        }
+        for i in range(max_len)
+    ]
+
+    return {
+        "current_user": user["name"],
+        "other_user": other_user["name"],
+        "my_total": my_total,
+        "other_total": other_total,
+        "total_diff": round(other_total - my_total, 2),
+        "different_players_diff": different_players_diff,
+        "different_players": different_players,
+        "common_role_diff_total": round(role_diff_total, 2),
+        "common_role_diff": common_role_diff,
+        "common_players": common_same,
+    }
+
+
+@router.get("/{match_id}/contestants")
+async def match_contestants(
+    match_id: int,
+    user: dict = Depends(get_current_user),
+):
+    """List contestants who picked teams for this match (for the diff dropdown)."""
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT DISTINCT u.id, u.name
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.user_id
+        WHERE ut.match_id = ?
+        ORDER BY u.name
+        """,
+        (match_id,),
+    ).fetchall()
+    return [{"id": row["id"], "name": row["name"]} for row in rows]

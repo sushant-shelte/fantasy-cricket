@@ -6,7 +6,9 @@ from backend.config import TEAM_MAP
 
 
 def clean_name(name):
-    return re.sub(r"[†*]", "", name).strip()
+    name = re.sub(r"[\u2020\u2021*]", "", str(name))
+    name = re.sub(r"\s*\((?:c|wk|sub)\)\s*$", "", name, flags=re.IGNORECASE)
+    return " ".join(name.split()).strip()
 
 
 def clean_team_name(name):
@@ -56,7 +58,192 @@ class Match:
 
     # --- Scorecard parser ---
 
-    def parse_scorecard(self, soup: BeautifulSoup):
+    def parse_scorecard(self, soup):
+        self.players = {}
+        if self.parse_espn_scorecard(soup):
+            return
+        self.parse_legacy_scorecard(soup)
+
+    def parse_espn_scorecard(self, soup):
+        lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
+        valid_teams = {self.team1, self.team2}
+
+        # Find innings headers like "Royal Challengers Bengaluru Innings"
+        def find_innings_headers():
+            headers = []
+            seen = set()
+            for idx, line in enumerate(lines):
+                match_obj = re.fullmatch(r"(.+?)\s+[Ii]nnings", line)
+                if not match_obj:
+                    continue
+                raw_team = match_obj.group(1).strip()
+                if re.fullmatch(r"\d+(?:st|nd|rd|th)", raw_team.lower()):
+                    continue
+                team = clean_team_name(raw_team)
+                if team not in valid_teams or team in seen:
+                    continue
+                next_window = lines[idx + 1: idx + 8]
+                if not any(text.upper() in ("BATSMEN", "BATTING") for text in next_window):
+                    continue
+                seen.add(team)
+                headers.append((idx, team))
+                if len(headers) == 2:
+                    break
+            return headers
+
+        def find_between(start, end, targets):
+            target_set = {item.upper() for item in targets}
+            for idx in range(start, end):
+                if lines[idx].upper() in target_set:
+                    return idx
+            return -1
+
+        def find_prefix_between(start, end, prefix):
+            prefix = prefix.lower()
+            for idx in range(start, end):
+                if lines[idx].lower().startswith(prefix):
+                    return idx
+            return -1
+
+        def is_int_text(value):
+            return bool(re.fullmatch(r"\d+", str(value).strip()))
+
+        def is_float_text(value):
+            return bool(re.fullmatch(r"\d+(?:\.\d+)?", str(value).strip()))
+
+        def get_batter_layout(index, end):
+            # 8-column layout (with minutes column)
+            if index + 7 < end and (
+                is_int_text(lines[index + 2]) and is_int_text(lines[index + 3]) and
+                is_int_text(lines[index + 4]) and is_int_text(lines[index + 5]) and
+                is_int_text(lines[index + 6]) and is_float_text(lines[index + 7])
+            ):
+                return {"step": 8, "runs_idx": 2, "balls_idx": 3, "fours_idx": 5, "sixes_idx": 6, "sr_idx": 7}
+            # 7-column layout
+            if index + 6 < end and (
+                is_int_text(lines[index + 2]) and is_int_text(lines[index + 3]) and
+                is_int_text(lines[index + 4]) and is_int_text(lines[index + 5]) and
+                is_float_text(lines[index + 6])
+            ):
+                return {"step": 7, "runs_idx": 2, "balls_idx": 3, "fours_idx": 4, "sixes_idx": 5, "sr_idx": 6}
+            return None
+
+        def looks_like_batter_row(index, end):
+            if index + 6 >= end:
+                return False
+            name = lines[index]
+            dismissal = lines[index + 1]
+            if name.upper() in {"BATSMEN", "BATTING", "R", "B", "4S", "6S", "SR", "EXTRAS", "TOTAL", "DID NOT BAT", "BOWLING"}:
+                return False
+            if dismissal.upper() in {"R", "B", "4S", "6S", "SR"}:
+                return False
+            return get_batter_layout(index, end) is not None
+
+        def looks_like_bowler_row(index, end):
+            if index + 5 >= end:
+                return False
+            name = lines[index]
+            if name.upper() in {"BOWLING", "O", "M", "R", "W", "ECON", "0S", "4S", "6S", "WD", "NB"}:
+                return False
+            return (
+                is_float_text(lines[index + 1]) and is_int_text(lines[index + 2]) and
+                is_int_text(lines[index + 3]) and is_int_text(lines[index + 4]) and
+                is_float_text(lines[index + 5])
+            )
+
+        innings_headers = find_innings_headers()
+        if not innings_headers:
+            return False
+
+        for header_pos, batting_team in innings_headers:
+            next_header_positions = [pos for pos, _ in innings_headers if pos > header_pos]
+            section_end = next_header_positions[0] if next_header_positions else len(lines)
+            bowling_team = self.team2 if batting_team == self.team1 else self.team1
+
+            for stop_marker in ("Match Details", "Match Notes", "Match Coverage", "All Match News"):
+                stop_idx = find_between(header_pos, section_end, (stop_marker,))
+                if stop_idx != -1:
+                    section_end = stop_idx
+                    break
+
+            batting_header = find_between(header_pos, section_end, ("BATSMEN", "BATTING"))
+            extras_idx = find_between(header_pos, section_end, ("Extras", "EXTRAS"))
+
+            # Parse batters
+            if batting_header != -1 and extras_idx != -1:
+                idx = batting_header + 1
+                while idx < extras_idx:
+                    if looks_like_batter_row(idx, extras_idx):
+                        layout = get_batter_layout(idx, extras_idx)
+                        name = clean_name(lines[idx])
+                        dismissal = lines[idx + 1]
+                        pid = self.get_player_id(name, batting_team)
+                        if not pid:
+                            idx += 1
+                            continue
+                        player = self.get_or_create_player(pid)
+                        player.team = batting_team
+                        player.played = True
+                        player.runs = int(lines[idx + layout["runs_idx"]])
+                        player.balls = int(lines[idx + layout["balls_idx"]])
+                        player.fours = int(lines[idx + layout["fours_idx"]])
+                        player.sixes = int(lines[idx + layout["sixes_idx"]])
+                        if player.balls > 0:
+                            player.strike_rate = round((player.runs / player.balls) * 100, 2)
+                        player.apply_dismissal(dismissal, self, bowling_team)
+                        idx += layout["step"]
+                        continue
+                    idx += 1
+
+            # Parse DNB
+            dnb_idx = find_between(header_pos, section_end, ("Did not bat",))
+            bowling_idx = find_between(header_pos, section_end, ("Bowling", "BOWLING"))
+            fow_idx = find_prefix_between(header_pos, section_end, "fall of wickets")
+            dnb_end = min(idx for idx in (fow_idx, bowling_idx, section_end) if idx != -1)
+
+            if dnb_idx != -1:
+                for idx in range(dnb_idx + 1, dnb_end):
+                    line = lines[idx]
+                    if line == ":":
+                        continue
+                    for raw_name in line.split(","):
+                        name = clean_name(re.sub(r"\s*\([^)]*\)\s*$", "", raw_name).strip())
+                        if not name:
+                            continue
+                        pid = self.get_player_id(name, batting_team)
+                        if not pid:
+                            continue
+                        player = self.get_or_create_player(pid)
+                        player.team = batting_team
+                        player.played = True
+
+            # Parse bowlers
+            if bowling_idx != -1:
+                idx = bowling_idx + 1
+                while idx < section_end:
+                    if looks_like_bowler_row(idx, section_end):
+                        name = clean_name(lines[idx])
+                        pid = self.get_player_id(name, bowling_team)
+                        if not pid:
+                            idx += 1
+                            continue
+                        player = self.get_or_create_player(pid)
+                        player.team = bowling_team
+                        player.played = True
+                        player.overs = float(lines[idx + 1])
+                        player.maidens = int(lines[idx + 2])
+                        player.runs_conceded = int(lines[idx + 3])
+                        player.wickets = int(lines[idx + 4])
+                        player.dot_balls = int(lines[idx + 6])
+                        if player.overs > 0:
+                            player.economy = round(player.runs_conceded / player.overs, 2)
+                        idx += 6
+                        continue
+                    idx += 1
+
+        return True
+
+    def parse_legacy_scorecard(self, soup: BeautifulSoup):
         self.players = {}
 
         def get_table_rows(table):
