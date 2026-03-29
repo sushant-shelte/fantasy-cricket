@@ -184,6 +184,33 @@ export default function ViewScoresPage() {
               Auto-refreshes every 30s
             </div>
 
+            {/* Contestant Rankings */}
+            <div className="max-w-2xl bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/10">
+                <h2 className="text-white font-semibold">Contestant Rankings</h2>
+              </div>
+              <div className="divide-y divide-white/5">
+                {sortedContestants.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-indigo-400">No contestant scores yet.</div>
+                ) : (
+                  sortedContestants.map((c, i) => (
+                    <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
+                      <div className="w-8 flex-shrink-0 text-center">
+                        {i === 0 ? <span className="text-lg">&#x1F947;</span>
+                          : i === 1 ? <span className="text-lg">&#x1F948;</span>
+                          : i === 2 ? <span className="text-lg">&#x1F949;</span>
+                          : <span className="text-indigo-400 text-sm font-medium">{i + 1}</span>}
+                      </div>
+                      <div className="ml-3 min-w-0 flex-1">
+                        <span className="text-white font-medium text-sm">{c.name}</span>
+                      </div>
+                      <span className="ml-4 flex-shrink-0 text-green-400 font-bold text-sm">{c.points} pts</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             {/* Player Stats */}
             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-white/10">
@@ -266,30 +293,6 @@ export default function ViewScoresPage() {
               </div>
             </div>
 
-            {/* Contestant Rankings */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-white/10">
-                <h2 className="text-white font-semibold">Contestant Rankings</h2>
-              </div>
-              <div className="divide-y divide-white/5">
-                {sortedContestants.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-indigo-400">No contestant scores yet.</div>
-                ) : (
-                  sortedContestants.map((c, i) => (
-                    <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
-                      <div className="w-8 text-center">
-                        {i === 0 ? <span className="text-lg">&#x1F947;</span>
-                          : i === 1 ? <span className="text-lg">&#x1F948;</span>
-                          : i === 2 ? <span className="text-lg">&#x1F949;</span>
-                          : <span className="text-indigo-400 text-sm font-medium">{i + 1}</span>}
-                      </div>
-                      <div className="flex-1 ml-3"><span className="text-white font-medium text-sm">{c.name}</span></div>
-                      <span className="text-green-400 font-bold text-sm">{c.points} pts</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </>
         )}
 
