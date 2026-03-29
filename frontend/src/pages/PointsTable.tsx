@@ -4,11 +4,6 @@ import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { PointsTableEntry } from '../types';
 
-interface MatchPoints {
-  matchId: string;
-  points: Record<string, number>;
-}
-
 export default function PointsTablePage() {
   const [data, setData] = useState<PointsTableEntry[]>([]);
   const [loading, setLoading] = useState(true);
