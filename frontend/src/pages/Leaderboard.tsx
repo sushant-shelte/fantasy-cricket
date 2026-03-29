@@ -23,11 +23,19 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     fetchLeaderboard();
-    intervalRef.current = setInterval(fetchLeaderboard, 60000);
+    intervalRef.current = setInterval(fetchLeaderboard, 1800000); // 30 minutes
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchLeaderboard();
+    setRefreshing(false);
+  };
 
   const sorted = [...entries].sort((a, b) => b.points - a.points);
 
@@ -35,22 +43,25 @@ export default function LeaderboardPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-lg border-b border-white/10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <div>
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
             <h1 className="text-lg font-bold text-white">Leaderboard</h1>
-            <div className="flex items-center gap-2 text-xs text-indigo-400">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
-              </span>
-              Auto-refreshes every 15s
-            </div>
           </div>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="p-2 hover:bg-white/10 rounded-xl transition-all disabled:opacity-50"
+            title="Refresh"
+          >
+            <svg className={`w-5 h-5 text-indigo-300 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
         </div>
       </header>
 
