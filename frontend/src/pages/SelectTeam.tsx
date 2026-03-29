@@ -9,6 +9,11 @@ interface SelectedPlayer {
   is_vice_captain: boolean;
 }
 
+interface PlayingXiState {
+  announced: boolean;
+  url: string | null;
+}
+
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   Wicketkeeper: { label: 'Wicket-Keeper', color: 'text-purple-300', bg: 'bg-purple-500/20', border: 'border-purple-500/30' },
   Batter: { label: 'Batsman', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
@@ -27,6 +32,7 @@ export default function SelectTeamPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [playingXi, setPlayingXi] = useState<PlayingXiState>({ announced: false, url: null });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -37,8 +43,15 @@ export default function SelectTeamPage() {
         ]);
         // API returns {Wicketkeeper: [...], Batter: [...], ...} — flatten to array
         const data = playersRes.data || {};
-        const flat = Array.isArray(data) ? data : Object.values(data).flat() as Player[];
+        const groupedPlayers = data.players || data;
+        const flat = Array.isArray(groupedPlayers)
+          ? groupedPlayers
+          : Object.values(groupedPlayers).flat() as Player[];
         setPlayers(flat);
+        setPlayingXi({
+          announced: Boolean(data.playing_xi?.announced),
+          url: data.playing_xi?.url || null,
+        });
 
         // Pre-select existing team
         const existing: TeamSelection[] = teamRes.data || [];
@@ -113,6 +126,8 @@ export default function SelectTeamPage() {
 
     Object.values(groups).forEach((group) => {
       group.sort((a, b) => {
+        const playingDiff = Number(Boolean(b.is_playing_xi)) - Number(Boolean(a.is_playing_xi));
+        if (playingDiff !== 0) return playingDiff;
         const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
         if (pointsDiff !== 0) return pointsDiff;
         return a.name.localeCompare(b.name);
@@ -255,6 +270,31 @@ export default function SelectTeamPage() {
           </span>
         </div>
 
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${
+          playingXi.announced
+            ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100'
+            : 'bg-amber-500/10 border-amber-400/20 text-amber-100'
+        }`}>
+          <div className="font-semibold">
+            {playingXi.announced ? 'Playing XI announced' : 'Playing XI not announced yet'}
+          </div>
+          <div className="mt-1 text-xs opacity-90">
+            {playingXi.announced
+              ? 'Players tagged as Playing XI are from the current post-toss lineup.'
+              : 'The app starts checking ESPN around 30 minutes before match start and will highlight confirmed starters once they appear.'}
+          </div>
+          {playingXi.url && (
+            <a
+              href={playingXi.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-xs font-semibold text-cyan-300 hover:text-cyan-200"
+            >
+              Open ESPN playing XI page
+            </a>
+          )}
+        </div>
+
         {sortedRoles.map((role) => {
           const config = ROLE_CONFIG[role] || { label: role, color: 'text-gray-300', bg: 'bg-gray-500/20', border: 'border-gray-500/30' };
           const rolePlayers = groups[role];
@@ -298,7 +338,11 @@ export default function SelectTeamPage() {
                       <div
                         key={player.id}
                         className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
-                          isSelected ? 'bg-indigo-500/10' : 'hover:bg-white/5'
+                          isSelected
+                            ? 'bg-indigo-500/10'
+                            : player.is_playing_xi === false
+                              ? 'bg-white/[0.03] hover:bg-white/[0.06]'
+                              : 'hover:bg-white/5'
                         }`}
                       >
                         {/* Checkbox */}
@@ -321,11 +365,21 @@ export default function SelectTeamPage() {
                         {/* Player info */}
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium truncate">{player.name}</p>
-                          <div className="flex items-center gap-2 text-xs">
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
                             <span className="text-indigo-400">{player.team}</span>
                             <span className="text-emerald-300 font-semibold">
                               {(player.total_points || 0).toFixed(2)} pts
                             </span>
+                            {player.is_playing_xi === true && (
+                              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
+                                Playing XI
+                              </span>
+                            )}
+                            {player.is_playing_xi === false && (
+                              <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 font-semibold text-slate-300">
+                                Squad
+                              </span>
+                            )}
                           </div>
                         </div>
 
