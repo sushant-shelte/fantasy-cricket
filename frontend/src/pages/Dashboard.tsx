@@ -147,24 +147,33 @@ export default function DashboardPage() {
           <p className="text-white/40 text-sm mt-1">Hippies Mahasangram</p>
 
           {/* Quick Actions */}
-          <div className="grid grid-cols-2 gap-3 mt-6">
+          <div className="grid grid-cols-3 gap-3 mt-6">
           <Link to="/leaderboard"
-            className="flex flex-col items-center gap-2 p-4 bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/20 rounded-2xl transition-all group">
-            <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            className="flex flex-col items-center gap-2 p-3 bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/20 rounded-2xl transition-all group">
+            <div className="w-9 h-9 bg-amber-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
             </div>
-            <span className="text-amber-300 text-sm font-medium">Leaderboard</span>
+            <span className="text-amber-300 text-xs font-medium">Leaderboard</span>
           </Link>
           <Link to="/points-table"
-            className="flex flex-col items-center gap-2 p-4 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 rounded-2xl transition-all group">
-            <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            className="flex flex-col items-center gap-2 p-3 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 rounded-2xl transition-all group">
+            <div className="w-9 h-9 bg-indigo-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
             </div>
-            <span className="text-indigo-300 text-sm font-medium">Points Table</span>
+            <span className="text-indigo-300 text-xs font-medium">Points Table</span>
+          </Link>
+          <Link to="/rules"
+            className="flex flex-col items-center gap-2 p-3 bg-green-500/10 hover:bg-green-500/15 border border-green-500/20 rounded-2xl transition-all group">
+            <div className="w-9 h-9 bg-green-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <span className="text-green-300 text-xs font-medium">Rules</span>
           </Link>
           </div>
         </div>

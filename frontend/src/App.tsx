@@ -12,6 +12,7 @@ const SelectTeam = lazy(() => import('./pages/SelectTeam'));
 const ViewScores = lazy(() => import('./pages/ViewScores'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 const PointsTable = lazy(() => import('./pages/PointsTable'));
+const Rules = lazy(() => import('./pages/Rules'));
 
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/view-scores/:matchId" element={<ProtectedRoute><AppLayout><ViewScores /></AppLayout></ProtectedRoute>} />
             <Route path="/leaderboard" element={<ProtectedRoute><AppLayout><Leaderboard /></AppLayout></ProtectedRoute>} />
             <Route path="/points-table" element={<ProtectedRoute><AppLayout><PointsTable /></AppLayout></ProtectedRoute>} />
+            <Route path="/rules" element={<ProtectedRoute><AppLayout><Rules /></AppLayout></ProtectedRoute>} />
 
             {/* Admin routes with nested layout */}
             <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
