@@ -4,7 +4,7 @@ from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
-from backend.services.scraper import fetch_scorecard_html
+from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html
 from backend.config import ESPN_MATCH_ID_OFFSET
 from bs4 import BeautifulSoup
 
@@ -58,6 +58,23 @@ async def match_scores(
     soup = BeautifulSoup(html_content, "html.parser")
     match_obj.parse_scorecard(soup)
 
+    players_rows = []
+    for row in players_data:
+        players_rows.append({
+            "id": row["PlayerID"],
+            "name": row["Name"],
+            "team": row["Team"],
+            "role": row["Role"],
+            "aliases": row["Aliases"],
+        })
+
+    playing_xi = fetch_playing_xi(match_id, clean_team_name(match_row["team1"]), clean_team_name(match_row["team2"]), players_rows)
+    for pid in playing_xi.get("player_ids", []):
+        player = match_obj.get_or_create_player(int(pid))
+        if player:
+            player.team = registry.players.get(int(pid), {}).get("Team")
+            player.played = True
+
     # Get stored player points for this match
     pp_rows = db.execute(
         "SELECT * FROM player_points WHERE match_id = ?", (match_id,)
@@ -71,10 +88,12 @@ async def match_scores(
     result = []
     for p in match_obj.players.values():
         pid_str = str(p.player_id)
+        role = role_lookup.get(pid_str) or registry.players.get(p.player_id, {}).get("Role")
+        calculated_points = p.calculate_player_points(role) if role else 0
         result.append({
             "name": p.name,
             "team": p.team,
-            "role": role_lookup.get(pid_str),
+            "role": role,
             "runs": p.runs,
             "balls": p.balls,
             "fours": p.fours,
@@ -92,7 +111,7 @@ async def match_scores(
             "runout_direct": p.runout_direct,
             "stumpings": p.stumpings,
             "runout_indirect": p.runout_indirect,
-            "points": pp_lookup.get(pid_str, 0),
+            "points": calculated_points if calculated_points or p.played else pp_lookup.get(pid_str, 0),
         })
 
     result.sort(key=lambda x: x["points"], reverse=True)
