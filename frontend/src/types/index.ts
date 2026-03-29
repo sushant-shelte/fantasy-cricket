@@ -69,8 +69,9 @@ export type LeaderboardEntry = {
 };
 
 export type PointsTableEntry = {
-  User: string;
-  Mobile: string;
-  MatchID: string;
-  Points: number;
+  user_id: number;
+  name: string;
+  match_id: number;
+  points: number;
+  last_updated: string;
 };

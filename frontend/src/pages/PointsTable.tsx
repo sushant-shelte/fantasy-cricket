@@ -22,11 +22,12 @@ export default function PointsTablePage() {
   const matchMap = new Map<string, Record<string, number>>();
 
   data.forEach((entry) => {
-    contestantSet.add(entry.User);
-    if (!matchMap.has(entry.MatchID)) {
-      matchMap.set(entry.MatchID, {});
+    contestantSet.add(entry.name);
+    const mid = String(entry.match_id);
+    if (!matchMap.has(mid)) {
+      matchMap.set(mid, {});
     }
-    matchMap.get(entry.MatchID)![entry.User] = entry.Points;
+    matchMap.get(mid)![entry.name] = entry.points;
   });
 
   const contestants = Array.from(contestantSet);
