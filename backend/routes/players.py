@@ -28,7 +28,29 @@ async def list_players(
         team2 = match["team2"]
 
         rows = db.execute(
-            "SELECT * FROM players WHERE team IN (?, ?) ORDER BY role, name",
+            """
+            SELECT
+                p.id,
+                p.name,
+                p.team,
+                p.role,
+                p.aliases,
+                COALESCE(SUM(pp.points), 0) AS total_points
+            FROM players p
+            LEFT JOIN player_points pp ON pp.player_id = p.id
+            WHERE p.team IN (?, ?)
+            GROUP BY p.id, p.name, p.team, p.role, p.aliases
+            ORDER BY
+                CASE p.role
+                    WHEN 'Wicketkeeper' THEN 1
+                    WHEN 'Batter' THEN 2
+                    WHEN 'AllRounder' THEN 3
+                    WHEN 'Bowler' THEN 4
+                    ELSE 5
+                END,
+                total_points DESC,
+                p.name ASC
+            """,
             (team1, team2),
         ).fetchall()
 
@@ -36,11 +58,31 @@ async def list_players(
         grouped = {role: [] for role in ROLES}
         for row in rows:
             player = dict(row)
+            player["total_points"] = round(float(player.get("total_points") or 0), 2)
             if player["role"] in grouped:
                 grouped[player["role"]].append(player)
 
         return grouped
 
     # Return all players
-    rows = db.execute("SELECT * FROM players ORDER BY team, role, name").fetchall()
-    return [dict(row) for row in rows]
+    rows = db.execute(
+        """
+        SELECT
+            p.id,
+            p.name,
+            p.team,
+            p.role,
+            p.aliases,
+            COALESCE(SUM(pp.points), 0) AS total_points
+        FROM players p
+        LEFT JOIN player_points pp ON pp.player_id = p.id
+        GROUP BY p.id, p.name, p.team, p.role, p.aliases
+        ORDER BY p.team, p.role, total_points DESC, p.name
+        """
+    ).fetchall()
+    result = []
+    for row in rows:
+        player = dict(row)
+        player["total_points"] = round(float(player.get("total_points") or 0), 2)
+        result.append(player)
+    return result

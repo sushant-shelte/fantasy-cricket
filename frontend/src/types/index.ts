@@ -24,6 +24,7 @@ export type Player = {
   team: string;
   role: string;
   aliases: string;
+  total_points?: number;
 };
 
 export type TeamSelection = {

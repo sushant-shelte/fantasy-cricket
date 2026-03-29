@@ -110,6 +110,15 @@ export default function SelectTeamPage() {
       if (!groups[role]) groups[role] = [];
       groups[role].push(p);
     });
+
+    Object.values(groups).forEach((group) => {
+      group.sort((a, b) => {
+        const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
+        if (pointsDiff !== 0) return pointsDiff;
+        return a.name.localeCompare(b.name);
+      });
+    });
+
     return groups;
   };
 
@@ -294,7 +303,12 @@ export default function SelectTeamPage() {
                         {/* Player info */}
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium truncate">{player.name}</p>
-                          <span className="text-indigo-400 text-xs">{player.team}</span>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-indigo-400">{player.team}</span>
+                            <span className="text-emerald-300 font-semibold">
+                              {(player.total_points || 0).toFixed(2)} pts
+                            </span>
+                          </div>
                         </div>
 
                         {/* Captain radio */}
