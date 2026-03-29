@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import client from '../api/client';
-import type { PlayerScore, ContestantScore, TeamSelection } from '../types';
+import type { PlayerScore, ContestantScore } from '../types';
 
 export default function ViewScoresPage() {
   const { matchId } = useParams<{ matchId: string }>();
@@ -20,11 +20,12 @@ export default function ViewScoresPage() {
       ]);
 
       const data = scoresRes.data;
-      setPlayerScores(data.player_scores || []);
-      setContestants(data.contestant_scores || []);
+      setPlayerScores(data.players || []);
+      setContestants(data.contestants || []);
 
-      const team: TeamSelection[] = teamRes.data || [];
-      setMyTeam(new Set(team.map((t) => t.player_name)));
+      const team = teamRes.data || [];
+      // API returns list of player names (strings)
+      setMyTeam(new Set(team.map((t: string | { player_name: string }) => typeof t === 'string' ? t : t.player_name)));
 
       setLastUpdated(new Date());
     } catch {

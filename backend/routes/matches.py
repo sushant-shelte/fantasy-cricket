@@ -3,21 +3,12 @@ from datetime import datetime, timedelta
 
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
-from backend.config import IST, TEST_MODE, TEST_MODE_MONTH, TEST_MODE_DATE, TEST_MODE_TIME_HR, TEST_MODE_TIME_MIN
+from backend.config import IST
 
 router = APIRouter(prefix="/api", tags=["matches"])
 
 
-def get_now():
-    if TEST_MODE:
-        return IST.localize(
-            datetime(2025, TEST_MODE_MONTH, TEST_MODE_DATE, TEST_MODE_TIME_HR, TEST_MODE_TIME_MIN)
-        )
-    return datetime.now(IST)
-
-
 def compute_match_status(match_date: str, match_time: str):
-    """Compute status and locked fields for a match."""
     try:
         match_datetime = datetime.strptime(
             f"{match_date} {match_time}", "%Y-%m-%d %H:%M"
@@ -26,7 +17,7 @@ def compute_match_status(match_date: str, match_time: str):
     except Exception:
         return "future", False
 
-    now = get_now()
+    now = datetime.now(IST)
     locked = now >= match_datetime
 
     if now < match_datetime:

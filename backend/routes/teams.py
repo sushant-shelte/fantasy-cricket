@@ -5,7 +5,7 @@ from datetime import datetime
 
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
-from backend.config import IST, ROLES, TEST_MODE, TEST_MODE_MONTH, TEST_MODE_DATE, TEST_MODE_TIME_HR, TEST_MODE_TIME_MIN
+from backend.config import IST, ROLES
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -22,10 +22,6 @@ class SubmitTeamBody(BaseModel):
 
 
 def get_now():
-    if TEST_MODE:
-        return IST.localize(
-            datetime(2025, TEST_MODE_MONTH, TEST_MODE_DATE, TEST_MODE_TIME_HR, TEST_MODE_TIME_MIN)
-        )
     return datetime.now(IST)
 
 

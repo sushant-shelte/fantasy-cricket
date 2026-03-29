@@ -1,13 +1,9 @@
 import os
 import pytz
 
-TEST_MODE = True
-TEST_MODE_MONTH = 3
-TEST_MODE_DATE = 22
-TEST_MODE_TIME_HR = 20
-TEST_MODE_TIME_MIN = 0
+TEST_MODE = False
 
-MATCH_CODE_OFFSET = 1107 if TEST_MODE else 1181
+MATCH_CODE_OFFSET = 1181
 
 ROLES = ["Wicketkeeper", "Batter", "AllRounder", "Bowler"]
 

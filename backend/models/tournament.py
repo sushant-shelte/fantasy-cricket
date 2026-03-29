@@ -2,7 +2,7 @@ import time
 import threading
 from datetime import datetime, timedelta
 
-from backend.config import IST, TEST_MODE, TEST_MODE_MONTH, TEST_MODE_DATE, TEST_MODE_TIME_HR, TEST_MODE_TIME_MIN, MATCH_CODE_OFFSET
+from backend.config import IST, MATCH_CODE_OFFSET
 from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
@@ -73,10 +73,7 @@ class Tournament:
         except Exception:
             return None
 
-        if TEST_MODE:
-            now = IST.localize(datetime(2025, TEST_MODE_MONTH, TEST_MODE_DATE, TEST_MODE_TIME_HR, TEST_MODE_TIME_MIN))
-        else:
-            now = datetime.now(IST)
+        now = datetime.now(IST)
 
         if now < match_datetime:
             return "future"

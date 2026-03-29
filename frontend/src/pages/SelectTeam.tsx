@@ -10,10 +10,10 @@ interface SelectedPlayer {
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  WK: { label: 'Wicket-Keeper', color: 'text-purple-300', bg: 'bg-purple-500/20', border: 'border-purple-500/30' },
-  BAT: { label: 'Batsman', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
-  AR: { label: 'All-Rounder', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
-  BWL: { label: 'Bowler', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
+  Wicketkeeper: { label: 'Wicket-Keeper', color: 'text-purple-300', bg: 'bg-purple-500/20', border: 'border-purple-500/30' },
+  Batter: { label: 'Batsman', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
+  AllRounder: { label: 'All-Rounder', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
+  Bowler: { label: 'Bowler', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
 };
 
 export default function SelectTeamPage() {
@@ -22,7 +22,7 @@ export default function SelectTeamPage() {
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [selected, setSelected] = useState<Map<number, SelectedPlayer>>(new Map());
-  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set(['WK', 'BAT', 'AR', 'BWL']));
+  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set(['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler']));
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -35,7 +35,10 @@ export default function SelectTeamPage() {
           client.get(`/api/players?match_id=${matchId}`),
           client.get(`/api/teams/my?match_id=${matchId}`).catch(() => ({ data: [] })),
         ]);
-        setPlayers(playersRes.data || []);
+        // API returns {Wicketkeeper: [...], Batter: [...], ...} — flatten to array
+        const data = playersRes.data || {};
+        const flat = Array.isArray(data) ? data : Object.values(data).flat() as Player[];
+        setPlayers(flat);
 
         // Pre-select existing team
         const existing: TeamSelection[] = teamRes.data || [];
@@ -159,7 +162,7 @@ export default function SelectTeamPage() {
   };
 
   const groups = groupedPlayers();
-  const roleOrder = ['WK', 'BAT', 'AR', 'BWL'];
+  const roleOrder = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'];
   const sortedRoles = [...new Set([...roleOrder, ...Object.keys(groups)])].filter((r) => groups[r]);
 
   if (loading) {
