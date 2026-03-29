@@ -123,6 +123,7 @@ async def match_scores(
         FROM contestant_points cp
         JOIN users u ON u.id = cp.user_id
         WHERE cp.match_id = ?
+          AND u.is_active = 1
         ORDER BY cp.points DESC
         """,
         (match_id,),
@@ -249,6 +250,8 @@ async def team_diff(
     other_user = db.execute("SELECT * FROM users WHERE id = ?", (other_user_id,)).fetchone()
     if not other_user:
         return {"error": "Contestant not found"}
+    if not other_user["is_active"]:
+        return {"error": "Contestant is inactive"}
 
     my_entries, my_total = _build_team_snapshot(db, user["id"], match_id, match_obj, pp_lookup, role_lookup)
     other_entries, other_total = _build_team_snapshot(db, other_user_id, match_id, match_obj, pp_lookup, role_lookup)
@@ -330,6 +333,7 @@ async def match_contestants(
         FROM user_teams ut
         JOIN users u ON u.id = ut.user_id
         WHERE ut.match_id = ?
+          AND u.is_active = 1
         ORDER BY u.name
         """,
         (match_id,),

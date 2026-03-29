@@ -6,6 +6,7 @@ from typing import List, Optional
 from backend.middleware.auth import require_admin
 from backend.database import get_db
 from backend.config import ROLES
+from backend.services import data_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -282,6 +283,8 @@ async def recalculate_match(
         raise HTTPException(status_code=404, detail="Match not found")
 
     match_id_str = str(match_id)
+
+    tournament_ref.load_teams(data_service.get_teams())
 
     # Fetch and parse scorecard, compute points
     tournament_ref.update_match_data(match_id_str)

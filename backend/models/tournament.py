@@ -28,9 +28,15 @@ class Tournament:
         self.registry = PlayerRegistry(players_data)
         self.player_roles = build_player_role_map(players_data)
 
+        self.matches = {}
         for m in matches_data:
             match_id = str(m["MatchID"])
             self.matches[match_id] = Match(match_id, m["Team1"], m["Team2"], self.registry)
+
+        self.load_teams(teams_data)
+
+    def load_teams(self, teams_data):
+        self.contestants = {}
 
         for row in teams_data:
             contestant_key = str(row.get("UserID") or row.get("Mobile") or row.get("User"))
@@ -42,9 +48,11 @@ class Tournament:
                     row["User"],
                     str(row.get("Mobile") or ""),
                     row.get("UserID"),
+                    bool(row.get("IsActive", True)),
                 )
 
             contestant = self.contestants[contestant_key]
+            contestant.is_active = bool(row.get("IsActive", True))
             if match_id not in contestant.teams:
                 contestant.teams[match_id] = Team(match_id)
 
@@ -150,14 +158,20 @@ class Tournament:
 
     def compute_points_for_match(self, match_id):
         for contestant in self.contestants.values():
+            if not contestant.is_active:
+                contestant.points.pop(match_id, None)
+                continue
             match = self.matches.get(match_id)
             if match:
                 contestant.calculate_points_for_match(match, self.player_roles)
 
     def persist_to_local(self):
         now_str = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+        data_service.delete_inactive_contestant_points()
         rows = []
         for contestant in self.contestants.values():
+            if not contestant.is_active:
+                continue
             for match_id, pts in contestant.points.items():
                 rows.append({
                     "UserID": contestant.user_id,
@@ -200,6 +214,8 @@ class Tournament:
                 try:
                     print("\n--- Scheduler tick ---")
                     matches_data = data_service.get_cached_data("matches")
+                    teams_data = data_service.get_teams()
+                    self.load_teams(teams_data)
 
                     # Get already computed match IDs from player_points
                     computed_matches = set()

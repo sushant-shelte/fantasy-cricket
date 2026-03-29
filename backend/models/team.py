@@ -28,10 +28,11 @@ class Team:
 
 
 class Contestant:
-    def __init__(self, name, mobile="", user_id=None):
+    def __init__(self, name, mobile="", user_id=None, is_active=True):
         self.name = name
         self.mobile = mobile
         self.user_id = user_id
+        self.is_active = is_active
         self.teams = {}   # match_id -> Team
         self.points = {}  # match_id -> points
 

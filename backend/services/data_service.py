@@ -226,6 +226,7 @@ def get_teams() -> list[dict]:
             u.id     AS user_id,
             u.name   AS user_name,
             u.mobile AS mobile,
+            u.is_active AS user_is_active,
             ut.match_id,
             ut.player_id,
             p.name   AS player_name,
@@ -242,6 +243,7 @@ def get_teams() -> list[dict]:
             "UserID": r["user_id"],
             "User": r["user_name"],
             "Mobile": r["mobile"] or "",
+            "IsActive": bool(r["user_is_active"]),
             "MatchID": str(r["match_id"]),
             "PlayerID": r["player_id"],
             "Name": r["player_name"],
@@ -374,6 +376,19 @@ def save_contestant_points(rows: list[dict]) -> None:
             (user["id"], match_id, points, last_updated),
         )
 
+    db.commit()
+
+
+def delete_inactive_contestant_points() -> None:
+    db = get_db()
+    db.execute(
+        """
+        DELETE FROM contestant_points
+        WHERE user_id IN (
+            SELECT id FROM users WHERE is_active = 0
+        )
+        """
+    )
     db.commit()
 
 
