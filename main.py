@@ -29,7 +29,7 @@ try:
     # =============================
     # CONFIG
     # =============================
-    TEST_MODE = True
+    TEST_MODE = False
     
     ESPN_SERIES_ID = 8048
     ESPN_MATCH_ID_OFFSET = 1527673
