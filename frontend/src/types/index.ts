@@ -69,8 +69,11 @@ export type ContestantScore = {
 };
 
 export type LeaderboardEntry = {
+  rank: number;
   name: string;
+  user_id: number;
   points: number;
+  balance: number;
 };
 
 export type PointsTableEntry = {

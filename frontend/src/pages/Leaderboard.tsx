@@ -86,10 +86,24 @@ export default function LeaderboardPage() {
             </div>
           )}
 
+          {/* Entry fee info */}
+          <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs text-white/40 mb-4">
+            <span>Entry: ₹50/match</span>
+            <span>Prize: 1st 50% · 2nd 30% · 3rd 20%</span>
+          </div>
+
           <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-sm">
+            {/* Header */}
+            <div className="flex items-center px-4 py-2.5 border-b border-white/5 text-xs text-white/30 uppercase tracking-wider">
+              <div className="w-10 text-center">#</div>
+              <div className="flex-1 ml-2">Player</div>
+              <div className="w-20 text-right">Points</div>
+              <div className="w-24 text-right">Balance</div>
+            </div>
             <div className="divide-y divide-white/5">
               {ranked.map((entry, i) => {
                 const isMe = profile?.name === entry.name;
+                const bal = entry.balance || 0;
                 return (
                   <div key={i}
                     className={`flex items-center px-4 py-3.5 transition-colors ${isMe ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}>
@@ -105,7 +119,14 @@ export default function LeaderboardPage() {
                         {isMe && <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-indigo-500/30 text-indigo-300 rounded-md border border-indigo-500/30">YOU</span>}
                       </div>
                     </div>
-                    <span className={`font-bold text-sm flex-shrink-0 ${isMe ? 'text-green-400' : 'text-green-400/80'}`}>{entry.points} pts</span>
+                    <div className="w-20 text-right">
+                      <span className="text-white/60 text-sm">{entry.points}</span>
+                    </div>
+                    <div className="w-24 text-right">
+                      <span className={`font-bold text-sm ${bal > 0 ? 'text-green-400' : bal < 0 ? 'text-red-400' : 'text-white/40'}`}>
+                        {bal > 0 ? '+' : ''}₹{bal}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
