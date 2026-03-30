@@ -65,6 +65,12 @@ class Tournament:
             if str(row["ViceCaptain"]).lower() == "true":
                 team.vice_captain = pid
 
+    def _log_active_player_count(self, match_id, match):
+        active_players = [player for player in match.players.values() if getattr(player, "played", False)]
+        active_count = len(active_players)
+        if active_count < 22 or active_count > 24:
+            print(f"[ALERT] Match {match_id}: active scoring player count is {active_count} (expected 22 to 24)")
+
     def update_match_data(self, match_id, use_playing_xi=False):
         match = self.matches.get(match_id)
         if not match:
@@ -108,6 +114,7 @@ class Tournament:
         if html_text:
             soup = BeautifulSoup(html_text, "html.parser")
             match.parse_scorecard(soup, reset_players=False)
+            self._log_active_player_count(match_id, match)
 
     def get_match_status(self, match_row):
         try:

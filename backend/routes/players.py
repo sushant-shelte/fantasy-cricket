@@ -6,7 +6,7 @@ from backend.database import get_db
 from backend.config import ESPN_MATCH_ID_OFFSET, ROLES
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
-from backend.services.scraper import build_ipl_playing_xi_url, fetch_playing_xi, fetch_scorecard_html
+from backend.services.scraper import build_cricbuzz_playing_xi_url, fetch_playing_xi
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api", tags=["players"])
@@ -23,26 +23,6 @@ def _build_registry(players_rows: list[dict]) -> PlayerRegistry:
             "Aliases": row.get("aliases") or "",
         })
     return PlayerRegistry(players_data)
-
-
-def _fetch_playing_xi_from_scorecard(match_id: int, team1: str, team2: str, players_rows: list[dict]) -> set[int]:
-    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
-    html_content = fetch_scorecard_html(scorecard_id)
-    if not html_content:
-        return set()
-
-    registry = _build_registry(players_rows)
-    match_obj = Match(
-        str(match_id),
-        clean_team_name(team1),
-        clean_team_name(team2),
-        registry,
-    )
-
-    soup = BeautifulSoup(html_content, "html.parser")
-    match_obj.parse_scorecard(soup)
-
-    return {int(pid) for pid, player in match_obj.players.items() if getattr(player, "played", False)}
 
 @router.get("/players")
 async def list_players(
@@ -98,21 +78,14 @@ async def list_players(
 
         playing_xi_data = {
             "announced": False,
-            "url": build_ipl_playing_xi_url(match_id, team1, team2),
+            "url": "",
             "player_ids": [],
+            "substitute_ids": [],
         }
         playing_xi_data = fetch_playing_xi(match_id, team1, team2, players)
 
-        if not playing_xi_data["announced"] or len(playing_xi_data["player_ids"]) < 18:
-            scorecard_ids = _fetch_playing_xi_from_scorecard(match_id, team1, team2, players)
-            if len(scorecard_ids) >= 18:
-                playing_xi_data = {
-                    "announced": True,
-                    "url": playing_xi_data.get("url") or build_ipl_playing_xi_url(match_id, team1, team2),
-                    "player_ids": sorted(scorecard_ids),
-                }
-
         playing_ids = set(playing_xi_data["player_ids"])
+        substitute_ids = set(playing_xi_data.get("substitute_ids", []))
         playing_ids_complete = len(playing_ids) >= 18
 
         # Group by role
@@ -120,12 +93,24 @@ async def list_players(
         for player in players:
             if not playing_xi_data["announced"]:
                 player["is_playing_xi"] = None
+                player["is_substitute"] = None
+                player["availability_status"] = None
             elif player["id"] in playing_ids:
                 player["is_playing_xi"] = True
+                player["is_substitute"] = False
+                player["availability_status"] = "available"
+            elif player["id"] in substitute_ids:
+                player["is_playing_xi"] = False
+                player["is_substitute"] = True
+                player["availability_status"] = "substitute"
             elif playing_ids_complete:
                 player["is_playing_xi"] = False
+                player["is_substitute"] = False
+                player["availability_status"] = "unavailable"
             else:
                 player["is_playing_xi"] = None
+                player["is_substitute"] = None
+                player["availability_status"] = None
             if player["role"] in grouped:
                 grouped[player["role"]].append(player)
 
@@ -134,6 +119,7 @@ async def list_players(
             "playing_xi": {
                 "announced": playing_xi_data["announced"],
                 "url": playing_xi_data["url"],
+                "substitute_count": len(substitute_ids),
             },
         }
 

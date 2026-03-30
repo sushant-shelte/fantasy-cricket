@@ -356,18 +356,23 @@ def _find_close_team_player_id(raw_name: str, team: str, players_rows: list[dict
     return None
 
 
-def _extract_playing_xi_from_cricbuzz_page(
+def _find_cricbuzz_section_heading(soup: BeautifulSoup, section_name: str):
+    target = _normalize_player_name(section_name)
+    for tag in soup.find_all(["h1", "h2", "h3"]):
+        if _normalize_player_name(tag.get_text(" ", strip=True)) == target:
+            return tag
+    return None
+
+
+def _extract_named_players_from_cricbuzz_section(
     html: str,
+    section_name: str,
     team1: str,
     team2: str,
     players_rows: list[dict],
 ) -> tuple[set[int], list[str], bool]:
     soup = BeautifulSoup(html, "html.parser")
-    heading = None
-    for tag in soup.find_all(["h1", "h2", "h3"]):
-        if _normalize_player_name(tag.get_text(" ", strip=True)) == "playing xi":
-            heading = tag
-            break
+    heading = _find_cricbuzz_section_heading(soup, section_name)
 
     if not heading:
         return set(), [], False
@@ -518,22 +523,30 @@ def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[d
             print(f"[Playing XI] Match {match_id}: status {res.status_code} for {url}")
             return {"announced": False, "url": url, "player_ids": []}
 
-        playing_ids, unmatched_names, announced = _extract_playing_xi_from_cricbuzz_page(
-            res.text, team1, team2, players_rows
+        playing_ids, unmatched_names, announced = _extract_named_players_from_cricbuzz_section(
+            res.text, "playing xi", team1, team2, players_rows
+        )
+        substitute_ids, substitute_unmatched_names, substitutes_available = _extract_named_players_from_cricbuzz_section(
+            res.text, "substitutes", team1, team2, players_rows
         )
         if not announced:
             print(f"[Playing XI] Match {match_id}: Playing XI section not available yet at {url}")
-            return {"announced": False, "url": url, "player_ids": []}
+            return {"announced": False, "url": url, "player_ids": [], "substitute_ids": []}
 
         print(f"[Playing XI] Match {match_id}: using {url} (total={len(playing_ids)})")
         for name in unmatched_names:
             print(f"[Playing XI] Match {match_id}: player mapping not found for '{name}'")
+        if substitutes_available:
+            print(f"[Playing XI] Match {match_id}: substitutes found ({len(substitute_ids)})")
+            for name in substitute_unmatched_names:
+                print(f"[Playing XI] Match {match_id}: substitute mapping not found for '{name}'")
 
         return {
             "announced": len(playing_ids) >= 18,
             "url": url,
             "player_ids": sorted(playing_ids),
+            "substitute_ids": sorted(substitute_ids),
         }
     except Exception as e:
         print("Error fetching playing XI:", e)
-        return {"announced": False, "url": url, "player_ids": []}
+        return {"announced": False, "url": url, "player_ids": [], "substitute_ids": []}

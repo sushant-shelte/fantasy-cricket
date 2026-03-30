@@ -107,6 +107,8 @@ class Match:
 
         def mark_player_played(name, team):
             cleaned = str(name).strip()
+            if "(sub)" in cleaned.lower():
+                return False
             cleaned = re.sub(r"^\d+\s*[.)-]?\s*", "", cleaned)
             cleaned = re.sub(r"\s*\([^)]*\)\s*$", "", cleaned)
             cleaned = clean_name(cleaned)

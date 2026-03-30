@@ -12,6 +12,7 @@ interface SelectedPlayer {
 interface PlayingXiState {
   announced: boolean;
   url: string | null;
+  substituteCount?: number;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -52,6 +53,7 @@ export default function SelectTeamPage() {
         setPlayingXi({
           announced: Boolean(data.playing_xi?.announced),
           url: data.playing_xi?.url || null,
+          substituteCount: data.playing_xi?.substitute_count || 0,
         });
 
         // Pre-select existing team
@@ -127,8 +129,14 @@ export default function SelectTeamPage() {
 
     Object.values(groups).forEach((group) => {
       group.sort((a, b) => {
-        const playingDiff = Number(Boolean(b.is_playing_xi)) - Number(Boolean(a.is_playing_xi));
-        if (playingDiff !== 0) return playingDiff;
+        const availabilityRank = (player: Player) => {
+          if (player.availability_status === 'available') return 3;
+          if (player.availability_status === 'substitute') return 2;
+          if (player.availability_status === 'unavailable') return 1;
+          return 0;
+        };
+        const availabilityDiff = availabilityRank(b) - availabilityRank(a);
+        if (availabilityDiff !== 0) return availabilityDiff;
         const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
         if (pointsDiff !== 0) return pointsDiff;
         return a.name.localeCompare(b.name);
@@ -280,8 +288,8 @@ export default function SelectTeamPage() {
           </div>
           <div className="mt-1 text-xs opacity-90">
             {playingXi.announced
-              ? 'Players tagged as Playing XI are from the current post-toss lineup.'
-              : 'The app starts checking ESPN around 30 minutes before match start and will highlight confirmed starters once they appear.'}
+              ? `Confirmed starters are highlighted in green. Substitutes are marked with blue dots.${playingXi.substituteCount ? ` ${playingXi.substituteCount} substitutes found.` : ''}`
+              : 'Around toss time, the app checks the live match page and highlights available and substitute players once lineups appear.'}
           </div>
           {playingXi.url && (
             <a
@@ -290,9 +298,24 @@ export default function SelectTeamPage() {
               rel="noreferrer"
               className="mt-2 inline-flex text-xs font-semibold text-cyan-300 hover:text-cyan-200"
             >
-              Open ESPN playing XI page
+              Open lineup page
             </a>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 text-xs text-white/50">
+          <span className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+            Avl
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+            Sub
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+            Unavl
+          </span>
         </div>
 
         {sortedRoles.map((role) => {
@@ -339,8 +362,12 @@ export default function SelectTeamPage() {
                         key={player.id}
                         className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
                           isSelected
-                            ? 'bg-white/10'
-                            : player.is_playing_xi === false
+                            ? player.availability_status === 'available'
+                              ? 'bg-emerald-500/10'
+                              : 'bg-white/10'
+                            : player.availability_status === 'available'
+                              ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
+                              : player.availability_status === 'unavailable'
                               ? 'bg-white/[0.03] hover:bg-white/[0.06]'
                               : 'hover:bg-white/5'
                         }`}
@@ -366,20 +393,28 @@ export default function SelectTeamPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium truncate">{player.name}</p>
                           <div className="flex flex-wrap items-center gap-2 text-xs">
+                            {player.availability_status === 'available' && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                                Avl
+                              </span>
+                            )}
+                            {player.availability_status === 'substitute' && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 font-semibold text-sky-200">
+                                <span className="h-2 w-2 rounded-full bg-sky-400"></span>
+                                Sub
+                              </span>
+                            )}
+                            {player.availability_status === 'unavailable' && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 font-semibold text-red-200">
+                                <span className="h-2 w-2 rounded-full bg-red-400"></span>
+                                Unavl
+                              </span>
+                            )}
                             <span className="text-white/40">{player.team}</span>
                             <span className="text-emerald-300 font-semibold">
                               {(player.total_points || 0).toFixed(2)} pts
                             </span>
-                            {player.is_playing_xi === true && (
-                              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
-                                Playing XI
-                              </span>
-                            )}
-                            {player.is_playing_xi === false && (
-                              <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 font-semibold text-slate-300">
-                                Squad
-                              </span>
-                            )}
                           </div>
                         </div>
 

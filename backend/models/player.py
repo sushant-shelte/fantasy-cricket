@@ -52,6 +52,8 @@ class Player:
         self.is_out = True
 
         def get_player(name):
+            if "(sub)" in str(name).lower():
+                return None
             if bowling_team:
                 return match.get_player_by_team(name, bowling_team)
             return match.get_player_by_name(name)

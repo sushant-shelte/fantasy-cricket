@@ -26,6 +26,8 @@ export type Player = {
   aliases: string;
   total_points?: number;
   is_playing_xi?: boolean | null;
+  is_substitute?: boolean | null;
+  availability_status?: 'available' | 'substitute' | 'unavailable' | null;
 };
 
 export type TeamSelection = {

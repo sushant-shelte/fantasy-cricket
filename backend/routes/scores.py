@@ -56,6 +56,13 @@ def _is_live_window(match_row) -> bool:
     return match_datetime - timedelta(minutes=30) <= now < match_datetime + timedelta(hours=5)
 
 
+def _log_active_player_count(match_id: int, match_obj):
+    active_players = [player for player in match_obj.players.values() if getattr(player, "played", False)]
+    active_count = len(active_players)
+    if active_count < 22 or active_count > 24:
+        print(f"[ALERT] Match {match_id}: active scoring player count is {active_count} (expected 22 to 24)")
+
+
 def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_data, include_playing_xi=False):
     team1 = clean_team_name(match_row["team1"])
     team2 = clean_team_name(match_row["team2"])
@@ -80,6 +87,8 @@ def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_da
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
         match_obj.parse_scorecard(soup, reset_players=False)
+        if include_playing_xi:
+            _log_active_player_count(match_id, match_obj)
 
     return match_obj, html_content, playing_xi
 
