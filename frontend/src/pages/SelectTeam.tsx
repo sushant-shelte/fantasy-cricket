@@ -23,6 +23,8 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; bo
   Bowler: { label: 'Bowler', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
 };
 
+const REQUIRED_ROLES = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'] as const;
+
 export default function SelectTeamPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
@@ -104,7 +106,7 @@ export default function SelectTeamPage() {
     setSelected((prev) => {
       const next = new Map(prev);
       next.forEach((v, k) => {
-        next.set(k, { ...v, is_captain: k === playerId });
+        next.set(k, { ...v, is_captain: k === playerId, is_vice_captain: k === playerId ? false : v.is_vice_captain });
       });
       return next;
     });
@@ -114,7 +116,7 @@ export default function SelectTeamPage() {
     setSelected((prev) => {
       const next = new Map(prev);
       next.forEach((v, k) => {
-        next.set(k, { ...v, is_vice_captain: k === playerId });
+        next.set(k, { ...v, is_vice_captain: k === playerId, is_captain: k === playerId ? false : v.is_captain });
       });
       return next;
     });
@@ -151,6 +153,11 @@ export default function SelectTeamPage() {
   const captainId = [...selected.values()].find((s) => s.is_captain)?.player_id;
   const vcId = [...selected.values()].find((s) => s.is_vice_captain)?.player_id;
   const selectedByTeam: Record<string, number> = {};
+  const selectedPlayers = players.filter((player) => selected.has(player.id));
+  const selectedRoleCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
+    acc[role] = selectedPlayers.filter((player) => player.role === role).length;
+    return acc;
+  }, {});
 
   players.forEach((player) => {
     if (!selected.has(player.id)) return;
@@ -158,6 +165,20 @@ export default function SelectTeamPage() {
   });
 
   const teamsInMatch = [...new Set(players.map((player) => player.team))].sort();
+
+  const canSelectPlayer = (player: Player) => {
+    if (selected.has(player.id)) return true;
+    if (selectedCount >= 11) return false;
+
+    const simulatedCounts = { ...selectedRoleCounts };
+    if (player.role in simulatedCounts) {
+      simulatedCounts[player.role] += 1;
+    }
+
+    const remainingSlots = 11 - (selectedCount + 1);
+    const missingRolesAfterSelection = REQUIRED_ROLES.filter((role) => simulatedCounts[role] === 0).length;
+    return remainingSlots >= missingRolesAfterSelection;
+  };
 
   const renderTeamBadge = (team: string, compact = false) => {
     const theme = getTeamTheme(team);
@@ -167,18 +188,14 @@ export default function SelectTeamPage() {
       </span>
     );
   };
-
   const validate = (): string | null => {
     if (selectedCount !== 11) return `Select exactly 11 players (currently ${selectedCount}).`;
     if (!captainId) return 'Select a Captain.';
     if (!vcId) return 'Select a Vice Captain.';
     if (captainId === vcId) return 'Captain and Vice Captain must be different players.';
 
-    // Check at least 1 per role
-    const groups = groupedPlayers();
-    const roles = Object.keys(groups);
-    for (const role of roles) {
-      const count = groups[role].filter((p) => selected.has(p.id)).length;
+    for (const role of REQUIRED_ROLES) {
+      const count = selectedRoleCounts[role];
       if (count === 0) return `Select at least 1 ${ROLE_CONFIG[role]?.label || role}.`;
     }
 
@@ -367,18 +384,22 @@ export default function SelectTeamPage() {
                     const isSelected = selected.has(player.id);
                     const isCaptain = captainId === player.id;
                     const isVC = vcId === player.id;
+                    const availabilityStatus = player.availability_status || 'unavailable';
+                    const selectionAllowed = canSelectPlayer(player);
 
                     return (
                       <div
                         key={player.id}
                         className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
                           isSelected
-                            ? player.availability_status === 'available'
+                            ? availabilityStatus === 'available'
                               ? 'bg-emerald-500/10'
                               : 'bg-white/10'
-                            : player.availability_status === 'available'
+                            : !selectionAllowed
+                              ? 'opacity-45'
+                            : availabilityStatus === 'available'
                               ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
-                              : player.availability_status === 'unavailable'
+                              : availabilityStatus === 'unavailable'
                               ? 'bg-white/[0.03] hover:bg-white/[0.06]'
                               : 'hover:bg-white/5'
                         } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
@@ -387,9 +408,12 @@ export default function SelectTeamPage() {
                         <button
                           type="button"
                           onClick={() => togglePlayer(player.id)}
+                          disabled={!isSelected && !selectionAllowed}
                           className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
                             isSelected
                               ? 'bg-green-500 border-green-500'
+                              : !selectionAllowed
+                                ? 'border-white/10 bg-white/5 cursor-not-allowed'
                               : 'border-white/30 hover:border-white/50'
                           }`}
                         >
@@ -404,28 +428,36 @@ export default function SelectTeamPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium truncate">{player.name}</p>
                           <div className="flex flex-wrap items-center gap-2 text-xs">
-                            {player.availability_status === 'available' && (
+                            {availabilityStatus === 'available' && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
                                 <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
                                 Avl
                               </span>
                             )}
-                            {player.availability_status === 'substitute' && (
+                            {availabilityStatus === 'substitute' && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 font-semibold text-sky-200">
                                 <span className="h-2 w-2 rounded-full bg-sky-400"></span>
                                 Sub
                               </span>
                             )}
-                            {player.availability_status === 'unavailable' && (
+                            {availabilityStatus === 'unavailable' && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 font-semibold text-red-200">
                                 <span className="h-2 w-2 rounded-full bg-red-400"></span>
                                 Unavl
                               </span>
                             )}
                             {renderTeamBadge(player.team)}
+                            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/60">
+                              {ROLE_CONFIG[player.role]?.label || player.role}
+                            </span>
                             <span className="text-emerald-300 font-semibold">
                               {(player.total_points || 0).toFixed(2)} pts
                             </span>
+                            {!isSelected && !selectionAllowed && (
+                              <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
+                                Keep slot for other roles
+                              </span>
+                            )}
                           </div>
                         </div>
 
