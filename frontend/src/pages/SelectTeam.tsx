@@ -284,12 +284,12 @@ export default function SelectTeamPage() {
             : 'bg-amber-500/10 border-amber-400/20 text-amber-100'
         }`}>
           <div className="font-semibold">
-            {playingXi.announced ? 'Playing XI announced' : 'Playing XI not announced yet'}
+            {playingXi.announced ? 'Lineup available' : 'Playing XI not available'}
           </div>
           <div className="mt-1 text-xs opacity-90">
             {playingXi.announced
               ? `Confirmed starters are highlighted in green. Substitutes are marked with blue dots.${playingXi.substituteCount ? ` ${playingXi.substituteCount} substitutes found.` : ''}`
-              : 'Around toss time, the app checks the live match page and highlights available and substitute players once lineups appear.'}
+              : 'Before toss, Playing XI is not available. Once Cricbuzz publishes the lineup, available and substitute players will be highlighted here.'}
           </div>
           {playingXi.url && (
             <a
