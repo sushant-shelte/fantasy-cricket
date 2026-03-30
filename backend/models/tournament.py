@@ -85,6 +85,7 @@ class Tournament:
 
         playing_xi = fetch_playing_xi(int(match_id), match.team1, match.team2, players_rows)
         playing_ids = playing_xi.get("player_ids", [])
+        print(f"[Playing XI] Match {match_id}: fetch result url={playing_xi.get('url')} players={len(playing_ids)}")
         if playing_ids:
             match.apply_playing_xi(playing_ids)
 
@@ -97,6 +98,8 @@ class Tournament:
             print(f"[Playing XI] Match {match_id} via {playing_xi.get('url')}")
             print(f"  {match.team1}: {', '.join(team1_players) if team1_players else 'none'}")
             print(f"  {match.team2}: {', '.join(team2_players) if team2_players else 'none'}")
+        else:
+            print(f"[Playing XI] Match {match_id}: no mapped playing XI players found")
 
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
         html_text = fetch_scorecard_html(scorecard_id)

@@ -122,7 +122,49 @@ def _extract_candidate_names_from_json(value, names: list[str]):
             _extract_candidate_names_from_json(item, names)
 
 
-def _extract_playing_xi_from_json(html: str, players_rows: list[dict]) -> set[int]:
+def _is_likely_player_name(name: str) -> bool:
+    normalized = _normalize_player_name(name)
+    if not normalized:
+        return False
+    parts = normalized.split()
+    if len(parts) < 2 or len(parts) > 5:
+        return False
+    banned = {
+        "playing xi", "squad", "impact subs", "impact players", "match details",
+        "batting", "bowling", "fall of wickets", "toss", "live score", "scorecard",
+    }
+    return normalized not in banned
+
+
+def _match_candidate_names(
+    candidate_names: list[str],
+    player_lookup: dict[str, dict[str, int]],
+) -> tuple[set[int], list[str]]:
+    playing_ids: set[int] = set()
+    unmatched_names: list[str] = []
+    seen_unmatched: set[str] = set()
+
+    for raw_name in candidate_names:
+        normalized = _normalize_player_name(raw_name)
+        if not normalized:
+            continue
+
+        matched = False
+        for team_lookup in player_lookup.values():
+            player_id = team_lookup.get(normalized)
+            if player_id:
+                playing_ids.add(player_id)
+                matched = True
+                break
+
+        if not matched and _is_likely_player_name(raw_name) and normalized not in seen_unmatched:
+            seen_unmatched.add(normalized)
+            unmatched_names.append(str(raw_name).strip())
+
+    return playing_ids, unmatched_names
+
+
+def _extract_playing_xi_from_json(html: str, players_rows: list[dict]) -> tuple[set[int], list[str]]:
     player_lookup = _build_team_player_lookup(players_rows)
     all_names: list[str] = []
 
@@ -144,34 +186,25 @@ def _extract_playing_xi_from_json(html: str, players_rows: list[dict]) -> set[in
 
         _extract_candidate_names_from_json(data, all_names)
 
-    playing_ids: set[int] = set()
-    for raw_name in all_names:
-        normalized = _normalize_player_name(raw_name)
-        if not normalized:
-            continue
-
-        for team_lookup in player_lookup.values():
-            player_id = team_lookup.get(normalized)
-            if player_id:
-                playing_ids.add(player_id)
-                break
-
-    return playing_ids
+    return _match_candidate_names(all_names, player_lookup)
 
 
-def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_rows: list[dict]) -> set[int]:
+def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_rows: list[dict]) -> tuple[set[int], list[str]]:
     soup = BeautifulSoup(html, "html.parser")
     lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
     player_lookup = _build_team_player_lookup(players_rows)
     playing_ids: set[int] = set()
+    unmatched_names: list[str] = []
+    unmatched_seen: set[str] = set()
 
     expanded_team_names = {
         team1: {_normalize_player_name(team1), _normalize_player_name(_expand_team_name(team1))},
         team2: {_normalize_player_name(team2), _normalize_player_name(_expand_team_name(team2))},
     }
 
-    def gather_from_section(team: str, start_idx: int) -> set[int]:
+    def gather_from_section(team: str, start_idx: int) -> tuple[set[int], list[str]]:
         ids: set[int] = set()
+        unmatched: list[str] = []
         next_team_markers = expanded_team_names[team1 if team == team2 else team2]
 
         for line in lines[start_idx + 1:start_idx + 40]:
@@ -186,27 +219,39 @@ def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_row
                 segments = [line]
 
             for segment in segments:
-                player_id = player_lookup.get(team, {}).get(_normalize_player_name(segment))
+                segment = segment.strip()
+                normalized_segment = _normalize_player_name(segment)
+                if not normalized_segment:
+                    continue
+
+                player_id = player_lookup.get(team, {}).get(normalized_segment)
                 if player_id:
                     ids.add(player_id)
                     if len(ids) >= 11:
                         break
+                elif _is_likely_player_name(segment):
+                    unmatched.append(segment)
 
             if len(ids) >= 11:
                 break
 
-        return ids
+        return ids, unmatched
 
     for team in (team1, team2):
         for idx, line in enumerate(lines):
             normalized_line = _normalize_player_name(line)
             if normalized_line in expanded_team_names[team]:
-                section_ids = gather_from_section(team, idx)
+                section_ids, section_unmatched = gather_from_section(team, idx)
                 if len(section_ids) >= 9:
                     playing_ids.update(section_ids)
+                    for name in section_unmatched:
+                        normalized_name = _normalize_player_name(name)
+                        if normalized_name and normalized_name not in unmatched_seen:
+                            unmatched_seen.add(normalized_name)
+                            unmatched_names.append(name)
                     break
 
-    return playing_ids
+    return playing_ids, unmatched_names
 
 
 def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[dict]) -> dict:
@@ -214,13 +259,22 @@ def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[d
 
     try:
         for url in urls:
+            print(f"[Playing XI] Match {match_id}: trying {url}")
             res = _session_get(url)
             if res.status_code != 200:
+                print(f"[Playing XI] Match {match_id}: status {res.status_code} for {url}")
                 continue
 
-            json_ids = _extract_playing_xi_from_json(res.text, players_rows)
-            text_ids = _extract_playing_xi_from_text(res.text, team1, team2, players_rows)
+            json_ids, json_unmatched = _extract_playing_xi_from_json(res.text, players_rows)
+            text_ids, text_unmatched = _extract_playing_xi_from_text(res.text, team1, team2, players_rows)
             playing_ids = json_ids | text_ids
+            unmatched_names = []
+            seen_unmatched = set()
+            for name in text_unmatched + json_unmatched:
+                normalized = _normalize_player_name(name)
+                if normalized and normalized not in seen_unmatched:
+                    seen_unmatched.add(normalized)
+                    unmatched_names.append(name)
 
             announced = (
                 len(text_ids) >= 18
@@ -233,12 +287,20 @@ def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[d
             if not announced:
                 continue
 
+            print(
+                f"[Playing XI] Match {match_id}: using {url} "
+                f"(json={len(json_ids)}, text={len(text_ids)}, total={len(playing_ids)})"
+            )
+            for name in unmatched_names:
+                print(f"[Playing XI] Match {match_id}: player mapping not found for '{name}'")
+
             return {
                 "announced": True,
                 "url": url,
                 "player_ids": sorted(playing_ids),
             }
 
+        print(f"[Playing XI] Match {match_id}: no announced XI found, first candidate was {urls[0]}")
         return {"announced": False, "url": urls[0], "player_ids": []}
     except Exception as e:
         print("Error fetching playing XI:", e)
