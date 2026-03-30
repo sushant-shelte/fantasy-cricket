@@ -7,7 +7,7 @@ from backend.config import IST, ESPN_MATCH_ID_OFFSET
 from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
-from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html
+from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html, initialize_cricbuzz_match_map
 from backend.services import data_service
 from bs4 import BeautifulSoup
 
@@ -27,6 +27,7 @@ class Tournament:
     def initialize(self, players_data, matches_data, teams_data):
         self.registry = PlayerRegistry(players_data)
         self.player_roles = build_player_role_map(players_data)
+        initialize_cricbuzz_match_map(matches_data)
 
         self.matches = {}
         for m in matches_data:
@@ -64,7 +65,7 @@ class Tournament:
             if str(row["ViceCaptain"]).lower() == "true":
                 team.vice_captain = pid
 
-    def update_match_data(self, match_id):
+    def update_match_data(self, match_id, use_playing_xi=False):
         match = self.matches.get(match_id)
         if not match:
             return
@@ -83,23 +84,24 @@ class Tournament:
                 "aliases": info.get("Aliases", ""),
             })
 
-        playing_xi = fetch_playing_xi(int(match_id), match.team1, match.team2, players_rows)
-        playing_ids = playing_xi.get("player_ids", [])
-        print(f"[Playing XI] Match {match_id}: fetch result url={playing_xi.get('url')} players={len(playing_ids)}")
-        if playing_ids:
-            match.apply_playing_xi(playing_ids)
+        if use_playing_xi:
+            playing_xi = fetch_playing_xi(int(match_id), match.team1, match.team2, players_rows)
+            playing_ids = playing_xi.get("player_ids", [])
+            print(f"[Playing XI] Match {match_id}: fetch result url={playing_xi.get('url')} players={len(playing_ids)}")
+            if playing_ids:
+                match.apply_playing_xi(playing_ids)
 
-            team1_players = sorted(
-                [match.players[int(pid)].name for pid in playing_ids if self.registry.players.get(int(pid), {}).get("Team") == match.team1]
-            )
-            team2_players = sorted(
-                [match.players[int(pid)].name for pid in playing_ids if self.registry.players.get(int(pid), {}).get("Team") == match.team2]
-            )
-            print(f"[Playing XI] Match {match_id} via {playing_xi.get('url')}")
-            print(f"  {match.team1}: {', '.join(team1_players) if team1_players else 'none'}")
-            print(f"  {match.team2}: {', '.join(team2_players) if team2_players else 'none'}")
-        else:
-            print(f"[Playing XI] Match {match_id}: no mapped playing XI players found")
+                team1_players = sorted(
+                    [match.players[int(pid)].name for pid in playing_ids if self.registry.players.get(int(pid), {}).get("Team") == match.team1]
+                )
+                team2_players = sorted(
+                    [match.players[int(pid)].name for pid in playing_ids if self.registry.players.get(int(pid), {}).get("Team") == match.team2]
+                )
+                print(f"[Playing XI] Match {match_id} via {playing_xi.get('url')}")
+                print(f"  {match.team1}: {', '.join(team1_players) if team1_players else 'none'}")
+                print(f"  {match.team2}: {', '.join(team2_players) if team2_players else 'none'}")
+            else:
+                print(f"[Playing XI] Match {match_id}: no mapped playing XI players found")
 
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
         html_text = fetch_scorecard_html(scorecard_id)
@@ -253,7 +255,7 @@ class Tournament:
                         try:
                             if status in ("lineups", "live"):
                                 print(f"  Match {match_id}: {status.upper()} — fetching scores")
-                                self.update_match_data(match_id)
+                                self.update_match_data(match_id, use_playing_xi=True)
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
                                 processed += 1
@@ -264,7 +266,7 @@ class Tournament:
                                     continue
 
                                 print(f"  Match {match_id}: OVER — computing for first time")
-                                self.update_match_data(match_id)
+                                self.update_match_data(match_id, use_playing_xi=False)
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
                                 processed += 1

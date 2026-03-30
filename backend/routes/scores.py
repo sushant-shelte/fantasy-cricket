@@ -1,11 +1,13 @@
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 
+from backend.config import ESPN_MATCH_ID_OFFSET, IST
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html
-from backend.config import ESPN_MATCH_ID_OFFSET
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
@@ -41,7 +43,20 @@ def _build_players_rows(players_data, team1=None, team2=None):
     return rows
 
 
-def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_data):
+def _is_live_window(match_row) -> bool:
+    try:
+        match_datetime = datetime.strptime(
+            f"{match_row['match_date']} {match_row['match_time']}", "%Y-%m-%d %H:%M"
+        )
+        match_datetime = IST.localize(match_datetime)
+    except Exception:
+        return False
+
+    now = datetime.now(IST)
+    return match_datetime - timedelta(minutes=30) <= now < match_datetime + timedelta(hours=5)
+
+
+def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_data, include_playing_xi=False):
     team1 = clean_team_name(match_row["team1"])
     team2 = clean_team_name(match_row["team2"])
 
@@ -53,10 +68,12 @@ def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_da
     )
 
     players_rows = _build_players_rows(players_data, team1, team2)
-    playing_xi = fetch_playing_xi(match_id, team1, team2, players_rows)
-    playing_ids = playing_xi.get("player_ids", [])
-    if playing_ids:
-        match_obj.apply_playing_xi(playing_ids)
+    playing_xi = {"announced": False, "url": "", "player_ids": []}
+    if include_playing_xi:
+        playing_xi = fetch_playing_xi(match_id, team1, team2, players_rows)
+        playing_ids = playing_xi.get("player_ids", [])
+        if playing_ids:
+            match_obj.apply_playing_xi(playing_ids)
 
     scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
     html_content = fetch_scorecard_html(scorecard_id)
@@ -83,7 +100,13 @@ async def match_scores(
 
     registry, players_data = _build_registry(db)
 
-    match_obj, html_content, _ = _hydrate_match_from_live_data(match_id, match_row, registry, players_data)
+    match_obj, html_content, _ = _hydrate_match_from_live_data(
+        match_id,
+        match_row,
+        registry,
+        players_data,
+        include_playing_xi=_is_live_window(match_row),
+    )
 
     if not html_content:
         raise HTTPException(status_code=404, detail="No scorecard data available")
@@ -207,7 +230,13 @@ async def team_breakdown(
     match_row = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
     match_obj = None
     if match_row:
-        match_obj, html_content, _ = _hydrate_match_from_live_data(match_id, match_row, registry, players_data)
+        match_obj, html_content, _ = _hydrate_match_from_live_data(
+            match_id,
+            match_row,
+            registry,
+            players_data,
+            include_playing_xi=_is_live_window(match_row),
+        )
         if html_content:
             # Calculate points so breakdown is available
             for pid_key, player in match_obj.players.items():
@@ -271,7 +300,13 @@ def _load_match_and_points(db, match_id):
         return None, None, {}, {}
 
     registry, players_data = _build_registry(db)
-    match_obj, _, _ = _hydrate_match_from_live_data(match_id, match_row, registry, players_data)
+    match_obj, _, _ = _hydrate_match_from_live_data(
+        match_id,
+        match_row,
+        registry,
+        players_data,
+        include_playing_xi=_is_live_window(match_row),
+    )
 
     pp_rows = db.execute("SELECT * FROM player_points WHERE match_id = ?", (match_id,)).fetchall()
     pp_lookup = {str(row["player_id"]): float(row["points"]) for row in pp_rows}
