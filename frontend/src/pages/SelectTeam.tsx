@@ -21,6 +21,7 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; bo
   Batter: { label: 'Batsman', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
   AllRounder: { label: 'All-Rounder', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
   Bowler: { label: 'Bowler', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
+  Unavailable: { label: 'Unavailable', color: 'text-red-200', bg: 'bg-red-500/15', border: 'border-red-500/25' },
 };
 
 const REQUIRED_ROLES = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'] as const;
@@ -125,6 +126,11 @@ export default function SelectTeamPage() {
   const groupedPlayers = () => {
     const groups: Record<string, Player[]> = {};
     players.forEach((p) => {
+      if (playingXi.announced && p.availability_status === 'unavailable') {
+        if (!groups.Unavailable) groups.Unavailable = [];
+        groups.Unavailable.push(p);
+        return;
+      }
       const role = p.role || 'OTHER';
       if (!groups[role]) groups[role] = [];
       groups[role].push(p);
@@ -232,7 +238,7 @@ export default function SelectTeamPage() {
   };
 
   const groups = groupedPlayers();
-  const roleOrder = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'];
+  const roleOrder = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler', 'Unavailable'];
   const sortedRoles = [...new Set([...roleOrder, ...Object.keys(groups)])].filter((r) => groups[r]);
 
   if (loading) {
@@ -331,20 +337,22 @@ export default function SelectTeamPage() {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-xs text-white/50">
-          <span className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-            Avl
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
-            Sub
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
-            Unavl
-          </span>
-        </div>
+        {playingXi.announced && (
+          <div className="flex flex-wrap items-center gap-4 text-xs text-white/50">
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              Avl
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+              Sub
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+              Unavl
+            </span>
+          </div>
+        )}
 
         {sortedRoles.map((role) => {
           const config = ROLE_CONFIG[role] || { label: role, color: 'text-gray-300', bg: 'bg-gray-500/20', border: 'border-gray-500/30' };
@@ -428,19 +436,19 @@ export default function SelectTeamPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-medium truncate">{player.name}</p>
                           <div className="flex flex-wrap items-center gap-2 text-xs">
-                            {availabilityStatus === 'available' && (
+                            {playingXi.announced && availabilityStatus === 'available' && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
                                 <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
                                 Avl
                               </span>
                             )}
-                            {availabilityStatus === 'substitute' && (
+                            {playingXi.announced && availabilityStatus === 'substitute' && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 font-semibold text-sky-200">
                                 <span className="h-2 w-2 rounded-full bg-sky-400"></span>
                                 Sub
                               </span>
                             )}
-                            {availabilityStatus === 'unavailable' && (
+                            {playingXi.announced && availabilityStatus === 'unavailable' && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 font-semibold text-red-200">
                                 <span className="h-2 w-2 rounded-full bg-red-400"></span>
                                 Unavl
