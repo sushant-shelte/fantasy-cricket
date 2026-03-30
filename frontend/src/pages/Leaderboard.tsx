@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -40,16 +41,31 @@ export default function LeaderboardPage() {
     ranked.push({ ...entry, rank });
   });
 
+  const rankBadge = (rank: number, size: 'sm' | 'lg' = 'sm') => {
+    const className = size === 'lg' ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl';
+    if (rank === 1) return <span className={className}>&#x1F947;</span>;
+    if (rank === 2) return <span className={className}>&#x1F948;</span>;
+    if (rank === 3) return <span className={className}>&#x1F949;</span>;
+    return <span className={size === 'lg' ? 'text-xl sm:text-2xl font-bold text-white/70' : 'text-lg font-semibold text-white/70'}>{rank}</span>;
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-white">Leaderboard</h2>
-        <button onClick={handleRefresh} disabled={refreshing}
-          className="p-2 hover:bg-white/10 rounded-xl transition-all disabled:opacity-50" title="Refresh">
-          <svg className={`w-5 h-5 text-white/50 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all" title="Back">
+            <svg className="w-5 h-5 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </Link>
+          <button onClick={handleRefresh} disabled={refreshing}
+            className="p-2 hover:bg-white/10 rounded-xl transition-all disabled:opacity-50" title="Refresh">
+            <svg className={`w-5 h-5 text-white/50 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -64,21 +80,21 @@ export default function LeaderboardPage() {
             <div className="flex items-end justify-center gap-4 mb-8 pt-4">
               <div className="flex flex-col items-center">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-500/10 border-2 border-slate-400/20 rounded-2xl flex items-center justify-center mb-2">
-                  <span className="text-2xl sm:text-3xl">&#x1F948;</span>
+                  {rankBadge(ranked[1].rank)}
                 </div>
                 <p className="text-white text-sm font-medium text-center truncate max-w-[5rem]">{ranked[1].name}</p>
                 <p className="text-slate-400 text-xs font-bold">{ranked[1].points} pts</p>
               </div>
               <div className="flex flex-col items-center -mt-4">
                 <div className="w-20 h-20 sm:w-24 sm:h-24 bg-amber-500/15 border-2 border-amber-400/30 rounded-2xl flex items-center justify-center mb-2 shadow-lg shadow-amber-500/10">
-                  <span className="text-3xl sm:text-4xl">&#x1F947;</span>
+                  {rankBadge(ranked[0].rank, 'lg')}
                 </div>
                 <p className="text-white text-sm font-bold text-center truncate max-w-[5rem]">{ranked[0].name}</p>
                 <p className="text-amber-400 text-xs font-bold">{ranked[0].points} pts</p>
               </div>
               <div className="flex flex-col items-center mt-2">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-500/10 border-2 border-orange-500/20 rounded-2xl flex items-center justify-center mb-2">
-                  <span className="text-2xl sm:text-3xl">&#x1F949;</span>
+                  {rankBadge(ranked[2].rank)}
                 </div>
                 <p className="text-white text-sm font-medium text-center truncate max-w-[5rem]">{ranked[2].name}</p>
                 <p className="text-orange-400 text-xs font-bold">{ranked[2].points} pts</p>

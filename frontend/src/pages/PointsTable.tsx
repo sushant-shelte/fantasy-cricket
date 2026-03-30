@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -71,7 +72,15 @@ export default function PointsTablePage() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-white mb-4">Points Table</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-white">Points Table</h2>
+        <Link to="/dashboard" className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-all">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </Link>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-16">
