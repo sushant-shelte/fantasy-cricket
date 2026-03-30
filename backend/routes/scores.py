@@ -122,7 +122,7 @@ async def match_scores(
     # Contestants for this match
     contestant_rows = db.execute(
         """
-        SELECT u.name, cp.points
+        SELECT u.id, u.name, cp.points
         FROM contestant_points cp
         JOIN users u ON u.id = cp.user_id
         WHERE cp.match_id = ?
@@ -132,7 +132,7 @@ async def match_scores(
         (match_id,),
     ).fetchall()
 
-    contestants = [{"name": row["name"], "points": float(row["points"])} for row in contestant_rows]
+    contestants = [{"id": row["id"], "name": row["name"], "points": float(row["points"])} for row in contestant_rows]
 
     return {"players": result, "contestants": contestants}
 

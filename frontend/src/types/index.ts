@@ -64,6 +64,7 @@ export type PlayerScore = {
 };
 
 export type ContestantScore = {
+  id: number;
   name: string;
   points: number;
 };

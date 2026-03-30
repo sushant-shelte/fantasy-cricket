@@ -45,3 +45,5 @@ cookies.txt
 
 # Claude Code
 .claude/
+
+tests/

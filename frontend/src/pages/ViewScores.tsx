@@ -66,6 +66,9 @@ export default function ViewScoresPage() {
   // Team breakdown state
   const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
   const [breakdownLoading, setBreakdownLoading] = useState(false);
+  const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null);
+  const [selectedContestantBreakdown, setSelectedContestantBreakdown] = useState<BreakdownData | null>(null);
+  const [selectedContestantLoading, setSelectedContestantLoading] = useState(false);
 
   // Team diff state
   const [diffContestants, setDiffContestants] = useState<Contestant[]>([]);
@@ -97,6 +100,18 @@ export default function ViewScoresPage() {
     finally { setBreakdownLoading(false); }
   };
 
+  const fetchContestantBreakdown = async (userId: number) => {
+    setSelectedContestantLoading(true);
+    try {
+      const res = await client.get(`/api/scores/${matchId}/team-breakdown?user_id=${userId}`);
+      setSelectedContestantBreakdown(res.data);
+    } catch {
+      setSelectedContestantBreakdown(null);
+    } finally {
+      setSelectedContestantLoading(false);
+    }
+  };
+
   const fetchDiffContestants = async () => {
     try {
       const res = await client.get(`/api/scores/${matchId}/contestants`);
@@ -122,6 +137,12 @@ export default function ViewScoresPage() {
   }, [matchId]);
 
   useEffect(() => {
+    setSelectedContestantId(null);
+    setSelectedContestantBreakdown(null);
+    setSelectedContestantLoading(false);
+  }, [matchId]);
+
+  useEffect(() => {
     if (selectedOther) fetchDiff(selectedOther);
   }, [selectedOther]);
 
@@ -137,14 +158,6 @@ export default function ViewScoresPage() {
   }
 
   const sortedContestants = [...contestants].sort((a, b) => b.points - a.points);
-  const rankedContestants: (ContestantScore & { rank: number })[] = [];
-  sortedContestants.forEach((entry, i) => {
-    let rank = i + 1;
-    if (i > 0 && entry.points === sortedContestants[i - 1].points) {
-      rank = rankedContestants[i - 1].rank;
-    }
-    rankedContestants.push({ ...entry, rank });
-  });
 
   const renderPlayerEntry = (entry: TeamDiffEntry | null, side: 'left' | 'right') => {
     if (!entry) return <div className="flex-1 p-3 bg-white/5 rounded-xl text-center text-white/30 text-xs">—</div>;
@@ -176,6 +189,19 @@ export default function ViewScoresPage() {
         {config.symbol}
       </span>
     );
+  };
+
+  const handleContestantClick = (contestantId: number) => {
+    if (selectedContestantId === contestantId) {
+      setSelectedContestantId(null);
+      setSelectedContestantBreakdown(null);
+      setSelectedContestantLoading(false);
+      return;
+    }
+
+    setSelectedContestantId(contestantId);
+    setSelectedContestantBreakdown(null);
+    fetchContestantBreakdown(contestantId);
   };
 
   return (
@@ -224,20 +250,84 @@ export default function ViewScoresPage() {
                 {sortedContestants.length === 0 ? (
                   <div className="px-4 py-8 text-center text-white/40">No contestant scores yet.</div>
                 ) : (
-                  sortedContestants.map((c, i) => (
-                    <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
-                      <div className="w-8 flex-shrink-0 text-center">
-                        {i === 0 ? <span className="text-lg">&#x1F947;</span>
-                          : i === 1 ? <span className="text-lg">&#x1F948;</span>
-                          : i === 2 ? <span className="text-lg">&#x1F949;</span>
-                          : <span className="text-white/40 text-sm font-medium">{i + 1}</span>}
+                  sortedContestants.map((c, i) => {
+                    const isSelected = selectedContestantId === c.id;
+                    return (
+                      <div key={c.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleContestantClick(c.id)}
+                          className={`flex w-full items-center px-4 py-3 text-left transition-colors ${isSelected ? 'bg-white/8' : 'hover:bg-white/5'}`}
+                        >
+                          <div className="w-8 flex-shrink-0 text-center">
+                            {i === 0 ? <span className="text-lg">&#x1F947;</span>
+                              : i === 1 ? <span className="text-lg">&#x1F948;</span>
+                              : i === 2 ? <span className="text-lg">&#x1F949;</span>
+                              : <span className="text-white/40 text-sm font-medium">{i + 1}</span>}
+                          </div>
+                          <div className="ml-3 min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-medium text-sm">{c.name}</span>
+                              <span className="text-[10px] uppercase tracking-wide text-white/35">Tap to view team</span>
+                            </div>
+                          </div>
+                          <span className="ml-4 flex-shrink-0 text-green-400 font-bold text-sm">{c.points} pts</span>
+                          <span className={`ml-3 text-[10px] text-white/40 transition-transform ${isSelected ? 'rotate-90' : ''}`}>&#9654;</span>
+                        </button>
+
+                        {isSelected && (
+                          <div className="border-t border-white/5 bg-black/20 px-4 py-4">
+                            {selectedContestantLoading ? (
+                              <div className="flex items-center justify-center py-4">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                              </div>
+                            ) : selectedContestantBreakdown?.error ? (
+                              <p className="text-sm text-white/40">{selectedContestantBreakdown.error}</p>
+                            ) : selectedContestantBreakdown ? (
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-xs uppercase tracking-[0.2em] text-white/35">Team View</p>
+                                    <h3 className="text-sm font-semibold text-white">{selectedContestantBreakdown.user_name}</h3>
+                                  </div>
+                                  <p className="text-sm font-bold text-green-400">{selectedContestantBreakdown.total} pts</p>
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {selectedContestantBreakdown.players.map((player, index) => (
+                                    <div key={`${player.name}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <p className="truncate text-sm font-medium text-white">{player.name}</p>
+                                            {player.tag && (
+                                              <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
+                                                player.tag === 'C' ? 'bg-amber-500 text-black' : 'bg-sky-500 text-black'
+                                              }`}>
+                                                {player.tag}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-xs text-white/35">{player.team} &middot; {player.role}</p>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-sm font-bold text-green-400">{player.adjusted_points}</p>
+                                          {player.multiplier > 1 && (
+                                            <p className="text-[10px] text-white/30">{player.base_points} &times; {player.multiplier}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-white/40">No team data available.</p>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="ml-3 min-w-0 flex-1">
-                        <span className="text-white font-medium text-sm">{c.name}</span>
-                      </div>
-                      <span className="ml-4 flex-shrink-0 text-green-400 font-bold text-sm">{c.points} pts</span>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -354,30 +444,6 @@ export default function ViewScoresPage() {
               </div>
             </div>
 
-            {/* Contestant Rankings */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-white/10">
-                <h2 className="text-white font-semibold">Contestant Rankings</h2>
-              </div>
-              <div className="divide-y divide-white/5">
-                {sortedContestants.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-white/40">No contestant scores yet.</div>
-                ) : (
-                  rankedContestants.map((c, i) => (
-                    <div key={i} className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors">
-                      <div className="w-8 text-center">
-                        {c.rank === 1 ? <span className="text-lg">&#x1F947;</span>
-                          : c.rank === 2 ? <span className="text-lg">&#x1F948;</span>
-                          : c.rank === 3 ? <span className="text-lg">&#x1F949;</span>
-                          : <span className="text-white/40 text-sm font-medium">{c.rank}</span>}
-                      </div>
-                      <div className="flex-1 ml-3"><span className="text-white font-medium text-sm">{c.name}</span></div>
-                      <span className="text-green-400 font-bold text-sm">{c.points} pts</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </>
         )}
 
@@ -449,18 +515,18 @@ export default function ViewScoresPage() {
                           <div
                             onClick={() => setExpandedPlayer(isOpen ? null : 1000 + i)}
                             className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer">
-                            <div className="w-6 text-center flex-shrink-0">
+                            <div className="w-5 text-center flex-shrink-0">
                               <span className={`text-[10px] text-white/40 transition-transform inline-block ${isOpen ? 'rotate-90' : ''}`}>&#9654;</span>
                             </div>
-                            <div className="w-8 flex-shrink-0 ml-1">
+                            <div className="w-7 flex-shrink-0 ml-1">
                               {p.tag === 'C' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>}
                               {p.tag === 'VC' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>}
                             </div>
-                            <div className="flex-1 min-w-0 ml-2">
+                            <div className="min-w-0 flex-[1.35] ml-2">
                               <p className="text-white text-sm font-medium truncate">{p.name}</p>
                               <p className="text-white/30 text-xs">{p.team} &middot; {p.role}</p>
                             </div>
-                            <div className="text-right flex-shrink-0 ml-3">
+                            <div className="text-right flex-shrink-0 ml-2 min-w-[56px]">
                               <p className="text-green-400 font-bold text-sm">{p.adjusted_points}</p>
                               {p.multiplier > 1 && (
                                 <p className="text-white/30 text-[10px]">{p.base_points} &times; {p.multiplier}</p>
