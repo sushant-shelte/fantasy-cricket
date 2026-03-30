@@ -45,7 +45,11 @@ def _ordinal(value: int) -> str:
 
 
 def _expand_team_name(team_name: str) -> str:
-    reverse_team_map = {short: full for full, short in TEAM_MAP.items() if len(short) <= 4}
+    reverse_team_map = {
+        short: full
+        for full, short in TEAM_MAP.items()
+        if len(short) <= 4 and full != short
+    }
     return reverse_team_map.get(team_name, team_name)
 
 

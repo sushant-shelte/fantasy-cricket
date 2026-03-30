@@ -43,18 +43,30 @@ class Match:
 
     def get_player_by_name(self, name):
         name = clean_name(name)
-        pid = (self.registry.get_player_id(name, self.team1)
-               or self.registry.get_player_id(name, self.team2))
+        team = None
+        pid = self.registry.get_player_id(name, self.team1)
+        if pid:
+            team = self.team1
+        else:
+            pid = self.registry.get_player_id(name, self.team2)
+            if pid:
+                team = self.team2
         if not pid:
             return None
-        return self.get_or_create_player(pid)
+        player = self.get_or_create_player(pid)
+        if player and team and not player.team:
+            player.team = team
+        return player
 
     def get_player_by_team(self, name, team):
         name = clean_name(name)
         pid = self.registry.get_player_id(name, team)
         if not pid:
             return None
-        return self.get_or_create_player(pid)
+        player = self.get_or_create_player(pid)
+        if player and not player.team:
+            player.team = team
+        return player
 
     def apply_playing_xi(self, player_ids):
         for pid in player_ids:
@@ -74,7 +86,11 @@ class Match:
     def parse_espn_scorecard(self, soup):
         lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
         valid_teams = {self.team1, self.team2}
-        reverse_team_map = {short: full for full, short in TEAM_MAP.items() if len(short) <= 4}
+        reverse_team_map = {
+            short: full
+            for full, short in TEAM_MAP.items()
+            if len(short) <= 4 and full != short
+        }
 
         def team_variants(team):
             variants = {team.lower()}
