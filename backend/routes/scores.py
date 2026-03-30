@@ -26,6 +26,47 @@ def _build_registry(db):
     return PlayerRegistry(players_data), players_data
 
 
+def _build_players_rows(players_data, team1=None, team2=None):
+    rows = []
+    for row in players_data:
+        if team1 and team2 and row["Team"] not in (team1, team2):
+            continue
+        rows.append({
+            "id": row["PlayerID"],
+            "name": row["Name"],
+            "team": row["Team"],
+            "role": row["Role"],
+            "aliases": row["Aliases"],
+        })
+    return rows
+
+
+def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_data):
+    team1 = clean_team_name(match_row["team1"])
+    team2 = clean_team_name(match_row["team2"])
+
+    match_obj = Match(
+        str(match_id),
+        team1,
+        team2,
+        registry,
+    )
+
+    players_rows = _build_players_rows(players_data, team1, team2)
+    playing_xi = fetch_playing_xi(match_id, team1, team2, players_rows)
+    playing_ids = playing_xi.get("player_ids", [])
+    if playing_ids:
+        match_obj.apply_playing_xi(playing_ids)
+
+    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
+    html_content = fetch_scorecard_html(scorecard_id)
+    if html_content:
+        soup = BeautifulSoup(html_content, "html.parser")
+        match_obj.parse_scorecard(soup, reset_players=False)
+
+    return match_obj, html_content, playing_xi
+
+
 @router.get("/{match_id}")
 async def match_scores(
     match_id: int,
@@ -42,38 +83,10 @@ async def match_scores(
 
     registry, players_data = _build_registry(db)
 
-    match_obj = Match(
-        str(match_id),
-        clean_team_name(match_row["team1"]),
-        clean_team_name(match_row["team2"]),
-        registry,
-    )
-
-    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
-    html_content = fetch_scorecard_html(scorecard_id)
+    match_obj, html_content, _ = _hydrate_match_from_live_data(match_id, match_row, registry, players_data)
 
     if not html_content:
         raise HTTPException(status_code=404, detail="No scorecard data available")
-
-    soup = BeautifulSoup(html_content, "html.parser")
-    match_obj.parse_scorecard(soup)
-
-    players_rows = []
-    for row in players_data:
-        players_rows.append({
-            "id": row["PlayerID"],
-            "name": row["Name"],
-            "team": row["Team"],
-            "role": row["Role"],
-            "aliases": row["Aliases"],
-        })
-
-    playing_xi = fetch_playing_xi(match_id, clean_team_name(match_row["team1"]), clean_team_name(match_row["team2"]), players_rows)
-    for pid in playing_xi.get("player_ids", []):
-        player = match_obj.get_or_create_player(int(pid))
-        if player:
-            player.team = registry.players.get(int(pid), {}).get("Team")
-            player.played = True
 
     # Get stored player points for this match
     pp_rows = db.execute(
@@ -190,21 +203,12 @@ async def team_breakdown(
     pp_lookup = {row["player_id"]: float(row["points"]) for row in pp_rows}
 
     # Fetch scorecard for detailed breakdown
-    registry, _ = _build_registry(db)
+    registry, players_data = _build_registry(db)
     match_row = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
     match_obj = None
     if match_row:
-        match_obj = Match(
-            str(match_id),
-            clean_team_name(match_row["team1"]),
-            clean_team_name(match_row["team2"]),
-            registry,
-        )
-        scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
-        html_content = fetch_scorecard_html(scorecard_id)
+        match_obj, html_content, _ = _hydrate_match_from_live_data(match_id, match_row, registry, players_data)
         if html_content:
-            soup = BeautifulSoup(html_content, "html.parser")
-            match_obj.parse_scorecard(soup)
             # Calculate points so breakdown is available
             for pid_key, player in match_obj.players.items():
                 role = registry.players.get(pid_key, {}).get("Role")
@@ -266,19 +270,8 @@ def _load_match_and_points(db, match_id):
     if not match_row:
         return None, None, {}, {}
 
-    registry, _ = _build_registry(db)
-    match_obj = Match(
-        str(match_id),
-        clean_team_name(match_row["team1"]),
-        clean_team_name(match_row["team2"]),
-        registry,
-    )
-
-    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
-    html_content = fetch_scorecard_html(scorecard_id)
-    if html_content:
-        soup = BeautifulSoup(html_content, "html.parser")
-        match_obj.parse_scorecard(soup)
+    registry, players_data = _build_registry(db)
+    match_obj, _, _ = _hydrate_match_from_live_data(match_id, match_row, registry, players_data)
 
     pp_rows = db.execute("SELECT * FROM player_points WHERE match_id = ?", (match_id,)).fetchall()
     pp_lookup = {str(row["player_id"]): float(row["points"]) for row in pp_rows}

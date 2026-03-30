@@ -56,10 +56,19 @@ class Match:
             return None
         return self.get_or_create_player(pid)
 
+    def apply_playing_xi(self, player_ids):
+        for pid in player_ids:
+            player = self.get_or_create_player(int(pid))
+            if not player:
+                continue
+            player.team = self.registry.players.get(int(pid), {}).get("Team")
+            player.played = True
+
     # --- Scorecard parser ---
 
-    def parse_scorecard(self, soup):
-        self.players = {}
+    def parse_scorecard(self, soup, reset_players=True):
+        if reset_players:
+            self.players = {}
         self.parse_espn_scorecard(soup)
 
     def parse_espn_scorecard(self, soup):

@@ -69,11 +69,7 @@ class Tournament:
         if not match:
             return
 
-        scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
-        html_text = fetch_scorecard_html(scorecard_id)
-        if html_text:
-            soup = BeautifulSoup(html_text, "html.parser")
-            match.parse_scorecard(soup)
+        match.players = {}
 
         players_rows = []
         for pid, info in self.registry.players.items():
@@ -88,11 +84,25 @@ class Tournament:
             })
 
         playing_xi = fetch_playing_xi(int(match_id), match.team1, match.team2, players_rows)
-        for pid in playing_xi.get("player_ids", []):
-            player = match.get_or_create_player(int(pid))
-            if player:
-                player.team = self.registry.players.get(int(pid), {}).get("Team")
-                player.played = True
+        playing_ids = playing_xi.get("player_ids", [])
+        if playing_ids:
+            match.apply_playing_xi(playing_ids)
+
+            team1_players = sorted(
+                [match.players[int(pid)].name for pid in playing_ids if self.registry.players.get(int(pid), {}).get("Team") == match.team1]
+            )
+            team2_players = sorted(
+                [match.players[int(pid)].name for pid in playing_ids if self.registry.players.get(int(pid), {}).get("Team") == match.team2]
+            )
+            print(f"[Playing XI] Match {match_id} via {playing_xi.get('url')}")
+            print(f"  {match.team1}: {', '.join(team1_players) if team1_players else 'none'}")
+            print(f"  {match.team2}: {', '.join(team2_players) if team2_players else 'none'}")
+
+        scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
+        html_text = fetch_scorecard_html(scorecard_id)
+        if html_text:
+            soup = BeautifulSoup(html_text, "html.parser")
+            match.parse_scorecard(soup, reset_players=False)
 
     def get_match_status(self, match_row):
         try:
