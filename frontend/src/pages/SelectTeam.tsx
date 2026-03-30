@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import client from '../api/client';
 import type { Player, TeamSelection } from '../types';
+import { getTeamTheme } from '../utils/teamTheme';
 
 interface SelectedPlayer {
   player_id: number;
@@ -158,6 +159,15 @@ export default function SelectTeamPage() {
 
   const teamsInMatch = [...new Set(players.map((player) => player.team))].sort();
 
+  const renderTeamBadge = (team: string, compact = false) => {
+    const theme = getTeamTheme(team);
+    return (
+      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${compact ? 'text-[9px]' : 'text-[10px]'} ${theme.badgeClass}`}>
+        {theme.label}
+      </span>
+    );
+  };
+
   const validate = (): string | null => {
     if (selectedCount !== 11) return `Select exactly 11 players (currently ${selectedCount}).`;
     if (!captainId) return 'Select a Captain.';
@@ -246,9 +256,10 @@ export default function SelectTeamPage() {
           {teamsInMatch.map((team) => (
             <div
               key={team}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 text-white/70"
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border bg-gradient-to-r ${getTeamTheme(team).tintClass} border-white/10 text-white/80`}
             >
-              {team}: <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
+              <span className="mr-1.5">{getTeamTheme(team).label}</span>
+              <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
             </div>
           ))}
         </div>
@@ -370,7 +381,7 @@ export default function SelectTeamPage() {
                               : player.availability_status === 'unavailable'
                               ? 'bg-white/[0.03] hover:bg-white/[0.06]'
                               : 'hover:bg-white/5'
-                        }`}
+                        } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
                       >
                         {/* Checkbox */}
                         <button
@@ -411,7 +422,7 @@ export default function SelectTeamPage() {
                                 Unavl
                               </span>
                             )}
-                            <span className="text-white/40">{player.team}</span>
+                            {renderTeamBadge(player.team)}
                             <span className="text-emerald-300 font-semibold">
                               {(player.total_points || 0).toFixed(2)} pts
                             </span>
@@ -472,8 +483,9 @@ export default function SelectTeamPage() {
             </span>
             <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-300">
               {teamsInMatch.map((team) => (
-                <span key={team}>
-                  {team}: <span className="text-emerald-300 font-semibold">{selectedByTeam[team] || 0}</span>
+                <span key={team} className="inline-flex items-center gap-1.5">
+                  {renderTeamBadge(team, true)}
+                  <span className="text-emerald-300 font-semibold">{selectedByTeam[team] || 0}</span>
                 </span>
               ))}
             </div>
@@ -535,7 +547,7 @@ export default function SelectTeamPage() {
                           {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}
                         </div>
                         <p className="text-white text-[10px] font-medium mt-1 max-w-[60px] text-center truncate">{p.name.split(' ').pop()}</p>
-                        <span className="text-white/40 text-[8px]">{p.team}</span>
+                        <span className="mt-1">{renderTeamBadge(p.team, true)}</span>
                       </div>
                     ))}
                   </div>
@@ -555,7 +567,7 @@ export default function SelectTeamPage() {
                           {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}
                         </div>
                         <p className="text-white text-[10px] font-medium mt-1 max-w-[60px] text-center truncate">{p.name.split(' ').pop()}</p>
-                        <span className="text-white/40 text-[8px]">{p.team}</span>
+                        <span className="mt-1">{renderTeamBadge(p.team, true)}</span>
                       </div>
                     ))}
                   </div>
@@ -575,7 +587,7 @@ export default function SelectTeamPage() {
                           {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}
                         </div>
                         <p className="text-white text-[10px] font-medium mt-1 max-w-[60px] text-center truncate">{p.name.split(' ').pop()}</p>
-                        <span className="text-white/40 text-[8px]">{p.team}</span>
+                        <span className="mt-1">{renderTeamBadge(p.team, true)}</span>
                       </div>
                     ))}
                   </div>
@@ -595,7 +607,7 @@ export default function SelectTeamPage() {
                           {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}
                         </div>
                         <p className="text-white text-[10px] font-medium mt-1 max-w-[60px] text-center truncate">{p.name.split(' ').pop()}</p>
-                        <span className="text-white/40 text-[8px]">{p.team}</span>
+                        <span className="mt-1">{renderTeamBadge(p.team, true)}</span>
                       </div>
                     ))}
                   </div>

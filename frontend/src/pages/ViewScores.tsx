@@ -3,6 +3,7 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { PlayerScore, ContestantScore } from '../types';
+import { getTeamTheme } from '../utils/teamTheme';
 
 interface TeamDiffEntry {
   player_id: number;
@@ -170,14 +171,18 @@ export default function ViewScoresPage() {
   const renderPlayerEntry = (entry: TeamDiffEntry | null, side: 'left' | 'right') => {
     if (!entry) return <div className="flex-1 p-3 bg-white/5 rounded-xl text-center text-white/30 text-xs">—</div>;
     const tagColor = entry.tag === 'C' ? 'bg-amber-500' : entry.tag === 'VC' ? 'bg-white/30' : '';
+    const theme = getTeamTheme(entry.team);
     return (
-      <div className={`flex-1 p-3 rounded-xl ${side === 'left' ? 'bg-white/10 border border-white/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+      <div className={`flex-1 rounded-xl border p-3 bg-gradient-to-r ${theme.tintClass} ${side === 'left' ? 'border-white/20' : 'border-red-500/20'}`}>
         <div className="flex items-center justify-between mb-1">
           <span className="text-white text-sm font-medium truncate">{entry.name}</span>
           {entry.tag && <span className={`text-[10px] text-white font-bold px-1.5 py-0.5 rounded ${tagColor}`}>{entry.tag}</span>}
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-white/40">{entry.team} &middot; {entry.role}</span>
+          <div className="flex items-center gap-2 text-white/40">
+            {renderTeamBadge(entry.team, true)}
+            <span>{entry.role}</span>
+          </div>
           <span className="text-green-400 font-bold">{entry.adjusted_points} pts</span>
         </div>
         {entry.multiplier > 1 && (
@@ -195,6 +200,15 @@ export default function ViewScoresPage() {
         className="inline-flex min-w-[2.75rem] justify-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/70"
       >
         {config.symbol}
+      </span>
+    );
+  };
+
+  const renderTeamBadge = (team: string, compact = false) => {
+    const theme = getTeamTheme(team);
+    return (
+      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${compact ? 'text-[9px]' : 'text-[10px]'} ${theme.badgeClass}`}>
+        {theme.label}
       </span>
     );
   };
@@ -302,7 +316,7 @@ export default function ViewScoresPage() {
                                 </div>
                                 <div className="grid gap-2 sm:grid-cols-2">
                                   {selectedContestantBreakdown.players.map((player, index) => (
-                                    <div key={`${player.name}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                                    <div key={`${player.name}-${index}`} className={`rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(player.team).tintClass} px-3 py-2.5`}>
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                           <div className="flex items-center gap-2">
@@ -315,7 +329,10 @@ export default function ViewScoresPage() {
                                               </span>
                                             )}
                                           </div>
-                                          <p className="text-xs text-white/35">{player.team} &middot; {player.role}</p>
+                                          <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
+                                            {renderTeamBadge(player.team)}
+                                            <span>{player.role}</span>
+                                          </div>
                                         </div>
                                         <div className="text-right">
                                           <p className="text-sm font-bold text-green-400">{player.adjusted_points}</p>
@@ -393,14 +410,14 @@ export default function ViewScoresPage() {
                           <React.Fragment key={i}>
                             <tr
                               onClick={() => setExpandedPlayer(isExpanded ? null : i)}
-                              className={`cursor-pointer transition-colors ${isMyPlayer ? 'bg-yellow-500/10 hover:bg-yellow-500/15' : 'hover:bg-white/5'}`}>
+                              className={`cursor-pointer bg-gradient-to-r ${getTeamTheme(p.team).tintClass} transition-colors ${isMyPlayer ? 'bg-yellow-500/10 hover:bg-yellow-500/15' : 'hover:bg-white/5'}`}>
                               <td className={`sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] bg-black`}>
                                 <span className={`inline-block w-3 text-[10px] text-white/40 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
                                 {p.name}
                                 {isMyPlayer && <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
                               </td>
                               <td className="px-3 py-2.5 text-right font-bold text-green-400">{p.points}</td>
-                              <td className="px-3 py-2.5 text-white/50">{p.team}</td>
+                              <td className="px-3 py-2.5 text-white/50">{renderTeamBadge(p.team)}</td>
                               <td className="px-3 py-2.5 text-center">{renderRoleSymbol(p.role)}</td>
                               <td className="px-3 py-2.5 text-center text-white">{p.played ? 'Y' : 'N'}</td>
                               <td className="px-3 py-2.5 text-center text-white">{p.is_out ? 'Y' : 'N'}</td>
@@ -522,7 +539,7 @@ export default function ViewScoresPage() {
                         <div key={i}>
                           <div
                             onClick={() => setExpandedPlayer(isOpen ? null : 1000 + i)}
-                            className="flex items-center px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer">
+                            className={`flex items-center px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer bg-gradient-to-r ${getTeamTheme(p.team).tintClass}`}>
                             <div className="w-5 text-center flex-shrink-0">
                               <span className={`text-[10px] text-white/40 transition-transform inline-block ${isOpen ? 'rotate-90' : ''}`}>&#9654;</span>
                             </div>
@@ -532,7 +549,10 @@ export default function ViewScoresPage() {
                             </div>
                             <div className="min-w-0 flex-[1.35] ml-2">
                               <p className="text-white text-sm font-medium truncate">{p.name}</p>
-                              <p className="text-white/30 text-xs">{p.team} &middot; {p.role}</p>
+                              <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
+                                {renderTeamBadge(p.team)}
+                                <span>{p.role}</span>
+                              </div>
                             </div>
                             <div className="text-right flex-shrink-0 ml-2 min-w-[56px]">
                               <p className="text-green-400 font-bold text-sm">{p.adjusted_points}</p>
