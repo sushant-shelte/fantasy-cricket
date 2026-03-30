@@ -29,6 +29,7 @@ export default function SelectTeamPage() {
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [selected, setSelected] = useState<Map<number, SelectedPlayer>>(new Map());
+  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set(['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler']));
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -77,6 +78,15 @@ export default function SelectTeamPage() {
     };
     fetchData();
   }, [matchId]);
+
+  const toggleRole = (role: string) => {
+    setExpandedRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  };
 
   const togglePlayer = (playerId: number) => {
     setSelected((prev) => {
@@ -158,108 +168,6 @@ export default function SelectTeamPage() {
     );
   };
 
-  const renderPlayerRow = (player: Player) => {
-    const isSelected = selected.has(player.id);
-    const isCaptain = captainId === player.id;
-    const isVC = vcId === player.id;
-    const availabilityStatus = player.availability_status || 'unavailable';
-
-    return (
-      <div
-        key={player.id}
-        className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
-          isSelected
-            ? availabilityStatus === 'available'
-              ? 'bg-emerald-500/10'
-              : 'bg-white/10'
-            : availabilityStatus === 'available'
-            ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
-            : availabilityStatus === 'unavailable'
-            ? 'bg-white/[0.03] hover:bg-white/[0.06]'
-            : 'hover:bg-white/5'
-        } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
-      >
-        <button
-          type="button"
-          onClick={() => togglePlayer(player.id)}
-          className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-            isSelected
-              ? 'bg-green-500 border-green-500'
-              : 'border-white/30 hover:border-white/50'
-          }`}
-        >
-          {isSelected && (
-            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-        </button>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <p className="truncate text-sm font-medium text-white">{player.name}</p>
-            <span className="text-emerald-300 text-xs font-semibold whitespace-nowrap">
-              {(player.total_points || 0).toFixed(2)} pts
-            </span>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-            {availabilityStatus === 'available' && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
-                <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-                Avl
-              </span>
-            )}
-            {availabilityStatus === 'substitute' && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 font-semibold text-sky-200">
-                <span className="h-2 w-2 rounded-full bg-sky-400"></span>
-                Sub
-              </span>
-            )}
-            {availabilityStatus === 'unavailable' && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 font-semibold text-red-200">
-                <span className="h-2 w-2 rounded-full bg-red-400"></span>
-                Unavl
-              </span>
-            )}
-            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/60">
-              {ROLE_CONFIG[player.role]?.label || player.role}
-            </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => isSelected && setCaptain(player.id)}
-          disabled={!isSelected}
-          className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
-            isCaptain
-              ? 'bg-amber-500 border-amber-500 text-white'
-              : isSelected
-              ? 'border-amber-500/50 text-amber-400/50 hover:border-amber-500 hover:text-amber-400'
-              : 'border-white/10 text-white/10 cursor-not-allowed'
-          }`}
-        >
-          C
-        </button>
-
-        <button
-          type="button"
-          onClick={() => isSelected && setViceCaptain(player.id)}
-          disabled={!isSelected}
-          className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
-            isVC
-              ? 'bg-sky-500 border-sky-500 text-white'
-              : isSelected
-              ? 'border-sky-500/50 text-sky-400/50 hover:border-sky-500 hover:text-sky-400'
-              : 'border-white/10 text-white/10 cursor-not-allowed'
-          }`}
-        >
-          VC
-        </button>
-      </div>
-    );
-  };
-
   const validate = (): string | null => {
     if (selectedCount !== 11) return `Select exactly 11 players (currently ${selectedCount}).`;
     if (!captainId) return 'Select a Captain.';
@@ -306,30 +214,9 @@ export default function SelectTeamPage() {
     }
   };
 
-  const rolePriority: Record<string, number> = {
-    Wicketkeeper: 0,
-    Batter: 1,
-    AllRounder: 2,
-    Bowler: 3,
-  };
-  const availabilitySections: Array<{ key: 'available' | 'substitute' | 'unavailable'; label: string; hint: string }> = [
-    { key: 'available', label: 'Announced', hint: 'Playing XI' },
-    { key: 'substitute', label: 'Subs', hint: 'Impact subs' },
-    { key: 'unavailable', label: 'Unannounced', hint: 'Awaiting lineup' },
-  ];
-
-  const sortPlayersForSelection = (list: Player[]) => [...list].sort((a, b) => {
-    const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
-    if (pointsDiff !== 0) return pointsDiff;
-    const roleDiff = (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99);
-    if (roleDiff !== 0) return roleDiff;
-    return a.name.localeCompare(b.name);
-  });
-
-  const teamsWithPlayers = teamsInMatch.map((team) => ({
-    team,
-    players: sortPlayersForSelection(players.filter((player) => player.team === team)),
-  }));
+  const groups = groupedPlayers();
+  const roleOrder = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'];
+  const sortedRoles = [...new Set([...roleOrder, ...Object.keys(groups)])].filter((r) => groups[r]);
 
   if (loading) {
     return (
@@ -442,52 +329,145 @@ export default function SelectTeamPage() {
           </span>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          {teamsWithPlayers.map(({ team, players: teamPlayers }) => {
-            const selectedCountForTeam = teamPlayers.filter((player) => selected.has(player.id)).length;
+        {sortedRoles.map((role) => {
+          const config = ROLE_CONFIG[role] || { label: role, color: 'text-gray-300', bg: 'bg-gray-500/20', border: 'border-gray-500/30' };
+          const rolePlayers = groups[role];
+          const roleSelected = rolePlayers.filter((p) => selected.has(p.id)).length;
+          const isExpanded = expandedRoles.has(role);
 
-            return (
-              <section key={team} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                <div className={`border-b border-white/10 bg-gradient-to-r px-4 py-3 ${getTeamTheme(team).tintClass}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      {renderTeamBadge(team)}
-                      <span className="text-sm font-medium text-white">{team}</span>
-                    </div>
-                    <span className="text-xs font-semibold text-white/60">{selectedCountForTeam} selected</span>
-                  </div>
-                  <p className="mt-1 text-xs text-white/45">
-                    Sorted by total points, then wicketkeeper, batsman, all-rounder, bowler.
-                  </p>
+          return (
+            <div key={role} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+              {/* Role header */}
+              <button
+                type="button"
+                onClick={() => toggleRole(role)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 text-xs font-bold rounded-lg ${config.bg} ${config.color} ${config.border} border`}>
+                    {role}
+                  </span>
+                  <span className="text-white font-medium text-sm">{config.label}</span>
+                  <span className="text-white/40 text-xs">({roleSelected} selected)</span>
                 </div>
+                <svg
+                  className={`w-4 h-4 text-white/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-                {playingXi.announced ? (
-                  <div className="divide-y divide-white/5">
-                    {availabilitySections.map((section) => {
-                      const sectionPlayers = teamPlayers.filter((player) => (player.availability_status || 'unavailable') === section.key);
-                      if (sectionPlayers.length === 0) return null;
-                      return (
-                        <div key={section.key}>
-                          <div className="flex items-center justify-between px-4 py-2.5 text-xs">
-                            <span className="font-semibold uppercase tracking-wide text-white/55">{section.label}</span>
-                            <span className="text-white/35">{section.hint} · {sectionPlayers.length}</span>
-                          </div>
-                          <div className="border-t border-white/5">
-                            {sectionPlayers.map((player) => renderPlayerRow(player))}
+              {/* Player rows */}
+              {isExpanded && (
+                <div className="border-t border-white/5">
+                  {rolePlayers.map((player) => {
+                    const isSelected = selected.has(player.id);
+                    const isCaptain = captainId === player.id;
+                    const isVC = vcId === player.id;
+
+                    return (
+                      <div
+                        key={player.id}
+                        className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
+                          isSelected
+                            ? player.availability_status === 'available'
+                              ? 'bg-emerald-500/10'
+                              : 'bg-white/10'
+                            : player.availability_status === 'available'
+                              ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
+                              : player.availability_status === 'unavailable'
+                              ? 'bg-white/[0.03] hover:bg-white/[0.06]'
+                              : 'hover:bg-white/5'
+                        } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
+                      >
+                        {/* Checkbox */}
+                        <button
+                          type="button"
+                          onClick={() => togglePlayer(player.id)}
+                          className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                            isSelected
+                              ? 'bg-green-500 border-green-500'
+                              : 'border-white/30 hover:border-white/50'
+                          }`}
+                        >
+                          {isSelected && (
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+
+                        {/* Player info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium truncate">{player.name}</p>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            {player.availability_status === 'available' && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                                Avl
+                              </span>
+                            )}
+                            {player.availability_status === 'substitute' && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 font-semibold text-sky-200">
+                                <span className="h-2 w-2 rounded-full bg-sky-400"></span>
+                                Sub
+                              </span>
+                            )}
+                            {player.availability_status === 'unavailable' && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 font-semibold text-red-200">
+                                <span className="h-2 w-2 rounded-full bg-red-400"></span>
+                                Unavl
+                              </span>
+                            )}
+                            {renderTeamBadge(player.team)}
+                            <span className="text-emerald-300 font-semibold">
+                              {(player.total_points || 0).toFixed(2)} pts
+                            </span>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="border-t border-white/5">
-                    {teamPlayers.map((player) => renderPlayerRow(player))}
-                  </div>
-                )}
-              </section>
-            );
-          })}
-        </div>
+
+                        {/* Captain radio */}
+                        <button
+                          type="button"
+                          onClick={() => isSelected && setCaptain(player.id)}
+                          disabled={!isSelected}
+                          className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
+                            isCaptain
+                              ? 'bg-amber-500 border-amber-500 text-white'
+                              : isSelected
+                              ? 'border-amber-500/50 text-amber-400/50 hover:border-amber-500 hover:text-amber-400'
+                              : 'border-white/10 text-white/10 cursor-not-allowed'
+                          }`}
+                        >
+                          C
+                        </button>
+
+                        {/* Vice Captain radio */}
+                        <button
+                          type="button"
+                          onClick={() => isSelected && setViceCaptain(player.id)}
+                          disabled={!isSelected}
+                          className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
+                            isVC
+                              ? 'bg-sky-500 border-sky-500 text-white'
+                              : isSelected
+                              ? 'border-sky-500/50 text-sky-400/50 hover:border-sky-500 hover:text-sky-400'
+                              : 'border-white/10 text-white/10 cursor-not-allowed'
+                          }`}
+                        >
+                          VC
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </form>
 
       {/* Sticky submit bar */}
