@@ -17,10 +17,10 @@ interface PlayingXiState {
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  Wicketkeeper: { label: 'Wicket-Keeper', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
-  Batter: { label: 'Batsman', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
-  AllRounder: { label: 'All-Rounder', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
-  Bowler: { label: 'Bowler', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
+  Wicketkeeper: { label: 'WK', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
+  Batter: { label: 'BAT', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
+  AllRounder: { label: 'AR', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
+  Bowler: { label: 'BOWL', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
 };
 
 const REQUIRED_ROLES = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'] as const;
@@ -301,12 +301,7 @@ export default function SelectTeamPage() {
             : 'bg-amber-500/10 border-amber-400/20 text-amber-100'
         }`}>
           <div className="font-semibold">
-            {playingXi.announced ? 'Lineup available' : 'Playing XI not available'}
-          </div>
-          <div className="mt-1 text-xs opacity-90">
-            {playingXi.announced
-              ? `Confirmed starters are highlighted in green. Substitutes are marked with blue dots.${playingXi.substituteCount ? ` ${playingXi.substituteCount} substitutes found.` : ''}`
-              : 'Before toss, Playing XI is not available. Once Cricbuzz publishes the lineup, available and substitute players will be highlighted here.'}
+            {playingXi.announced ? 'Playing XI announced' : 'Playing XI not announced'}
           </div>
           {playingXi.url && (
             <a
@@ -345,7 +340,7 @@ export default function SelectTeamPage() {
                 key={role}
                 type="button"
                 onClick={() => setActiveRole(role)}
-                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                className={`min-w-0 flex-1 rounded-lg px-2 py-2 text-xs sm:px-3 sm:text-sm font-medium transition-all ${
                   activeRole === role
                     ? hasUnavailableSelected
                       ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
@@ -355,8 +350,8 @@ export default function SelectTeamPage() {
                     : 'text-white/50 hover:bg-white/5 hover:text-white'
                 }`}
               >
-                <span>{ROLE_CONFIG[role].label}</span>
-                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${
+                <span className="truncate">{ROLE_CONFIG[role].label}</span>
+                <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
                   activeRole === role
                     ? hasUnavailableSelected ? 'bg-white/15 text-white' : 'bg-black/10 text-black/70'
                     : hasUnavailableSelected ? 'bg-red-500/20 text-red-100' : 'bg-white/10 text-white/60'
@@ -446,11 +441,6 @@ export default function SelectTeamPage() {
                       <span className="text-emerald-300 font-semibold">
                         {(player.total_points || 0).toFixed(2)} pts
                       </span>
-                      {!isSelected && !selectionAllowed && (
-                        <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
-                          Keep slot for other roles
-                        </span>
-                      )}
                     </div>
                   </div>
 
