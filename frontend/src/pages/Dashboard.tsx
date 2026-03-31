@@ -253,7 +253,10 @@ export default function DashboardPage() {
                 <p className="text-white/40 text-xs text-center mb-3">
                   {formatDate(match.match_date, match.match_time)}
                 </p>
-                {tab === 'today' && myTeams.has(match.id) && todayTeamLineup[match.id]?.announced && (
+                <p className="text-white/25 text-[11px] text-center mb-3">
+                  Match #{match.id}
+                </p>
+                {tab === 'today' && match.status === 'future' && myTeams.has(match.id) && todayTeamLineup[match.id]?.announced && (
                   <div className="mb-3 space-y-1 text-center text-xs font-medium">
                     <p className={todayTeamLineup[match.id].unannouncedSelected > 0 ? 'text-red-300' : 'text-emerald-300'}>
                       {todayTeamLineup[match.id].unannouncedSelected > 0

@@ -52,47 +52,55 @@ class PlayerRegistry:
                     self.last_name_lookup.setdefault((team, parts[-1]), set()).add(pid)
 
     def get_player_id(self, name, team):
+        candidates = self.get_player_candidates(name, team)
+        if len(candidates) == 1:
+            return next(iter(candidates))
+
         normalized_name = self.normalize(name)
 
         # Try whole name
         if (team, normalized_name) in self.lookup:
             return self.lookup[(team, normalized_name)]
 
+        print(f"Player mapping not found: '{name}' (team: {team})")
+        return None
+
+    def get_player_candidates(self, name, team):
+        normalized_name = self.normalize(name)
+        candidates = set()
+
+        # Try whole name
+        if (team, normalized_name) in self.lookup:
+            candidates.add(self.lookup[(team, normalized_name)])
+
         parts = normalized_name.split()
         if len(parts) > 1:
             first_name_matches = self.first_name_lookup.get((team, parts[0]), set())
             last_name_matches = self.last_name_lookup.get((team, parts[-1]), set())
             combined_matches = first_name_matches & last_name_matches
-            if len(combined_matches) == 1:
-                return next(iter(combined_matches))
+            candidates.update(combined_matches)
         elif len(parts) == 1:
             first_name_matches = self.first_name_lookup.get((team, parts[0]), set())
-            if len(first_name_matches) == 1:
-                return next(iter(first_name_matches))
+            candidates.update(first_name_matches)
 
             last_name_matches = self.last_name_lookup.get((team, parts[0]), set())
-            if len(last_name_matches) == 1:
-                return next(iter(last_name_matches))
+            candidates.update(last_name_matches)
 
         initials, surname = self._extract_initials_and_surname(normalized_name)
         if surname:
             surname_matches = self.last_name_lookup.get((team, surname), set())
-            if len(surname_matches) == 1:
-                return next(iter(surname_matches))
+            candidates.update(surname_matches)
 
             if initials:
                 first_initial = initials[0]
-                matching_candidates = []
+                matching_candidates = set()
                 for pid in surname_matches:
                     player_name = self.normalize(self.players.get(pid, {}).get("Name", ""))
                     if not player_name:
                         continue
                     player_parts = player_name.split()
                     if player_parts and player_parts[0].startswith(first_initial):
-                        matching_candidates.append(pid)
+                        matching_candidates.add(pid)
+                candidates.update(matching_candidates)
 
-                if len(matching_candidates) == 1:
-                    return matching_candidates[0]
-
-        print(f"Player mapping not found: '{name}' (team: {team})")
-        return None
+        return candidates

@@ -30,7 +30,29 @@ class Match:
         self.players = {}  # pid -> Player
 
     def get_player_id(self, name, team):
-        return self.registry.get_player_id(clean_name(name), team)
+        cleaned_name = clean_name(name)
+        direct_pid = self.registry.get_player_id(cleaned_name, team)
+        candidates = self.registry.get_player_candidates(cleaned_name, team)
+
+        if len(candidates) <= 1:
+            return direct_pid
+
+        playing_candidates = []
+        for pid in candidates:
+            player = self.players.get(pid)
+            if player and getattr(player, "played", False):
+                playing_candidates.append(pid)
+
+        if len(playing_candidates) == 1:
+            preferred_pid = playing_candidates[0]
+            if direct_pid != preferred_pid:
+                print(
+                    f"[Match {self.match_id}] Preferred playing XI player for '{cleaned_name}' "
+                    f"({team}): {self.registry.players.get(preferred_pid, {}).get('Name', preferred_pid)}"
+                )
+            return preferred_pid
+
+        return direct_pid
 
     def get_or_create_player(self, pid):
         if not pid:
