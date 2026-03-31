@@ -1,7 +1,7 @@
 import time
 import threading
 import traceback
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 
 from backend.config import IST, ESPN_MATCH_ID_OFFSET
 from backend.models.match import Match
@@ -19,51 +19,112 @@ def build_player_role_map(players_data):
 class Tournament:
     def __init__(self):
         self.matches = {}
+        self.match_rows = {}
         self.contestants = {}
+        self.match_participants = {}
+        self.locked_match_ids_loaded = set()
         self.registry = None
         self.player_roles = {}
         self.player_points = {}
+        self.players_by_team = {}
 
     def initialize(self, players_data, matches_data, teams_data):
         self.registry = PlayerRegistry(players_data)
         self.player_roles = build_player_role_map(players_data)
         initialize_cricbuzz_match_map(matches_data)
+        self.players_by_team = {}
+        for player in players_data:
+            self.players_by_team.setdefault(player["Team"], []).append({
+                "id": int(player["PlayerID"]),
+                "name": player.get("Name", ""),
+                "team": player.get("Team", ""),
+                "role": player.get("Role", ""),
+                "aliases": player.get("Aliases", ""),
+            })
 
         self.matches = {}
+        self.match_rows = {}
         for m in matches_data:
             match_id = str(m["MatchID"])
             self.matches[match_id] = Match(match_id, m["Team1"], m["Team2"], self.registry)
+            self.match_rows[match_id] = m
 
-        self.load_teams(teams_data)
+        self.contestants = {}
+        self.match_participants = {}
+        self.locked_match_ids_loaded = set()
+        if teams_data:
+            self.load_teams(teams_data)
 
     def load_teams(self, teams_data):
         self.contestants = {}
+        self.match_participants = {}
+        self.locked_match_ids_loaded = set()
 
         for row in teams_data:
-            contestant_key = str(row.get("UserID") or row.get("Mobile") or row.get("User"))
-            match_id = str(row["MatchID"])
-            pid = int(row["PlayerID"])
+            self._apply_team_row(row)
 
-            if contestant_key not in self.contestants:
-                self.contestants[contestant_key] = Contestant(
-                    row["User"],
-                    str(row.get("Mobile") or ""),
-                    row.get("UserID"),
-                    bool(row.get("IsActive", True)),
-                )
+        self.locked_match_ids_loaded.update(self.match_participants.keys())
 
-            contestant = self.contestants[contestant_key]
-            contestant.is_active = bool(row.get("IsActive", True))
-            if match_id not in contestant.teams:
-                contestant.teams[match_id] = Team(match_id)
+    def _apply_team_row(self, row):
+        contestant_key = str(row.get("UserID") or row.get("Mobile") or row.get("User"))
+        match_id = str(row["MatchID"])
+        pid = int(row["PlayerID"])
 
-            team = contestant.teams[match_id]
-            team.player_ids.add(pid)
+        if contestant_key not in self.contestants:
+            self.contestants[contestant_key] = Contestant(
+                row["User"],
+                str(row.get("Mobile") or ""),
+                row.get("UserID"),
+                bool(row.get("IsActive", True)),
+            )
 
-            if str(row["Captain"]).lower() == "true":
-                team.captain = pid
-            if str(row["ViceCaptain"]).lower() == "true":
-                team.vice_captain = pid
+        contestant = self.contestants[contestant_key]
+        contestant.is_active = bool(row.get("IsActive", True))
+        if match_id not in contestant.teams:
+            contestant.teams[match_id] = Team(match_id)
+
+        team = contestant.teams[match_id]
+        team.player_ids.add(pid)
+        self.match_participants.setdefault(match_id, set()).add(contestant_key)
+
+        if str(row["Captain"]).lower() == "true":
+            team.captain = pid
+        if str(row["ViceCaptain"]).lower() == "true":
+            team.vice_captain = pid
+
+    def _remove_match_teams(self, match_id):
+        participant_keys = list(self.match_participants.get(match_id, set()))
+        for contestant_key in participant_keys:
+            contestant = self.contestants.get(contestant_key)
+            if not contestant:
+                continue
+            contestant.teams.pop(match_id, None)
+            contestant.points.pop(match_id, None)
+            if not contestant.teams:
+                self.contestants.pop(contestant_key, None)
+        self.match_participants.pop(match_id, None)
+        self.locked_match_ids_loaded.discard(match_id)
+
+    def ensure_match_teams_loaded(self, match_ids, force=False):
+        normalized_ids = [str(match_id) for match_id in match_ids]
+        if not normalized_ids:
+            return
+
+        if force:
+            for match_id in normalized_ids:
+                self._remove_match_teams(match_id)
+            ids_to_fetch = normalized_ids
+        else:
+            ids_to_fetch = [match_id for match_id in normalized_ids if match_id not in self.locked_match_ids_loaded]
+
+        if not ids_to_fetch:
+            return
+
+        rows = data_service.get_teams_for_matches(ids_to_fetch)
+        for row in rows:
+            self._apply_team_row(row)
+
+        self.locked_match_ids_loaded.update(ids_to_fetch)
 
     def _log_active_player_count(self, match_id, match):
         active_players = [player for player in match.players.values() if getattr(player, "played", False)]
@@ -78,17 +139,7 @@ class Tournament:
 
         match.players = {}
 
-        players_rows = []
-        for pid, info in self.registry.players.items():
-            if info.get("Team") not in (match.team1, match.team2):
-                continue
-            players_rows.append({
-                "id": pid,
-                "name": info.get("Name", ""),
-                "team": info.get("Team", ""),
-                "role": info.get("Role", ""),
-                "aliases": info.get("Aliases", ""),
-            })
+        players_rows = self.players_by_team.get(match.team1, []) + self.players_by_team.get(match.team2, [])
 
         if use_playing_xi:
             playing_xi = fetch_playing_xi(int(match_id), match.team1, match.team2, players_rows)
@@ -181,13 +232,19 @@ class Tournament:
         self.player_points[match_id] = player_points
 
     def compute_points_for_match(self, match_id):
-        for contestant in self.contestants.values():
+        participant_keys = self.match_participants.get(match_id, set())
+        match = self.matches.get(match_id)
+        if not match:
+            return
+
+        for contestant_key in participant_keys:
+            contestant = self.contestants.get(contestant_key)
+            if not contestant:
+                continue
             if not contestant.is_active:
                 contestant.points.pop(match_id, None)
                 continue
-            match = self.matches.get(match_id)
-            if match:
-                contestant.calculate_points_for_match(match, self.player_roles)
+            contestant.calculate_points_for_match(match, self.player_roles)
 
     def persist_to_local(self):
         now_str = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
@@ -238,16 +295,18 @@ class Tournament:
                 try:
                     print("\n--- Scheduler tick ---")
                     matches_data = data_service.get_cached_data("matches")
-                    teams_data = data_service.get_teams()
-                    self.load_teams(teams_data)
+                    computed_matches = data_service.get_computed_match_ids()
+                    locked_match_ids_to_load = []
 
-                    # Get already computed match IDs from player_points
-                    computed_matches = set()
-                    try:
-                        pp = data_service.get_player_points()
-                        computed_matches = {str(r["MatchID"]) for r in pp}
-                    except Exception:
-                        pass
+                    for m in matches_data:
+                        match_id = str(m["MatchID"])
+                        status = self.get_match_status(m)
+                        if status in ("lineups", "live"):
+                            locked_match_ids_to_load.append(match_id)
+                        elif status == "over" and match_id not in computed_matches:
+                            locked_match_ids_to_load.append(match_id)
+
+                    self.ensure_match_teams_loaded(locked_match_ids_to_load)
 
                     processed = 0
 

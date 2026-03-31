@@ -10,7 +10,6 @@ route modules continue to work without changes.
 from __future__ import annotations
 
 import threading
-import time
 from datetime import datetime
 
 from backend.database import get_db
@@ -25,9 +24,7 @@ CACHE: dict = {
     "players": None,
     "users": None,
     "matches": None,
-    "last_updated": 0,
 }
-CACHE_TTL = 5  # seconds
 
 
 def _row_to_dict(row) -> dict:
@@ -39,8 +36,19 @@ def _rows_to_dicts(rows) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def invalidate_cache():
-    CACHE["last_updated"] = 0
+def invalidate_cache(*sheet_names: str):
+    keys = sheet_names or tuple(CACHE.keys())
+    with _lock:
+        for key in keys:
+            if key in CACHE:
+                CACHE[key] = None
+
+
+def prime_static_cache():
+    """Warm static caches at startup so hot paths avoid repeated reloads."""
+    get_cached_data("players")
+    get_cached_data("users")
+    get_cached_data("matches")
 
 
 # ---------------------------------------------------------------------------
@@ -53,12 +61,17 @@ def get_cached_data(sheet_name: str) -> list[dict]:
     The dict keys deliberately match the old JSON field names so that every
     consumer (tournament.py, routes, templates) keeps working.
     """
-    now = time.time()
-    if now - CACHE["last_updated"] > CACHE_TTL:
-        CACHE["players"] = _cached_players()
-        CACHE["users"] = _cached_users()
-        CACHE["matches"] = _cached_matches()
-        CACHE["last_updated"] = now
+    if sheet_name not in CACHE:
+        return []
+
+    with _lock:
+        if CACHE[sheet_name] is None:
+            if sheet_name == "players":
+                CACHE[sheet_name] = _cached_players()
+            elif sheet_name == "users":
+                CACHE[sheet_name] = _cached_users()
+            elif sheet_name == "matches":
+                CACHE[sheet_name] = _cached_matches()
     return CACHE.get(sheet_name, [])
 
 
@@ -149,7 +162,7 @@ def create_user(
         (firebase_uid, email, name, mobile, role),
     )
     db.commit()
-    invalidate_cache()
+    invalidate_cache("users")
     return get_user_by_id(cur.lastrowid)
 
 
@@ -161,7 +174,7 @@ def update_user(user_id: int, **fields) -> None:
     db = get_db()
     db.execute(f"UPDATE users SET {set_clause} WHERE id = ?", values)
     db.commit()
-    invalidate_cache()
+    invalidate_cache("users")
 
 
 def update_user_password(mobile: str, new_password: str) -> None:
@@ -171,7 +184,7 @@ def update_user_password(mobile: str, new_password: str) -> None:
     the old change-password route does not crash; it is effectively a no-op
     against the DB but invalidates the cache for consistency.
     """
-    invalidate_cache()
+    invalidate_cache("users")
 
 
 # ---------------------------------------------------------------------------
@@ -219,9 +232,12 @@ def get_teams() -> list[dict]:
 
     Keys: User, Mobile, MatchID, PlayerID, Name, Captain, ViceCaptain
     """
+    return get_teams_for_matches()
+
+
+def get_teams_for_matches(match_ids: list[int | str] | None = None) -> list[dict]:
     db = get_db()
-    rows = db.execute(
-        """
+    query = """
         SELECT
             u.id     AS user_id,
             u.name   AS user_name,
@@ -235,8 +251,15 @@ def get_teams() -> list[dict]:
         FROM user_teams ut
         JOIN users   u ON u.id  = ut.user_id
         JOIN players p ON p.id  = ut.player_id
-        """
-    ).fetchall()
+    """
+    params: list[int] = []
+    if match_ids:
+        normalized_ids = [int(match_id) for match_id in match_ids]
+        placeholders = ",".join("?" * len(normalized_ids))
+        query += f" WHERE ut.match_id IN ({placeholders})"
+        params.extend(normalized_ids)
+
+    rows = db.execute(query, params).fetchall()
 
     return [
         {
@@ -367,16 +390,42 @@ def save_contestant_points(rows: list[dict]) -> None:
         if not user:
             continue
 
-        db.execute(
-            """INSERT INTO contestant_points (user_id, match_id, points, last_updated)
-               VALUES (?, ?, ?, ?)
-               ON CONFLICT(user_id, match_id)
-               DO UPDATE SET points = excluded.points,
-                             last_updated = excluded.last_updated""",
-            (user["id"], match_id, points, last_updated),
+        update_result = db.execute(
+            """
+            UPDATE contestant_points
+            SET points = ?, last_updated = ?
+            WHERE user_id = ? AND match_id = ?
+            """,
+            (points, last_updated, user["id"], match_id),
         )
+        if getattr(update_result, "rowcount", None) == 0:
+            db.execute(
+                """
+                INSERT INTO contestant_points (user_id, match_id, points, last_updated)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user["id"], match_id, points, last_updated),
+            )
 
     db.commit()
+
+
+def get_computed_match_ids() -> set[str]:
+    db = get_db()
+    rows = db.execute("SELECT DISTINCT match_id FROM player_points").fetchall()
+    return {str(row["match_id"]) for row in rows}
+
+
+def get_latest_player_points_update(match_id: int | None = None) -> str:
+    db = get_db()
+    if match_id is None:
+        row = db.execute("SELECT COALESCE(MAX(last_updated), '') AS latest FROM player_points").fetchone()
+    else:
+        row = db.execute(
+            "SELECT COALESCE(MAX(last_updated), '') AS latest FROM player_points WHERE match_id = ?",
+            (int(match_id),),
+        ).fetchone()
+    return (row["latest"] if row else "") or ""
 
 
 def delete_inactive_contestant_points() -> None:
@@ -434,17 +483,22 @@ def save_player_points(rows: list[dict]) -> None:
         points = float(row["Points"])
         last_updated = row.get("LastUpdated", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-        db.execute(
-            """INSERT INTO player_points
-                   (match_id, player_id, player_name, team, role, points, last_updated)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(match_id, player_id)
-               DO UPDATE SET player_name  = excluded.player_name,
-                             team         = excluded.team,
-                             role         = excluded.role,
-                             points       = excluded.points,
-                             last_updated = excluded.last_updated""",
-            (match_id, player_id, player_name, team, role, points, last_updated),
+        update_result = db.execute(
+            """
+            UPDATE player_points
+            SET player_name = ?, team = ?, role = ?, points = ?, last_updated = ?
+            WHERE match_id = ? AND player_id = ?
+            """,
+            (player_name, team, role, points, last_updated, match_id, player_id),
         )
+        if getattr(update_result, "rowcount", None) == 0:
+            db.execute(
+                """
+                INSERT INTO player_points
+                    (match_id, player_id, player_name, team, role, points, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (match_id, player_id, player_name, team, role, points, last_updated),
+            )
 
     db.commit()

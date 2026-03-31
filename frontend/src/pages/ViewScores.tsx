@@ -130,22 +130,45 @@ export default function ViewScoresPage() {
   };
 
   useEffect(() => {
-    fetchScores();
-    fetchDiffContestants();
-    fetchBreakdown();
-    intervalRef.current = setInterval(fetchScores, 30000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    setLoading(true);
+    setPlayerScores([]);
+    setContestants([]);
+    setMyTeam(new Set());
+    setLastUpdated(null);
+    setBreakdown(null);
+    setDiffData(null);
+    setDiffContestants([]);
   }, [matchId]);
+
+  useEffect(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+
+    if (tab === 'scores') {
+      setLoading(true);
+      fetchScores();
+      intervalRef.current = setInterval(fetchScores, 30000);
+    } else if (tab === 'myteam') {
+      setLoading(false);
+      fetchBreakdown();
+      intervalRef.current = setInterval(fetchBreakdown, 60000);
+    } else if (tab === 'diff') {
+      setLoading(false);
+      fetchDiffContestants();
+      if (selectedOther) {
+        fetchDiff(selectedOther);
+      }
+    }
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [tab, matchId, selectedOther]);
 
   useEffect(() => {
     setSelectedContestantId(null);
     setSelectedContestantBreakdown(null);
     setSelectedContestantLoading(false);
   }, [matchId]);
-
-  useEffect(() => {
-    if (selectedOther) fetchDiff(selectedOther);
-  }, [selectedOther]);
 
   if (loading) {
     return (

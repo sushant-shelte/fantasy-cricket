@@ -67,6 +67,7 @@ async def update_user(
     params.append(user_id)
     db.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
+    data_service.invalidate_cache("users")
 
     updated = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     return dict(updated)
@@ -106,6 +107,7 @@ async def create_player(
         (body.name, body.team, body.role, body.aliases or ""),
     )
     db.commit()
+    data_service.invalidate_cache("players")
 
     player = db.execute(
         "SELECT * FROM players WHERE id = ?", (cursor.lastrowid,)
@@ -147,6 +149,7 @@ async def update_player(
     params.append(player_id)
     db.execute(f"UPDATE players SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
+    data_service.invalidate_cache("players")
 
     updated = db.execute("SELECT * FROM players WHERE id = ?", (player_id,)).fetchone()
     return dict(updated)
@@ -165,6 +168,7 @@ async def delete_player(
 
     db.execute("DELETE FROM players WHERE id = ?", (player_id,))
     db.commit()
+    data_service.invalidate_cache("players")
 
     return {"success": True}
 
@@ -204,6 +208,7 @@ async def create_match(
         (body.team1, body.team2, body.match_date, body.match_time),
     )
     db.commit()
+    data_service.invalidate_cache("matches")
 
     match = db.execute(
         "SELECT * FROM matches WHERE id = ?", (cursor.lastrowid,)
@@ -248,6 +253,7 @@ async def update_match(
     params.append(match_id)
     db.execute(f"UPDATE matches SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
+    data_service.invalidate_cache("matches")
 
     updated = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
     return dict(updated)
@@ -266,6 +272,7 @@ async def delete_match(
 
     db.execute("DELETE FROM matches WHERE id = ?", (match_id,))
     db.commit()
+    data_service.invalidate_cache("matches")
 
     return {"success": True}
 
@@ -287,7 +294,7 @@ async def recalculate_match(
 
     match_id_str = str(match_id)
 
-    tournament_ref.load_teams(data_service.get_teams())
+    tournament_ref.ensure_match_teams_loaded([match_id_str], force=True)
 
     # Fetch and parse scorecard, compute points
     tournament_ref.update_match_data(match_id_str)
@@ -524,6 +531,8 @@ async def clear_table(
 
     db.execute(CLEARABLE_TABLES[table_name])
     db.commit()
+    if table_name in {"players", "matches"}:
+        data_service.invalidate_cache(table_name)
 
     return {"success": True, "message": f"Cleared all data from {table_name}"}
 

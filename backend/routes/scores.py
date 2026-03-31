@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,24 +8,18 @@ from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
+from backend.services import data_service
 from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
+MATCH_DATA_CACHE: dict[tuple[int, bool, str], dict] = {}
+LIVE_MATCH_CACHE_TTL_SECONDS = 30
 
 
 def _build_registry(db):
     """Build a PlayerRegistry from the players table."""
-    rows = db.execute("SELECT * FROM players").fetchall()
-    players_data = []
-    for row in rows:
-        players_data.append({
-            "PlayerID": row["id"],
-            "Name": row["name"],
-            "Team": row["team"],
-            "Role": row["role"],
-            "Aliases": row["aliases"] or "",
-        })
+    players_data = data_service.get_cached_data("players")
     return PlayerRegistry(players_data), players_data
 
 
@@ -64,6 +59,13 @@ def _log_active_player_count(match_id: int, match_obj):
 
 
 def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_data, include_playing_xi=False):
+    latest_update = data_service.get_latest_player_points_update(match_id)
+    cache_key = (match_id, include_playing_xi, latest_update)
+    cached = MATCH_DATA_CACHE.get(cache_key)
+    if cached:
+        if not include_playing_xi or time.time() - cached["fetched_at"] < LIVE_MATCH_CACHE_TTL_SECONDS:
+            return cached["match_obj"], cached["html_content"], cached["playing_xi"]
+
     team1 = clean_team_name(match_row["team1"])
     team2 = clean_team_name(match_row["team2"])
 
@@ -90,6 +92,12 @@ def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_da
         if include_playing_xi:
             _log_active_player_count(match_id, match_obj)
 
+    MATCH_DATA_CACHE[cache_key] = {
+        "match_obj": match_obj,
+        "html_content": html_content,
+        "playing_xi": playing_xi,
+        "fetched_at": time.time(),
+    }
     return match_obj, html_content, playing_xi
 
 

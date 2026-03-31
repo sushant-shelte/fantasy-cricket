@@ -86,7 +86,7 @@ async def list_players(
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))
-        playing_ids_complete = len(playing_ids) >= 18
+        playing_ids_complete = len(playing_ids) == 22 and len(substitute_ids) >= 10
 
         # Group by role
         grouped = {role: [] for role in ROLES}

@@ -1,5 +1,6 @@
 import json
 import re
+import time
 import requests
 from difflib import SequenceMatcher
 from bs4 import BeautifulSoup
@@ -16,6 +17,8 @@ from backend.models.registry import PlayerRegistry
 
 
 CRICBUZZ_MATCH_ID_MAP: dict[int, int] = {}
+PLAYING_XI_CACHE: dict[int, dict] = {}
+PLAYING_XI_TTL_SECONDS = 60
 
 
 def _session_get(url):
@@ -32,6 +35,19 @@ def _session_get(url):
             "Connection": "keep-alive",
         },
     )
+
+
+def _copy_playing_xi_payload(payload: dict) -> dict:
+    return {
+        "announced": bool(payload.get("announced")),
+        "url": payload.get("url", ""),
+        "player_ids": list(payload.get("player_ids", [])),
+        "substitute_ids": list(payload.get("substitute_ids", [])),
+    }
+
+
+def _is_finalized_playing_xi(payload: dict) -> bool:
+    return len(payload.get("player_ids", [])) == 22 and len(payload.get("substitute_ids", [])) >= 10
 
 
 def fetch_scorecard_html(scorecard_id):
@@ -509,6 +525,15 @@ def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_row
 
 
 def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[dict]) -> dict:
+    cached = PLAYING_XI_CACHE.get(int(match_id))
+    now_ts = time.time()
+    if cached:
+        payload = _copy_playing_xi_payload(cached["payload"])
+        if cached.get("finalized"):
+            return payload
+        if now_ts - cached.get("fetched_at", 0) < PLAYING_XI_TTL_SECONDS:
+            return payload
+
     cricbuzz_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
     if not cricbuzz_match_id:
         print(f"[Playing XI] Match {match_id}: no cached Cricbuzz match id found")
@@ -521,7 +546,13 @@ def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[d
         res = _session_get(url)
         if res.status_code != 200:
             print(f"[Playing XI] Match {match_id}: status {res.status_code} for {url}")
-            return {"announced": False, "url": url, "player_ids": []}
+            payload = {"announced": False, "url": url, "player_ids": [], "substitute_ids": []}
+            PLAYING_XI_CACHE[int(match_id)] = {
+                "payload": payload,
+                "fetched_at": now_ts,
+                "finalized": False,
+            }
+            return _copy_playing_xi_payload(payload)
 
         playing_ids, unmatched_names, announced = _extract_named_players_from_cricbuzz_section(
             res.text, "playing xi", team1, team2, players_rows
@@ -531,7 +562,13 @@ def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[d
         )
         if not announced:
             print(f"[Playing XI] Match {match_id}: Playing XI section not available yet at {url}")
-            return {"announced": False, "url": url, "player_ids": [], "substitute_ids": []}
+            payload = {"announced": False, "url": url, "player_ids": [], "substitute_ids": []}
+            PLAYING_XI_CACHE[int(match_id)] = {
+                "payload": payload,
+                "fetched_at": now_ts,
+                "finalized": False,
+            }
+            return _copy_playing_xi_payload(payload)
 
         print(f"[Playing XI] Match {match_id}: using {url} (total={len(playing_ids)})")
         for name in unmatched_names:
@@ -541,12 +578,24 @@ def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[d
             for name in substitute_unmatched_names:
                 print(f"[Playing XI] Match {match_id}: substitute mapping not found for '{name}'")
 
-        return {
+        payload = {
             "announced": len(playing_ids) >= 18,
             "url": url,
             "player_ids": sorted(playing_ids),
             "substitute_ids": sorted(substitute_ids),
         }
+        PLAYING_XI_CACHE[int(match_id)] = {
+            "payload": payload,
+            "fetched_at": now_ts,
+            "finalized": _is_finalized_playing_xi(payload),
+        }
+        return _copy_playing_xi_payload(payload)
     except Exception as e:
         print("Error fetching playing XI:", e)
-        return {"announced": False, "url": url, "player_ids": [], "substitute_ids": []}
+        payload = {"announced": False, "url": url, "player_ids": [], "substitute_ids": []}
+        PLAYING_XI_CACHE[int(match_id)] = {
+            "payload": payload,
+            "fetched_at": now_ts,
+            "finalized": False,
+        }
+        return _copy_playing_xi_payload(payload)

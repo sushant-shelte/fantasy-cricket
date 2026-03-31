@@ -46,14 +46,14 @@ def startup():
     print("Database initialized")
 
     init_firebase()
+    data_service.prime_static_cache()
 
     admin.set_tournament(tournament)
 
     players_data = data_service.get_cached_data("players")
     matches_data = data_service.get_cached_data("matches")
-    teams_data = data_service.get_teams()
 
-    tournament.initialize(players_data, matches_data, teams_data)
+    tournament.initialize(players_data, matches_data, [])
     tournament.start_scheduler()
 
     print("Fantasy Cricket API started!")

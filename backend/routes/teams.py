@@ -6,6 +6,7 @@ from datetime import datetime
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.config import IST, ROLES
+from backend.services.scraper import fetch_playing_xi
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -65,6 +66,81 @@ async def my_team_matches(user: dict = Depends(get_current_user)):
         (user["id"],),
     ).fetchall()
     return [row["match_id"] for row in rows]
+
+
+@router.get("/my-lineup-statuses")
+async def my_lineup_statuses(
+    match_ids: str = Query(...),
+    user: dict = Depends(get_current_user),
+):
+    requested_ids = [int(match_id.strip()) for match_id in match_ids.split(",") if match_id.strip()]
+    if not requested_ids:
+        return {}
+
+    db = get_db()
+    placeholders = ",".join("?" * len(requested_ids))
+
+    match_rows = db.execute(
+        f"SELECT * FROM matches WHERE id IN ({placeholders})",
+        requested_ids,
+    ).fetchall()
+    match_lookup = {row["id"]: dict(row) for row in match_rows}
+
+    team_rows = db.execute(
+        f"""
+        SELECT match_id, player_id
+        FROM user_teams
+        WHERE user_id = ?
+          AND match_id IN ({placeholders})
+        """,
+        [user["id"], *requested_ids],
+    ).fetchall()
+
+    selected_by_match = {}
+    for row in team_rows:
+        selected_by_match.setdefault(int(row["match_id"]), set()).add(int(row["player_id"]))
+
+    result = {}
+    for match_id in requested_ids:
+        match = match_lookup.get(match_id)
+        selected_ids = selected_by_match.get(match_id, set())
+        if not match or not selected_ids:
+            result[str(match_id)] = {
+                "announced": False,
+                "unannouncedSelected": 0,
+                "substituteSelected": 0,
+            }
+            continue
+
+        player_rows = db.execute(
+            """
+            SELECT id, name, team, role, aliases
+            FROM players
+            WHERE team IN (?, ?)
+            """,
+            (match["team1"], match["team2"]),
+        ).fetchall()
+        players = [dict(row) for row in player_rows]
+        playing_xi = fetch_playing_xi(match_id, match["team1"], match["team2"], players)
+
+        playing_ids = set(playing_xi.get("player_ids", []))
+        substitute_ids = set(playing_xi.get("substitute_ids", []))
+        announced = bool(playing_xi.get("announced"))
+        playing_ids_complete = len(playing_ids) == 22 and len(substitute_ids) >= 10
+
+        unavailable_selected = 0
+        substitute_selected = 0
+        if announced and playing_ids_complete:
+            unavailable_selected = len([player_id for player_id in selected_ids if player_id not in playing_ids and player_id not in substitute_ids])
+            substitute_selected = len([player_id for player_id in selected_ids if player_id in substitute_ids])
+
+        result[str(match_id)] = {
+            "announced": announced,
+            "unannouncedSelected": unavailable_selected,
+            "substituteSelected": substitute_selected,
+        }
+
+    return result
 
 
 @router.post("")

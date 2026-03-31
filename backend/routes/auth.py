@@ -5,6 +5,7 @@ from typing import Optional
 from backend.middleware.auth import get_current_user
 from backend.firebase_setup import verify_firebase_token
 from backend.database import get_db
+from backend.services import data_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -50,6 +51,7 @@ async def register(body: RegisterBody, authorization: str = Header(default=None)
                     (firebase_uid, existing_email["id"]),
                 )
                 db.commit()
+                data_service.invalidate_cache("users")
                 user = db.execute("SELECT * FROM users WHERE id = ?", (existing_email["id"],)).fetchone()
                 return dict(user)
 
@@ -63,6 +65,7 @@ async def register(body: RegisterBody, authorization: str = Header(default=None)
                 (firebase_uid, email, body.name, body.mobile or "", role),
             )
             db.commit()
+            data_service.invalidate_cache("users")
 
             user = db.execute("SELECT * FROM users WHERE firebase_uid = ?", (firebase_uid,)).fetchone()
             return dict(user)
@@ -86,6 +89,7 @@ async def register(body: RegisterBody, authorization: str = Header(default=None)
         (firebase_uid, email, body.name, body.mobile or ""),
     )
     db.commit()
+    data_service.invalidate_cache("users")
 
     user = db.execute("SELECT * FROM users WHERE firebase_uid = ?", (firebase_uid,)).fetchone()
     return dict(user)
@@ -107,5 +111,6 @@ async def update_me(body: UpdateProfileBody, user: dict = Depends(get_current_us
     db = get_db()
     db.execute("UPDATE users SET name = ? WHERE id = ?", (cleaned_name, user["id"]))
     db.commit()
+    data_service.invalidate_cache("users")
     updated = db.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
     return dict(updated)

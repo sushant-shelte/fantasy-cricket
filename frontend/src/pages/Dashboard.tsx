@@ -33,40 +33,9 @@ export default function DashboardPage() {
         const matchesToCheck = todayMatches.filter((match) => loadedMyTeams.has(match.id));
 
         if (matchesToCheck.length > 0) {
-          const entries = await Promise.all(matchesToCheck.map(async (match) => {
-            try {
-              const [playersRes, teamRes] = await Promise.all([
-                client.get(`/api/players?match_id=${match.id}`),
-                client.get(`/api/teams/my?match_id=${match.id}`),
-              ]);
-              const data = playersRes.data || {};
-              const groupedPlayers = data.players || data;
-              const flatPlayers = Array.isArray(groupedPlayers)
-                ? groupedPlayers
-                : Object.values(groupedPlayers).flat() as Array<{ id: number; availability_status?: string | null }>;
-              const announced = Boolean(data.playing_xi?.announced);
-              const unavailableIds = new Set(
-                flatPlayers
-                  .filter((player) => player.availability_status === 'unavailable')
-                  .map((player) => player.id)
-              );
-              const substituteIds = new Set(
-                flatPlayers
-                  .filter((player) => player.availability_status === 'substitute')
-                  .map((player) => player.id)
-              );
-              const unannouncedSelected = announced
-                ? (teamRes.data || []).filter((player: { player_id: number }) => unavailableIds.has(player.player_id)).length
-                : 0;
-              const substituteSelected = announced
-                ? (teamRes.data || []).filter((player: { player_id: number }) => substituteIds.has(player.player_id)).length
-                : 0;
-              return [match.id, { announced, unannouncedSelected, substituteSelected }] as const;
-            } catch {
-              return [match.id, { announced: false, unannouncedSelected: 0, substituteSelected: 0 }] as const;
-            }
-          }));
-          setTodayTeamLineup(Object.fromEntries(entries));
+          const ids = matchesToCheck.map((match) => match.id).join(',');
+          const lineupRes = await client.get(`/api/teams/my-lineup-statuses?match_ids=${ids}`);
+          setTodayTeamLineup(lineupRes.data || {});
         } else {
           setTodayTeamLineup({});
         }

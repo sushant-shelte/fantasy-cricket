@@ -187,8 +187,11 @@ def init_db():
 
         # Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_teams_user_match ON user_teams(user_id, match_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_teams_match ON user_teams(match_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_teams_match_user ON user_teams(match_id, user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_contestant_points_match ON contestant_points(match_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_player_points_match ON player_points(match_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_player_points_last_updated ON player_points(last_updated)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid)")
 
         conn.commit()
@@ -250,8 +253,11 @@ def init_db():
                 UNIQUE(match_id, player_id)
             );
             CREATE INDEX IF NOT EXISTS idx_user_teams_user_match ON user_teams(user_id, match_id);
+            CREATE INDEX IF NOT EXISTS idx_user_teams_match ON user_teams(match_id);
+            CREATE INDEX IF NOT EXISTS idx_user_teams_match_user ON user_teams(match_id, user_id);
             CREATE INDEX IF NOT EXISTS idx_contestant_points_match ON contestant_points(match_id);
             CREATE INDEX IF NOT EXISTS idx_player_points_match ON player_points(match_id);
+            CREATE INDEX IF NOT EXISTS idx_player_points_last_updated ON player_points(last_updated);
             CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid);
         """)
         conn.commit()
