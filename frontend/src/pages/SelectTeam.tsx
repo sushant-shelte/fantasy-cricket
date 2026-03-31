@@ -21,7 +21,6 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; bo
   Batter: { label: 'Batsman', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
   AllRounder: { label: 'All-Rounder', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
   Bowler: { label: 'Bowler', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
-  Unavailable: { label: 'Unavailable', color: 'text-red-200', bg: 'bg-red-500/15', border: 'border-red-500/25' },
 };
 
 const REQUIRED_ROLES = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'] as const;
@@ -32,7 +31,7 @@ export default function SelectTeamPage() {
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [selected, setSelected] = useState<Map<number, SelectedPlayer>>(new Map());
-  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set(['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler']));
+  const [activeRole, setActiveRole] = useState<(typeof REQUIRED_ROLES)[number]>('Wicketkeeper');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -82,15 +81,6 @@ export default function SelectTeamPage() {
     fetchData();
   }, [matchId]);
 
-  const toggleRole = (role: string) => {
-    setExpandedRoles((prev) => {
-      const next = new Set(prev);
-      if (next.has(role)) next.delete(role);
-      else next.add(role);
-      return next;
-    });
-  };
-
   const togglePlayer = (playerId: number) => {
     setSelected((prev) => {
       const next = new Map(prev);
@@ -121,38 +111,6 @@ export default function SelectTeamPage() {
       });
       return next;
     });
-  };
-
-  const groupedPlayers = () => {
-    const groups: Record<string, Player[]> = {};
-    players.forEach((p) => {
-      if (playingXi.announced && p.availability_status === 'unavailable') {
-        if (!groups.Unavailable) groups.Unavailable = [];
-        groups.Unavailable.push(p);
-        return;
-      }
-      const role = p.role || 'OTHER';
-      if (!groups[role]) groups[role] = [];
-      groups[role].push(p);
-    });
-
-    Object.values(groups).forEach((group) => {
-      group.sort((a, b) => {
-        const availabilityRank = (player: Player) => {
-          if (player.availability_status === 'available') return 3;
-          if (player.availability_status === 'substitute') return 2;
-          if (player.availability_status === 'unavailable') return 1;
-          return 0;
-        };
-        const availabilityDiff = availabilityRank(b) - availabilityRank(a);
-        if (availabilityDiff !== 0) return availabilityDiff;
-        const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
-        if (pointsDiff !== 0) return pointsDiff;
-        return a.name.localeCompare(b.name);
-      });
-    });
-
-    return groups;
   };
 
   const selectedCount = selected.size;
@@ -208,6 +166,21 @@ export default function SelectTeamPage() {
     return null;
   };
 
+  const availabilityRank = (player: Player) => {
+    if (player.availability_status === 'available') return 3;
+    if (player.availability_status === 'substitute') return 2;
+    if (player.availability_status === 'unavailable') return 1;
+    return 0;
+  };
+
+  const sortPlayersForDisplay = (list: Player[]) => [...list].sort((a, b) => {
+    const availabilityDiff = availabilityRank(b) - availabilityRank(a);
+    if (availabilityDiff !== 0) return availabilityDiff;
+    const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
+    if (pointsDiff !== 0) return pointsDiff;
+    return a.name.localeCompare(b.name);
+  });
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -237,9 +210,19 @@ export default function SelectTeamPage() {
     }
   };
 
-  const groups = groupedPlayers();
-  const roleOrder = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler', 'Unavailable'];
-  const sortedRoles = [...new Set([...roleOrder, ...Object.keys(groups)])].filter((r) => groups[r]);
+  const rolePlayers = REQUIRED_ROLES.reduce<Record<string, Player[]>>((acc, role) => {
+    const playersForRole = players.filter((player) => player.role === role);
+    acc[role] = sortPlayersForDisplay(playersForRole);
+    return acc;
+  }, {});
+  const selectedUnavailableCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
+    acc[role] = players.filter((player) =>
+      player.role === role &&
+      player.availability_status === 'unavailable' &&
+      selected.has(player.id)
+    ).length;
+    return acc;
+  }, {});
 
   if (loading) {
     return (
@@ -354,160 +337,158 @@ export default function SelectTeamPage() {
           </div>
         )}
 
-        {sortedRoles.map((role) => {
-          const config = ROLE_CONFIG[role] || { label: role, color: 'text-gray-300', bg: 'bg-gray-500/20', border: 'border-gray-500/30' };
-          const rolePlayers = groups[role];
-          const roleSelected = rolePlayers.filter((p) => selected.has(p.id)).length;
-          const isExpanded = expandedRoles.has(role);
-
-          return (
-            <div key={role} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-              {/* Role header */}
+        <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+          {REQUIRED_ROLES.map((role) => {
+            const hasUnavailableSelected = playingXi.announced && selectedUnavailableCounts[role] > 0;
+            return (
               <button
+                key={role}
                 type="button"
-                onClick={() => toggleRole(role)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-all"
+                onClick={() => setActiveRole(role)}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                  activeRole === role
+                    ? hasUnavailableSelected
+                      ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                      : 'bg-white text-black shadow-lg'
+                    : hasUnavailableSelected
+                    ? 'bg-red-500/10 text-red-200 hover:bg-red-500/15'
+                    : 'text-white/50 hover:bg-white/5 hover:text-white'
+                }`}
               >
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 text-xs font-bold rounded-lg ${config.bg} ${config.color} ${config.border} border`}>
-                    {role}
-                  </span>
-                  <span className="text-white font-medium text-sm">{config.label}</span>
-                  <span className="text-white/40 text-xs">({roleSelected} selected)</span>
-                </div>
-                <svg
-                  className={`w-4 h-4 text-white/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                <span>{ROLE_CONFIG[role].label}</span>
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${
+                  activeRole === role
+                    ? hasUnavailableSelected ? 'bg-white/15 text-white' : 'bg-black/10 text-black/70'
+                    : hasUnavailableSelected ? 'bg-red-500/20 text-red-100' : 'bg-white/10 text-white/60'
+                }`}>
+                  {rolePlayers[role].filter((player) => selected.has(player.id)).length}
+                </span>
               </button>
+            );
+          })}
+        </div>
 
-              {/* Player rows */}
-              {isExpanded && (
-                <div className="border-t border-white/5">
-                  {rolePlayers.map((player) => {
-                    const isSelected = selected.has(player.id);
-                    const isCaptain = captainId === player.id;
-                    const isVC = vcId === player.id;
-                    const availabilityStatus = player.availability_status || 'unavailable';
-                    const selectionAllowed = canSelectPlayer(player);
-
-                    return (
-                      <div
-                        key={player.id}
-                        className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
-                          isSelected
-                            ? availabilityStatus === 'available'
-                              ? 'bg-emerald-500/10'
-                              : 'bg-white/10'
-                            : !selectionAllowed
-                              ? 'opacity-45'
-                            : availabilityStatus === 'available'
-                              ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
-                              : availabilityStatus === 'unavailable'
-                              ? 'bg-white/[0.03] hover:bg-white/[0.06]'
-                              : 'hover:bg-white/5'
-                        } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
-                      >
-                        {/* Checkbox */}
-                        <button
-                          type="button"
-                          onClick={() => togglePlayer(player.id)}
-                          disabled={!isSelected && !selectionAllowed}
-                          className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                            isSelected
-                              ? 'bg-green-500 border-green-500'
-                              : !selectionAllowed
-                                ? 'border-white/10 bg-white/5 cursor-not-allowed'
-                              : 'border-white/30 hover:border-white/50'
-                          }`}
-                        >
-                          {isSelected && (
-                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
-
-                        {/* Player info */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-medium truncate">{player.name}</p>
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            {playingXi.announced && availabilityStatus === 'available' && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
-                                <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-                                Avl
-                              </span>
-                            )}
-                            {playingXi.announced && availabilityStatus === 'substitute' && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 font-semibold text-sky-200">
-                                <span className="h-2 w-2 rounded-full bg-sky-400"></span>
-                                Sub
-                              </span>
-                            )}
-                            {playingXi.announced && availabilityStatus === 'unavailable' && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 font-semibold text-red-200">
-                                <span className="h-2 w-2 rounded-full bg-red-400"></span>
-                                Unavl
-                              </span>
-                            )}
-                            {renderTeamBadge(player.team)}
-                            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/60">
-                              {ROLE_CONFIG[player.role]?.label || player.role}
-                            </span>
-                            <span className="text-emerald-300 font-semibold">
-                              {(player.total_points || 0).toFixed(2)} pts
-                            </span>
-                            {!isSelected && !selectionAllowed && (
-                              <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
-                                Keep slot for other roles
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Captain radio */}
-                        <button
-                          type="button"
-                          onClick={() => isSelected && setCaptain(player.id)}
-                          disabled={!isSelected}
-                          className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
-                            isCaptain
-                              ? 'bg-amber-500 border-amber-500 text-white'
-                              : isSelected
-                              ? 'border-amber-500/50 text-amber-400/50 hover:border-amber-500 hover:text-amber-400'
-                              : 'border-white/10 text-white/10 cursor-not-allowed'
-                          }`}
-                        >
-                          C
-                        </button>
-
-                        {/* Vice Captain radio */}
-                        <button
-                          type="button"
-                          onClick={() => isSelected && setViceCaptain(player.id)}
-                          disabled={!isSelected}
-                          className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
-                            isVC
-                              ? 'bg-sky-500 border-sky-500 text-white'
-                              : isSelected
-                              ? 'border-sky-500/50 text-sky-400/50 hover:border-sky-500 hover:text-sky-400'
-                              : 'border-white/10 text-white/10 cursor-not-allowed'
-                          }`}
-                        >
-                          VC
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 text-xs font-bold rounded-lg ${ROLE_CONFIG[activeRole].bg} ${ROLE_CONFIG[activeRole].color} ${ROLE_CONFIG[activeRole].border} border`}>
+                {activeRole}
+              </span>
+              <span className="text-white font-medium text-sm">{ROLE_CONFIG[activeRole].label}</span>
+              <span className="text-white/40 text-xs">({rolePlayers[activeRole].filter((player) => selected.has(player.id)).length} selected)</span>
             </div>
-          );
-        })}
+            {playingXi.announced && selectedUnavailableCounts[activeRole] > 0 && (
+              <span className="rounded-full border border-red-500/25 bg-red-500/15 px-2 py-1 text-[10px] font-semibold text-red-200">
+                {selectedUnavailableCounts[activeRole]} unavailable selected
+              </span>
+            )}
+          </div>
+          <div className="border-t border-white/5">
+            {rolePlayers[activeRole].map((player) => {
+              const isSelected = selected.has(player.id);
+              const isCaptain = captainId === player.id;
+              const isVC = vcId === player.id;
+              const availabilityStatus = player.availability_status || 'unavailable';
+              const selectionAllowed = canSelectPlayer(player);
+
+              return (
+                <div
+                  key={player.id}
+                  className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all ${
+                    isSelected
+                      ? availabilityStatus === 'available'
+                        ? 'bg-emerald-500/10'
+                        : 'bg-white/10'
+                      : !selectionAllowed
+                        ? 'opacity-45'
+                      : availabilityStatus === 'available'
+                        ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
+                        : availabilityStatus === 'unavailable'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.06]'
+                        : 'hover:bg-white/5'
+                  } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => togglePlayer(player.id)}
+                    disabled={!isSelected && !selectionAllowed}
+                    className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-green-500 border-green-500'
+                        : !selectionAllowed
+                          ? 'border-white/10 bg-white/5 cursor-not-allowed'
+                        : 'border-white/30 hover:border-white/50'
+                    }`}
+                  >
+                    {isSelected && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{player.name}</p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {playingXi.announced && availabilityStatus === 'available' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
+                          <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                          Avl
+                        </span>
+                      )}
+                      {playingXi.announced && availabilityStatus === 'substitute' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 font-semibold text-sky-200">
+                          <span className="h-2 w-2 rounded-full bg-sky-400"></span>
+                          Sub
+                        </span>
+                      )}
+                      {renderTeamBadge(player.team)}
+                      <span className="text-emerald-300 font-semibold">
+                        {(player.total_points || 0).toFixed(2)} pts
+                      </span>
+                      {!isSelected && !selectionAllowed && (
+                        <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
+                          Keep slot for other roles
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => isSelected && setCaptain(player.id)}
+                    disabled={!isSelected}
+                    className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
+                      isCaptain
+                        ? 'bg-amber-500 border-amber-500 text-white'
+                        : isSelected
+                        ? 'border-amber-500/50 text-amber-400/50 hover:border-amber-500 hover:text-amber-400'
+                        : 'border-white/10 text-white/10 cursor-not-allowed'
+                    }`}
+                  >
+                    C
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => isSelected && setViceCaptain(player.id)}
+                    disabled={!isSelected}
+                    className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${
+                      isVC
+                        ? 'bg-sky-500 border-sky-500 text-white'
+                        : isSelected
+                        ? 'border-sky-500/50 text-sky-400/50 hover:border-sky-500 hover:text-sky-400'
+                        : 'border-white/10 text-white/10 cursor-not-allowed'
+                    }`}
+                  >
+                    VC
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
       </form>
 
       {/* Sticky submit bar */}

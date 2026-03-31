@@ -5,10 +5,12 @@ import { useAuth } from '../auth/AuthContext';
 import type { Match } from '../types';
 
 type MatchTab = 'today' | 'upcoming' | 'completed';
+type TodayTeamLineupInfo = { announced: boolean; unannouncedSelected: number };
 
 export default function DashboardPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [myTeams, setMyTeams] = useState<Set<number>>(new Set());
+  const [todayTeamLineup, setTodayTeamLineup] = useState<Record<number, TodayTeamLineupInfo>>({});
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MatchTab>('today');
   const { profile } = useAuth();
@@ -53,6 +55,44 @@ export default function DashboardPage() {
       else setTab('completed');
     }
   }, [loading]);
+
+  useEffect(() => {
+    if (loading || todayMatches.length === 0) return;
+
+    const matchesToCheck = todayMatches.filter((match) => myTeams.has(match.id));
+    if (matchesToCheck.length === 0) {
+      setTodayTeamLineup({});
+      return;
+    }
+
+    Promise.all(matchesToCheck.map(async (match) => {
+      try {
+        const [playersRes, teamRes] = await Promise.all([
+          client.get(`/api/players?match_id=${match.id}`),
+          client.get(`/api/teams/my?match_id=${match.id}`),
+        ]);
+        const data = playersRes.data || {};
+        const groupedPlayers = data.players || data;
+        const flatPlayers = Array.isArray(groupedPlayers)
+          ? groupedPlayers
+          : Object.values(groupedPlayers).flat() as Array<{ id: number; availability_status?: string | null }>;
+        const announced = Boolean(data.playing_xi?.announced);
+        const unavailableIds = new Set(
+          flatPlayers
+            .filter((player) => player.availability_status === 'unavailable')
+            .map((player) => player.id)
+        );
+        const unannouncedSelected = announced
+          ? (teamRes.data || []).filter((player: { player_id: number }) => unavailableIds.has(player.player_id)).length
+          : 0;
+        return [match.id, { announced, unannouncedSelected }] as const;
+      } catch {
+        return [match.id, { announced: false, unannouncedSelected: 0 }] as const;
+      }
+    })).then((entries) => {
+      setTodayTeamLineup(Object.fromEntries(entries));
+    });
+  }, [loading, matches, myTeams]);
 
   const currentMatches = tab === 'today' ? todayMatches : tab === 'upcoming' ? upcomingMatches : completedMatches;
 
@@ -230,6 +270,15 @@ export default function DashboardPage() {
                 <p className="text-white/40 text-xs text-center mb-3">
                   {formatDate(match.match_date, match.match_time)}
                 </p>
+                {tab === 'today' && myTeams.has(match.id) && todayTeamLineup[match.id]?.announced && (
+                  <p className={`mb-3 text-center text-xs font-medium ${
+                    todayTeamLineup[match.id].unannouncedSelected > 0 ? 'text-red-300' : 'text-emerald-300'
+                  }`}>
+                    {todayTeamLineup[match.id].unannouncedSelected > 0
+                      ? `${todayTeamLineup[match.id].unannouncedSelected} unannounced players in your team`
+                      : 'All selected players are announced'}
+                  </p>
+                )}
                 <div className="flex justify-center">{matchAction(match)}</div>
               </div>
             ))}
