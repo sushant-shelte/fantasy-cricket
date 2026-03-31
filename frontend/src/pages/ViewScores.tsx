@@ -654,9 +654,9 @@ export default function ViewScoresPage() {
                     <p className="text-white/50 text-xs font-medium mb-1">You</p>
                     <p className="text-white text-2xl font-bold">{diffData.my_total}</p>
                   </div>
-                  <div className={`${diffData.total_diff > 0 ? 'bg-red-500/10 border-red-500/20' : diffData.total_diff < 0 ? 'bg-green-500/10 border-green-500/20' : 'bg-white/5 border-white/10'} border rounded-2xl p-4 text-center`}>
+                  <div className={`${diffData.total_diff > 0 ? 'bg-green-500/10 border-green-500/20' : diffData.total_diff < 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-white/5 border-white/10'} border rounded-2xl p-4 text-center`}>
                     <p className="text-white/50 text-xs font-medium mb-1">Diff</p>
-                    <p className={`text-2xl font-bold ${diffData.total_diff > 0 ? 'text-red-400' : diffData.total_diff < 0 ? 'text-green-400' : 'text-white'}`}>
+                    <p className={`text-2xl font-bold ${diffData.total_diff > 0 ? 'text-green-400' : diffData.total_diff < 0 ? 'text-red-400' : 'text-white'}`}>
                       {diffData.total_diff > 0 ? '+' : ''}{diffData.total_diff}
                     </p>
                   </div>
@@ -671,7 +671,7 @@ export default function ViewScoresPage() {
                   <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-white font-semibold text-sm">Different Players</h3>
-                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${diffData.different_players_diff > 0 ? 'bg-red-500/20 text-red-400' : diffData.different_players_diff < 0 ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white'}`}>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${diffData.different_players_diff > 0 ? 'bg-green-500/20 text-green-400' : diffData.different_players_diff < 0 ? 'bg-red-500/20 text-red-400' : 'bg-white/10 text-white'}`}>
                         {diffData.different_players_diff > 0 ? '+' : ''}{diffData.different_players_diff} pts
                       </span>
                     </div>
@@ -691,7 +691,7 @@ export default function ViewScoresPage() {
                   <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-white font-semibold text-sm">Same Players, Different C/VC</h3>
-                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${diffData.common_role_diff_total > 0 ? 'bg-red-500/20 text-red-400' : diffData.common_role_diff_total < 0 ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white'}`}>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${diffData.common_role_diff_total > 0 ? 'bg-green-500/20 text-green-400' : diffData.common_role_diff_total < 0 ? 'bg-red-500/20 text-red-400' : 'bg-white/10 text-white'}`}>
                         {diffData.common_role_diff_total > 0 ? '+' : ''}{diffData.common_role_diff_total} pts
                       </span>
                     </div>
