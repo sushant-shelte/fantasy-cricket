@@ -426,7 +426,7 @@ async def team_diff(
     )
 
     different_players_diff = round(
-        sum(e["adjusted_points"] for e in other_only) - sum(e["adjusted_points"] for e in my_only), 2
+        sum(e["adjusted_points"] for e in my_only) - sum(e["adjusted_points"] for e in other_only), 2
     )
 
     # Common players with different roles (C/VC difference)
@@ -440,7 +440,7 @@ async def team_diff(
         row = {"left": left, "right": right}
 
         if left["tag"] != right["tag"] or left["multiplier"] != right["multiplier"]:
-            diff_points = round(right["adjusted_points"] - left["adjusted_points"], 2)
+            diff_points = round(left["adjusted_points"] - right["adjusted_points"], 2)
             row["diff_points"] = diff_points
             role_diff_total += diff_points
             common_role_diff.append(row)
@@ -462,7 +462,7 @@ async def team_diff(
         "other_user": other_user["name"],
         "my_total": my_total,
         "other_total": other_total,
-        "total_diff": round(other_total - my_total, 2),
+        "total_diff": round(my_total - other_total, 2),
         "different_players_diff": different_players_diff,
         "different_players": different_players,
         "common_role_diff_total": round(role_diff_total, 2),
