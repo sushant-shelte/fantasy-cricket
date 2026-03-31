@@ -423,8 +423,16 @@ export default function SelectTeamPage() {
                   </button>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{player.name}</p>
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      {renderTeamBadge(player.team)}
+                      <p className="min-w-0 truncate text-sm font-medium text-white">{player.name}</p>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-emerald-300 font-semibold">
+                        {(player.total_points || 0).toFixed(2)} pts
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                       {playingXi.announced && availabilityStatus === 'available' && (
                         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
                           <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
@@ -437,10 +445,12 @@ export default function SelectTeamPage() {
                           Sub
                         </span>
                       )}
-                      {renderTeamBadge(player.team)}
-                      <span className="text-emerald-300 font-semibold">
-                        {(player.total_points || 0).toFixed(2)} pts
-                      </span>
+                      {playingXi.announced && availabilityStatus === 'unavailable' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 font-semibold text-red-200">
+                          <span className="h-2 w-2 rounded-full bg-red-400"></span>
+                          Unavl
+                        </span>
+                      )}
                     </div>
                   </div>
 
