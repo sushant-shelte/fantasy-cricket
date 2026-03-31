@@ -43,9 +43,10 @@ class Player:
     # --- Dismissal parser ---
 
     def apply_dismissal(self, dismissal_text, match, bowling_team=None):
-        self.dismissal = dismissal_text.strip()
+        self.dismissal = " ".join(str(dismissal_text).strip().split())
+        dismissal_lower = self.dismissal.lower()
 
-        if self.dismissal.lower() == "not out":
+        if dismissal_lower == "not out":
             self.is_out = False
             return
 
@@ -58,9 +59,19 @@ class Player:
                 return match.get_player_by_team(name, bowling_team)
             return match.get_player_by_name(name)
 
+        # LBW
+        if re.match(r"^lbw\s+b\s+", self.dismissal, flags=re.IGNORECASE):
+            m = re.search(r"^lbw\s+b\s+(.+)$", self.dismissal, flags=re.IGNORECASE)
+            if m:
+                bowler = get_player(m.group(1))
+                if bowler:
+                    bowler.wickets += 1
+                    bowler.lbw += 1
+            return
+
         # Caught
-        if self.dismissal.startswith("c "):
-            m = re.search(r"c\s+(.+?)\s+b\s+(.+)", self.dismissal)
+        if re.match(r"^c\s+.+\s+b\s+", self.dismissal, flags=re.IGNORECASE):
+            m = re.search(r"^c\s+(.+?)\s+b\s+(.+)$", self.dismissal, flags=re.IGNORECASE)
             if m:
                 fielder = get_player(m.group(1))
                 bowler = get_player(m.group(2))
@@ -71,26 +82,16 @@ class Player:
             return
 
         # Bowled
-        if self.dismissal.startswith("b "):
-            bowler = get_player(self.dismissal.replace("b ", "").strip())
+        if re.match(r"^b\s+", self.dismissal, flags=re.IGNORECASE):
+            bowler = get_player(re.sub(r"^b\s+", "", self.dismissal, flags=re.IGNORECASE).strip())
             if bowler:
                 bowler.wickets += 1
                 bowler.bowled += 1
             return
 
-        # LBW
-        if self.dismissal.startswith("lbw"):
-            m = re.search(r"lbw\s+b\s+(.+)", self.dismissal)
-            if m:
-                bowler = get_player(m.group(1))
-                if bowler:
-                    bowler.wickets += 1
-                    bowler.lbw += 1
-            return
-
         # Stumping
-        if self.dismissal.startswith("st"):
-            m = re.search(r"st\s+(.+?)\s+b\s+(.+)", self.dismissal)
+        if re.match(r"^st\s+.+\s+b\s+", self.dismissal, flags=re.IGNORECASE):
+            m = re.search(r"^st\s+(.+?)\s+b\s+(.+)$", self.dismissal, flags=re.IGNORECASE)
             if m:
                 fielder = get_player(m.group(1))
                 bowler = get_player(m.group(2))
@@ -102,7 +103,7 @@ class Player:
             return
 
         # Run out
-        if "run out" in self.dismissal.lower():
+        if "run out" in dismissal_lower:
             m = re.search(r"\((.*?)\)", self.dismissal)
             if m:
                 fielders = [f.strip() for f in m.group(1).split("/")]

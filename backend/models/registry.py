@@ -52,15 +52,15 @@ class PlayerRegistry:
                     self.last_name_lookup.setdefault((team, parts[-1]), set()).add(pid)
 
     def get_player_id(self, name, team):
-        candidates = self.get_player_candidates(name, team)
-        if len(candidates) == 1:
-            return next(iter(candidates))
-
         normalized_name = self.normalize(name)
 
         # Try whole name
         if (team, normalized_name) in self.lookup:
             return self.lookup[(team, normalized_name)]
+
+        candidates = self.get_player_candidates(name, team)
+        if len(candidates) == 1:
+            return next(iter(candidates))
 
         print(f"Player mapping not found: '{name}' (team: {team})")
         return None

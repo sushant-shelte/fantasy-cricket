@@ -245,6 +245,9 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
+                <p className="text-white/25 text-[11px] text-center mb-2">
+                  Match #{match.id}
+                </p>
                 <div className="flex items-center justify-center gap-3 mb-2">
                   <span className="text-white font-bold text-lg">{match.team1}</span>
                   <span className="text-white/40 text-sm font-medium px-2 py-0.5 bg-white/5 rounded-lg">vs</span>
@@ -252,9 +255,6 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-white/40 text-xs text-center mb-3">
                   {formatDate(match.match_date, match.match_time)}
-                </p>
-                <p className="text-white/25 text-[11px] text-center mb-3">
-                  Match #{match.id}
                 </p>
                 {tab === 'today' && match.status === 'future' && myTeams.has(match.id) && todayTeamLineup[match.id]?.announced && (
                   <div className="mb-3 space-y-1 text-center text-xs font-medium">

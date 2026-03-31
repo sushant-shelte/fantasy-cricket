@@ -313,7 +313,6 @@ export default function ViewScoresPage() {
                           <div className="ml-3 min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-white font-medium text-sm">{c.name}</span>
-                              <span className="text-[10px] uppercase tracking-wide text-white/35">Tap to view team</span>
                             </div>
                           </div>
                           <span className="ml-4 flex-shrink-0 text-green-400 font-bold text-sm">{c.points} pts</span>

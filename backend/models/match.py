@@ -31,6 +31,12 @@ class Match:
 
     def get_player_id(self, name, team):
         cleaned_name = clean_name(name)
+        normalized_name = self.registry.normalize(cleaned_name)
+
+        # Exact full-name/alias lookup must win before any ambiguity fallback.
+        if (team, normalized_name) in self.registry.lookup:
+            return self.registry.lookup[(team, normalized_name)]
+
         direct_pid = self.registry.get_player_id(cleaned_name, team)
         candidates = self.registry.get_player_candidates(cleaned_name, team)
 
