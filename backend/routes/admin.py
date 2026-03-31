@@ -294,6 +294,10 @@ async def recalculate_match(
 
     match_id_str = str(match_id)
 
+    tournament_ref.refresh_static_data(
+        data_service.get_cached_data("players"),
+        data_service.get_cached_data("matches"),
+    )
     tournament_ref.ensure_match_teams_loaded([match_id_str], force=True)
 
     # Fetch and parse scorecard, compute points

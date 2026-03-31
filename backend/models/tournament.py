@@ -29,6 +29,15 @@ class Tournament:
         self.players_by_team = {}
 
     def initialize(self, players_data, matches_data, teams_data):
+        self.refresh_static_data(players_data, matches_data)
+
+        self.contestants = {}
+        self.match_participants = {}
+        self.locked_match_ids_loaded = set()
+        if teams_data:
+            self.load_teams(teams_data)
+
+    def refresh_static_data(self, players_data, matches_data):
         self.registry = PlayerRegistry(players_data)
         self.player_roles = build_player_role_map(players_data)
         initialize_cricbuzz_match_map(matches_data)
@@ -48,12 +57,6 @@ class Tournament:
             match_id = str(m["MatchID"])
             self.matches[match_id] = Match(match_id, m["Team1"], m["Team2"], self.registry)
             self.match_rows[match_id] = m
-
-        self.contestants = {}
-        self.match_participants = {}
-        self.locked_match_ids_loaded = set()
-        if teams_data:
-            self.load_teams(teams_data)
 
     def load_teams(self, teams_data):
         self.contestants = {}
@@ -294,7 +297,9 @@ class Tournament:
             while True:
                 try:
                     print("\n--- Scheduler tick ---")
+                    players_data = data_service.get_cached_data("players")
                     matches_data = data_service.get_cached_data("matches")
+                    self.refresh_static_data(players_data, matches_data)
                     computed_matches = data_service.get_computed_match_ids()
                     locked_match_ids_to_load = []
 
