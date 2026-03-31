@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import type { Match } from '../types';
 
 type MatchTab = 'today' | 'upcoming' | 'completed';
-type TodayTeamLineupInfo = { announced: boolean; unannouncedSelected: number };
+type TodayTeamLineupInfo = { announced: boolean; unannouncedSelected: number; substituteSelected: number };
 
 export default function DashboardPage() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -50,12 +50,20 @@ export default function DashboardPage() {
                   .filter((player) => player.availability_status === 'unavailable')
                   .map((player) => player.id)
               );
+              const substituteIds = new Set(
+                flatPlayers
+                  .filter((player) => player.availability_status === 'substitute')
+                  .map((player) => player.id)
+              );
               const unannouncedSelected = announced
                 ? (teamRes.data || []).filter((player: { player_id: number }) => unavailableIds.has(player.player_id)).length
                 : 0;
-              return [match.id, { announced, unannouncedSelected }] as const;
+              const substituteSelected = announced
+                ? (teamRes.data || []).filter((player: { player_id: number }) => substituteIds.has(player.player_id)).length
+                : 0;
+              return [match.id, { announced, unannouncedSelected, substituteSelected }] as const;
             } catch {
-              return [match.id, { announced: false, unannouncedSelected: 0 }] as const;
+              return [match.id, { announced: false, unannouncedSelected: 0, substituteSelected: 0 }] as const;
             }
           }));
           setTodayTeamLineup(Object.fromEntries(entries));
@@ -277,13 +285,18 @@ export default function DashboardPage() {
                   {formatDate(match.match_date, match.match_time)}
                 </p>
                 {tab === 'today' && myTeams.has(match.id) && todayTeamLineup[match.id]?.announced && (
-                  <p className={`mb-3 text-center text-xs font-medium ${
-                    todayTeamLineup[match.id].unannouncedSelected > 0 ? 'text-red-300' : 'text-emerald-300'
-                  }`}>
-                    {todayTeamLineup[match.id].unannouncedSelected > 0
-                      ? `${todayTeamLineup[match.id].unannouncedSelected} unannounced players in your team`
-                      : 'All selected players are announced'}
-                  </p>
+                  <div className="mb-3 space-y-1 text-center text-xs font-medium">
+                    <p className={todayTeamLineup[match.id].unannouncedSelected > 0 ? 'text-red-300' : 'text-emerald-300'}>
+                      {todayTeamLineup[match.id].unannouncedSelected > 0
+                        ? `${todayTeamLineup[match.id].unannouncedSelected} unannounced players in your team`
+                        : 'All selected players are announced'}
+                    </p>
+                    {todayTeamLineup[match.id].substituteSelected > 0 && (
+                      <p className="text-sky-300">
+                        {todayTeamLineup[match.id].substituteSelected} substitutes selected
+                      </p>
+                    )}
+                  </div>
                 )}
                 <div className="flex justify-center">{matchAction(match)}</div>
               </div>

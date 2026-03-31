@@ -223,6 +223,14 @@ export default function SelectTeamPage() {
     ).length;
     return acc;
   }, {});
+  const selectedSubstituteCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
+    acc[role] = players.filter((player) =>
+      player.role === role &&
+      player.availability_status === 'substitute' &&
+      selected.has(player.id)
+    ).length;
+    return acc;
+  }, {});
 
   if (loading) {
     return (
@@ -335,6 +343,7 @@ export default function SelectTeamPage() {
         <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
           {REQUIRED_ROLES.map((role) => {
             const hasUnavailableSelected = playingXi.announced && selectedUnavailableCounts[role] > 0;
+            const hasSubstituteSelected = playingXi.announced && selectedSubstituteCounts[role] > 0;
             return (
               <button
                 key={role}
@@ -344,17 +353,25 @@ export default function SelectTeamPage() {
                   activeRole === role
                     ? hasUnavailableSelected
                       ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                      : hasSubstituteSelected
+                      ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
                       : 'bg-white text-black shadow-lg'
                     : hasUnavailableSelected
                     ? 'bg-red-500/10 text-red-200 hover:bg-red-500/15'
+                    : hasSubstituteSelected
+                    ? 'bg-sky-500/10 text-sky-200 hover:bg-sky-500/15'
                     : 'text-white/50 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <span className="truncate">{ROLE_CONFIG[role].label}</span>
                 <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
                   activeRole === role
-                    ? hasUnavailableSelected ? 'bg-white/15 text-white' : 'bg-black/10 text-black/70'
-                    : hasUnavailableSelected ? 'bg-red-500/20 text-red-100' : 'bg-white/10 text-white/60'
+                    ? hasUnavailableSelected || hasSubstituteSelected ? 'bg-white/15 text-white' : 'bg-black/10 text-black/70'
+                    : hasUnavailableSelected
+                    ? 'bg-red-500/20 text-red-100'
+                    : hasSubstituteSelected
+                    ? 'bg-sky-500/20 text-sky-100'
+                    : 'bg-white/10 text-white/60'
                 }`}>
                   {rolePlayers[role].filter((player) => selected.has(player.id)).length}
                 </span>
