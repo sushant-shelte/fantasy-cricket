@@ -15,6 +15,10 @@ class RegisterBody(BaseModel):
     mobile: Optional[str] = None
 
 
+class UpdateProfileBody(BaseModel):
+    name: str
+
+
 @router.post("/register")
 async def register(body: RegisterBody, authorization: str = Header(default=None)):
     db = get_db()
@@ -90,3 +94,18 @@ async def register(body: RegisterBody, authorization: str = Header(default=None)
 @router.get("/me")
 async def me(user: dict = Depends(get_current_user)):
     return user
+
+
+@router.patch("/me")
+async def update_me(body: UpdateProfileBody, user: dict = Depends(get_current_user)):
+    cleaned_name = body.name.strip()
+    if not cleaned_name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    if len(cleaned_name) > 50:
+        raise HTTPException(status_code=400, detail="Name must be 50 characters or fewer")
+
+    db = get_db()
+    db.execute("UPDATE users SET name = ? WHERE id = ?", (cleaned_name, user["id"]))
+    db.commit()
+    updated = db.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+    return dict(updated)

@@ -182,7 +182,7 @@ export default function DashboardPage() {
         </div>
         <div className="relative z-10 px-4 pt-10 pb-8">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-            Welcome, <span className="text-green-400">{profile?.name || 'Player'}</span>
+            Welcome, <span className="inline-block max-w-[14rem] truncate align-bottom text-green-400 sm:max-w-[20rem]">{profile?.name || 'Player'}</span>
           </h2>
           <p className="text-white/40 text-sm mt-1">Hippies Mahasangram</p>
 

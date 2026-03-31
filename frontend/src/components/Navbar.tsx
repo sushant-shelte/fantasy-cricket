@@ -33,8 +33,8 @@ export default function Navbar() {
           Fantasy Cricket
         </Link>
         {profile && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-white/50 hidden sm:block">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <span className="hidden max-w-[11rem] truncate text-sm text-white/50 sm:block">
               {profile.name}
             </span>
             {profile.role === 'admin' && (
@@ -45,6 +45,12 @@ export default function Navbar() {
                 Admin
               </Link>
             )}
+            <Link
+              to="/settings"
+              className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium transition hover:bg-white/20"
+            >
+              Settings
+            </Link>
             <button
               onClick={handleLogout}
               className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition font-medium"
