@@ -11,6 +11,8 @@ from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html, ini
 from backend.services import data_service
 from bs4 import BeautifulSoup
 
+DEBUG_PLAYER_ID = 0
+
 
 def build_player_role_map(players_data):
     return {int(p["PlayerID"]): p["Role"] for p in players_data}
@@ -200,9 +202,9 @@ class Tournament:
             role = self.player_roles.get(pid)
             if role:
                 player_points[pid] = player.calculate_player_points(role)
-                if int(pid) == 86:
+                if DEBUG_PLAYER_ID and int(pid) == DEBUG_PLAYER_ID:
                     print(
-                        "[DEBUG player 86]",
+                        f"[DEBUG player {DEBUG_PLAYER_ID}]",
                         {
                             "match_id": match_id,
                             "player_id": pid,

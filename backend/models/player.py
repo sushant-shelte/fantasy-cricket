@@ -50,10 +50,15 @@ class Player:
             self.is_out = False
             return
 
+        if "(sub" in dismissal_lower or dismissal_lower.startswith("sub "):
+            self.is_out = True
+            return
+
         self.is_out = True
 
         def get_player(name):
-            if "(sub)" in str(name).lower():
+            normalized_name = str(name).lower()
+            if "(sub)" in normalized_name or normalized_name.startswith("sub ") or normalized_name.startswith("sub ("):
                 return None
             if bowling_team:
                 return match.get_player_by_team(name, bowling_team)
@@ -73,8 +78,13 @@ class Player:
         if re.match(r"^c\s+.+\s+b\s+", self.dismissal, flags=re.IGNORECASE):
             m = re.search(r"^c\s+(.+?)\s+b\s+(.+)$", self.dismissal, flags=re.IGNORECASE)
             if m:
-                fielder = get_player(m.group(1))
+                fielder_name = m.group(1).strip()
                 bowler = get_player(m.group(2))
+                # "c & b Bowler" means caught-and-bowled by the bowler.
+                if fielder_name in {"&", "&amp;"}:
+                    fielder = bowler
+                else:
+                    fielder = get_player(fielder_name)
                 if fielder:
                     fielder.catches += 1
                 if bowler:
