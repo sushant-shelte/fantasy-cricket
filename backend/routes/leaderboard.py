@@ -18,6 +18,12 @@ LEADERBOARD_CACHE = {
 }
 
 
+def invalidate_leaderboard_cache():
+    LEADERBOARD_CACHE["leaderboard"] = None
+    LEADERBOARD_CACHE["points_table"] = None
+    LEADERBOARD_CACHE["player_points_version"] = ""
+
+
 def _calculate_balances(db):
     """Calculate running balance for each user across all completed matches."""
     # Get all contestant points grouped by match

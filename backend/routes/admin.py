@@ -11,6 +11,7 @@ from backend.services import data_service
 from backend.config import IST
 from backend.config import ROLES
 from backend.services import data_service
+from backend.routes.leaderboard import invalidate_leaderboard_cache
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -312,6 +313,7 @@ async def recalculate_match(
     tournament_ref.compute_points_for_match(match_id_str)
     tournament_ref.persist_player_points_to_local()
     tournament_ref.persist_to_local()
+    invalidate_leaderboard_cache()
 
     return {"success": True, "message": f"Recalculated scores for match {match_id}"}
 
