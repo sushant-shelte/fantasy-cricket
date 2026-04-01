@@ -26,6 +26,10 @@ def get_now():
     return datetime.now(IST)
 
 
+def get_now_str():
+    return get_now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def is_match_locked(match_date: str, match_time: str) -> bool:
     try:
         match_datetime = datetime.strptime(
@@ -202,12 +206,45 @@ async def submit_team(
     )
 
     # Insert new team
+    updated_at = get_now_str()
     for p in body.players:
         db.execute(
-            "INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain) VALUES (?, ?, ?, ?, ?)",
-            (user["id"], body.match_id, p.player_id, int(p.is_captain), int(p.is_vice_captain)),
+            "INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (user["id"], body.match_id, p.player_id, int(p.is_captain), int(p.is_vice_captain), updated_at),
         )
 
     db.commit()
 
     return {"success": True}
+
+
+@router.get("/contestants")
+async def match_contestants_with_updates(
+    match_id: int = Query(...),
+    user: dict = Depends(get_current_user),
+):
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            u.id AS user_id,
+            u.name,
+            MAX(COALESCE(ut.updated_at, '')) AS last_team_updated
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.user_id
+        WHERE ut.match_id = ?
+          AND u.is_active = 1
+        GROUP BY u.id, u.name
+        ORDER BY last_team_updated DESC, u.name ASC
+        """,
+        (match_id,),
+    ).fetchall()
+
+    return [
+        {
+            "user_id": row["user_id"],
+            "name": row["name"],
+            "last_team_updated": row["last_team_updated"] or None,
+        }
+        for row in rows
+    ]

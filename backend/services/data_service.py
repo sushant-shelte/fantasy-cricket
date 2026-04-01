@@ -317,13 +317,14 @@ def save_team(mobile, name, match_id, selected_players, captain, vice_captain, p
     )
 
     # Insert new selections
+    updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for pid in selected_players:
         is_cap = 1 if str(pid) == str(captain) else 0
         is_vc = 1 if str(pid) == str(vice_captain) else 0
         db.execute(
-            """INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain)
-               VALUES (?, ?, ?, ?, ?)""",
-            (user_id, mid, int(pid), is_cap, is_vc),
+            """INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (user_id, mid, int(pid), is_cap, is_vc, updated_at),
         )
 
     db.commit()

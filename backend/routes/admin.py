@@ -8,6 +8,7 @@ from backend.middleware.auth import require_admin
 from backend.database import get_db
 from backend.config import ROLES
 from backend.services import data_service
+from backend.config import IST
 from backend.config import ROLES
 from backend.services import data_service
 
@@ -15,6 +16,11 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 # Tournament reference - will be set from main.py
 tournament_ref = None
+
+
+def _now_str():
+    from datetime import datetime
+    return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def set_tournament(t):
@@ -480,13 +486,14 @@ async def update_team(
         (body.user_id, body.match_id),
     )
 
+    updated_at = _now_str()
     for player in body.players:
         db.execute(
             """
-            INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (body.user_id, body.match_id, player.player_id, int(player.is_captain), int(player.is_vice_captain)),
+            (body.user_id, body.match_id, player.player_id, int(player.is_captain), int(player.is_vice_captain), updated_at),
         )
 
     db.commit()
@@ -561,10 +568,11 @@ async def admin_submit_team(body: AdminSubmitTeamBody, user: dict = Depends(requ
     # Delete old team
     db.execute("DELETE FROM user_teams WHERE user_id = ? AND match_id = ?", (body.user_id, body.match_id))
     # Insert new
+    updated_at = _now_str()
     for p in body.players:
         db.execute(
-            "INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain) VALUES (?, ?, ?, ?, ?)",
-            (body.user_id, body.match_id, p.player_id, int(p.is_captain), int(p.is_vice_captain)),
+            "INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (body.user_id, body.match_id, p.player_id, int(p.is_captain), int(p.is_vice_captain), updated_at),
         )
     db.commit()
     return {"success": True}

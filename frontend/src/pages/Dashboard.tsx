@@ -6,11 +6,15 @@ import type { Match } from '../types';
 
 type MatchTab = 'today' | 'upcoming' | 'completed';
 type TodayTeamLineupInfo = { announced: boolean; unannouncedSelected: number; substituteSelected: number };
+type MatchContestant = { user_id: number; name: string; last_team_updated: string | null };
 
 export default function DashboardPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [myTeams, setMyTeams] = useState<Set<number>>(new Set());
   const [todayTeamLineup, setTodayTeamLineup] = useState<Record<number, TodayTeamLineupInfo>>({});
+  const [showContestantsForMatch, setShowContestantsForMatch] = useState<Match | null>(null);
+  const [matchContestants, setMatchContestants] = useState<MatchContestant[]>([]);
+  const [contestantsLoading, setContestantsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MatchTab>('today');
   const { profile } = useAuth();
@@ -59,6 +63,36 @@ export default function DashboardPage() {
     } catch { return `${dateStr} ${timeStr}`; }
   };
 
+  const formatDateTime = (value: string | null) => {
+    if (!value) return 'Unknown';
+    try {
+      const dt = new Date(value.replace(' ', 'T'));
+      return dt.toLocaleString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return value;
+    }
+  };
+
+  const openContestantsModal = async (match: Match) => {
+    setShowContestantsForMatch(match);
+    setContestantsLoading(true);
+    setMatchContestants([]);
+    try {
+      const res = await client.get(`/api/teams/contestants?match_id=${match.id}`);
+      setMatchContestants(res.data || []);
+    } catch {
+      setMatchContestants([]);
+    } finally {
+      setContestantsLoading(false);
+    }
+  };
+
   // Get today's date in IST
   const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
@@ -103,17 +137,26 @@ export default function DashboardPage() {
       case 'future': {
         const hasTeam = myTeams.has(match.id);
         return (
-          <Link to={`/select-team/${match.id}`}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all ${
-              hasTeam ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20' : 'bg-green-500 hover:bg-green-400 text-black shadow-lg shadow-green-500/20'
-            }`}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              {hasTeam
-                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />}
-            </svg>
-            {hasTeam ? 'Edit Team' : 'Pick Team'}
-          </Link>
+          <div className="flex gap-2">
+            <Link to={`/select-team/${match.id}`}
+              className={`inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all ${
+                hasTeam ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20' : 'bg-green-500 hover:bg-green-400 text-black shadow-lg shadow-green-500/20'
+              }`}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {hasTeam
+                  ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />}
+              </svg>
+              {hasTeam ? 'Edit Team' : 'Pick Team'}
+            </Link>
+            <button
+              type="button"
+              onClick={() => openContestantsModal(match)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm font-medium rounded-xl border border-white/10 transition-all"
+            >
+              Who&apos;s Playing
+            </button>
+          </div>
         );
       }
       case 'live':
@@ -280,6 +323,56 @@ export default function DashboardPage() {
       <div className="text-center text-white/10 text-xs py-6">
         Built by Fantasy Cricket Team
       </div>
+
+      {showContestantsForMatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0f0f0f] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-white/35">Who&apos;s Playing</p>
+                <h3 className="mt-1 text-lg font-semibold text-white">
+                  Match #{showContestantsForMatch.id}: {showContestantsForMatch.team1} vs {showContestantsForMatch.team2}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowContestantsForMatch(null)}
+                className="rounded-lg p-2 text-white/50 transition hover:bg-white/10 hover:text-white"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-[60vh] overflow-auto rounded-xl border border-white/10 bg-white/5">
+              {contestantsLoading ? (
+                <div className="flex justify-center py-10">
+                  <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-white" />
+                </div>
+              ) : matchContestants.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-white/40">
+                  No contestants have joined this match yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {matchContestants.map((contestant, index) => (
+                    <div key={`${contestant.user_id}-${index}`} className="flex items-center justify-between gap-4 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-white">{contestant.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] uppercase tracking-wide text-white/30">Last updated</p>
+                        <p className="text-xs text-white/65">{formatDateTime(contestant.last_team_updated)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

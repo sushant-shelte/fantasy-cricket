@@ -97,6 +97,26 @@ def _is_postgres():
     return DATABASE_URL.startswith("postgres")
 
 
+def _sqlite_column_exists(conn, table_name, column_name):
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return any(row[1] == column_name for row in rows)
+
+
+def _ensure_user_teams_updated_at_sqlite(conn):
+    if not _sqlite_column_exists(conn, "user_teams", "updated_at"):
+        conn.execute("ALTER TABLE user_teams ADD COLUMN updated_at TEXT")
+        conn.execute(
+            "UPDATE user_teams SET updated_at = datetime('now') WHERE updated_at IS NULL OR updated_at = ''"
+        )
+
+
+def _ensure_user_teams_updated_at_postgres(cursor):
+    cursor.execute("ALTER TABLE user_teams ADD COLUMN IF NOT EXISTS updated_at TEXT")
+    cursor.execute(
+        "UPDATE user_teams SET updated_at = TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI:SS') WHERE updated_at IS NULL OR updated_at = ''"
+    )
+
+
 def get_db():
     if not hasattr(_local, "conn") or _local.conn is None:
         if _is_postgres():
@@ -158,9 +178,11 @@ def init_db():
                 player_id INTEGER NOT NULL REFERENCES players(id),
                 is_captain INTEGER NOT NULL DEFAULT 0,
                 is_vice_captain INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT,
                 UNIQUE(user_id, match_id, player_id)
             )
         """)
+        _ensure_user_teams_updated_at_postgres(cursor)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS contestant_points (
                 id SERIAL PRIMARY KEY,
@@ -189,6 +211,7 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_teams_user_match ON user_teams(user_id, match_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_teams_match ON user_teams(match_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_teams_match_user ON user_teams(match_id, user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_teams_match_updated_at ON user_teams(match_id, updated_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_contestant_points_match ON contestant_points(match_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_player_points_match ON player_points(match_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_player_points_last_updated ON player_points(last_updated)")
@@ -231,6 +254,7 @@ def init_db():
                 player_id INTEGER NOT NULL REFERENCES players(id),
                 is_captain INTEGER NOT NULL DEFAULT 0,
                 is_vice_captain INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT,
                 UNIQUE(user_id, match_id, player_id)
             );
             CREATE TABLE IF NOT EXISTS contestant_points (
@@ -255,10 +279,12 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_user_teams_user_match ON user_teams(user_id, match_id);
             CREATE INDEX IF NOT EXISTS idx_user_teams_match ON user_teams(match_id);
             CREATE INDEX IF NOT EXISTS idx_user_teams_match_user ON user_teams(match_id, user_id);
+            CREATE INDEX IF NOT EXISTS idx_user_teams_match_updated_at ON user_teams(match_id, updated_at);
             CREATE INDEX IF NOT EXISTS idx_contestant_points_match ON contestant_points(match_id);
             CREATE INDEX IF NOT EXISTS idx_player_points_match ON player_points(match_id);
             CREATE INDEX IF NOT EXISTS idx_player_points_last_updated ON player_points(last_updated);
             CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid);
         """)
+        _ensure_user_teams_updated_at_sqlite(conn)
         conn.commit()
         conn.close()
