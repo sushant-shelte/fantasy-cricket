@@ -17,6 +17,66 @@ MATCH_DATA_CACHE: dict[tuple[int, bool, str], dict] = {}
 LIVE_MATCH_CACHE_TTL_SECONDS = 30
 
 
+def _compute_contestants_from_player_points(db, match_id: int) -> list[dict]:
+    team_rows = db.execute(
+        """
+        SELECT
+            u.id AS user_id,
+            u.name AS user_name,
+            ut.player_id,
+            ut.is_captain,
+            ut.is_vice_captain,
+            COALESCE(pp.points, 0) AS player_points
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.user_id
+        LEFT JOIN player_points pp
+          ON pp.match_id = ut.match_id
+         AND pp.player_id = ut.player_id
+        WHERE ut.match_id = ?
+          AND u.is_active = 1
+        ORDER BY u.id
+        """,
+        (match_id,),
+    ).fetchall()
+
+    totals: dict[int, dict] = {}
+    for row in team_rows:
+        user_id = row["user_id"]
+        entry = totals.setdefault(
+            user_id,
+            {"id": user_id, "name": row["user_name"], "points": 0.0},
+        )
+
+        base_points = float(row["player_points"] or 0)
+        if row["is_captain"]:
+            base_points *= 2.0
+        elif row["is_vice_captain"]:
+            base_points *= 1.5
+
+        entry["points"] += base_points
+
+    contestants = list(totals.values())
+    for contestant in contestants:
+        contestant["points"] = round(contestant["points"], 2)
+    contestants.sort(key=lambda item: (-item["points"], item["name"]))
+    return contestants
+
+
+def _fill_missing_player_points(match_obj, registry, pp_lookup: dict, role_lookup: dict) -> tuple[dict, dict]:
+    if not match_obj:
+        return pp_lookup, role_lookup
+
+    for pid, player in match_obj.players.items():
+        pid_str = str(pid)
+        role = role_lookup.get(pid_str) or registry.players.get(pid, {}).get("Role")
+        if role and pid_str not in role_lookup:
+            role_lookup[pid_str] = role
+        if role and pid_str not in pp_lookup:
+            pp_lookup[pid_str] = float(player.calculate_player_points(role))
+
+    return pp_lookup, role_lookup
+
+
 def _build_registry(db):
     """Build a PlayerRegistry from the players table."""
     players_data = data_service.get_cached_data("players")
@@ -193,6 +253,8 @@ async def match_scores(
     ).fetchall()
 
     contestants = [{"id": row["id"], "name": row["name"], "points": float(row["points"])} for row in contestant_rows]
+    if not contestants and pp_rows:
+        contestants = _compute_contestants_from_player_points(db, match_id)
 
     return {"players": result, "contestants": contestants}
 
@@ -268,6 +330,14 @@ async def team_breakdown(
                 if role:
                     player.calculate_player_points(role)
 
+    pp_lookup_str = {str(pid): points for pid, points in pp_lookup.items()}
+    role_lookup = {
+        str(row["player_id"]): row["role"]
+        for row in team_rows
+        if row.get("role")
+    }
+    pp_lookup_str, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup_str, role_lookup)
+
     target_user = db.execute("SELECT name FROM users WHERE id = ?", (target_user_id,)).fetchone()
 
     breakdown = []
@@ -275,7 +345,7 @@ async def team_breakdown(
 
     for row in team_rows:
         pid = row["player_id"]
-        base_pts = pp_lookup.get(pid, 0)
+        base_pts = pp_lookup_str.get(str(pid), 0)
         is_captain = bool(row["is_captain"])
         is_vc = bool(row["is_vice_captain"])
 
@@ -335,6 +405,7 @@ def _load_match_and_points(db, match_id):
     pp_rows = db.execute("SELECT * FROM player_points WHERE match_id = ?", (match_id,)).fetchall()
     pp_lookup = {str(row["player_id"]): float(row["points"]) for row in pp_rows}
     role_lookup = {str(row["player_id"]): row["role"] for row in pp_rows}
+    pp_lookup, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup, role_lookup)
 
     return match_row, match_obj, pp_lookup, role_lookup
 
