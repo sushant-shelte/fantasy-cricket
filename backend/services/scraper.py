@@ -76,8 +76,11 @@ def fetch_scorecard_html(scorecard_id):
         return None
 
 
-def fetch_cricbuzz_scorecard_html(match_id: int):
-    cricbuzz_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
+def fetch_cricbuzz_scorecard_html(match_id: int, team1: str | None = None, team2: str | None = None):
+    if team1 and team2:
+        cricbuzz_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2)
+    else:
+        cricbuzz_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
     if not cricbuzz_match_id:
         print(f"[Cricbuzz Scorecard] Match {match_id}: no cached Cricbuzz match id found")
         return None
@@ -204,6 +207,31 @@ def _extract_candidate_names_from_json(value, names: list[str]):
 def initialize_cricbuzz_match_map(matches_data: list[dict]) -> dict[int, int]:
     global CRICBUZZ_MATCH_ID_MAP
 
+    schedule_lookup = _fetch_cricbuzz_schedule_lookup()
+    if schedule_lookup is None:
+        CRICBUZZ_MATCH_ID_MAP = {}
+        return CRICBUZZ_MATCH_ID_MAP
+
+    mapping: dict[int, int] = {}
+    for match in matches_data:
+        our_match_id = int(match["MatchID"])
+        key = (
+            our_match_id,
+            frozenset({
+                _to_short_team_name(match["Team1"]),
+                _to_short_team_name(match["Team2"]),
+            }),
+        )
+        cricbuzz_match_id = schedule_lookup.get(key)
+        if cricbuzz_match_id:
+            mapping[our_match_id] = cricbuzz_match_id
+
+    CRICBUZZ_MATCH_ID_MAP.update(mapping)
+    print(f"[Cricbuzz] Cached {len(CRICBUZZ_MATCH_ID_MAP)} match id mappings")
+    return CRICBUZZ_MATCH_ID_MAP
+
+
+def _fetch_cricbuzz_schedule_lookup() -> dict[tuple[int, frozenset[str]], int] | None:
     schedule_url = build_cricbuzz_schedule_url()
     print(f"[Cricbuzz] Loading schedule mapping from {schedule_url}")
 
@@ -211,8 +239,7 @@ def initialize_cricbuzz_match_map(matches_data: list[dict]) -> dict[int, int]:
         res = _session_get(schedule_url)
         if res.status_code != 200:
             print(f"[Cricbuzz] Schedule fetch failed with status {res.status_code}")
-            CRICBUZZ_MATCH_ID_MAP = {}
-            return CRICBUZZ_MATCH_ID_MAP
+            return None
 
         soup = BeautifulSoup(res.text, "html.parser")
         schedule_lookup: dict[tuple[int, frozenset[str]], int] = {}
@@ -221,7 +248,7 @@ def initialize_cricbuzz_match_map(matches_data: list[dict]) -> dict[int, int]:
             href = anchor.get("href", "")
             title = anchor.get("title", "")
             match_id_match = re.search(r"/live-cricket-scores/(\d+)", href)
-            title_match = re.match(r"(.+?) vs (.+?), (\d+)(?:st|nd|rd|th) Match\b", title)
+            title_match = re.match(r"(.+?) vs (.+?), (\d+)(?:st|nd|rd|th) Match\b", title, flags=re.IGNORECASE)
             if not match_id_match or not title_match:
                 continue
 
@@ -231,27 +258,29 @@ def initialize_cricbuzz_match_map(matches_data: list[dict]) -> dict[int, int]:
             cricbuzz_match_id = int(match_id_match.group(1))
             schedule_lookup[(match_no, frozenset({team_a, team_b}))] = cricbuzz_match_id
 
-        mapping: dict[int, int] = {}
-        for match in matches_data:
-            our_match_id = int(match["MatchID"])
-            key = (
-                our_match_id,
-                frozenset({
-                    _to_short_team_name(match["Team1"]),
-                    _to_short_team_name(match["Team2"]),
-                }),
-            )
-            cricbuzz_match_id = schedule_lookup.get(key)
-            if cricbuzz_match_id:
-                mapping[our_match_id] = cricbuzz_match_id
-
-        CRICBUZZ_MATCH_ID_MAP = mapping
-        print(f"[Cricbuzz] Cached {len(CRICBUZZ_MATCH_ID_MAP)} match id mappings")
-        return CRICBUZZ_MATCH_ID_MAP
+        return schedule_lookup
     except Exception as e:
         print(f"[Cricbuzz] Error loading schedule mapping: {e}")
-        CRICBUZZ_MATCH_ID_MAP = {}
-        return CRICBUZZ_MATCH_ID_MAP
+        return None
+
+
+def resolve_cricbuzz_match_id(match_id: int, team1: str, team2: str) -> int | None:
+    cached_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
+    if cached_match_id:
+        return cached_match_id
+
+    schedule_lookup = _fetch_cricbuzz_schedule_lookup()
+    if not schedule_lookup:
+        return None
+
+    key = (
+        int(match_id),
+        frozenset({_to_short_team_name(team1), _to_short_team_name(team2)}),
+    )
+    resolved = schedule_lookup.get(key)
+    if resolved:
+        CRICBUZZ_MATCH_ID_MAP[int(match_id)] = resolved
+    return resolved
 
 
 def _is_likely_player_name(name: str) -> bool:
@@ -576,9 +605,9 @@ def fetch_playing_xi(
     if not _should_attempt_playing_xi_fetch(match_date, match_time):
         return {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
 
-    cricbuzz_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
+    cricbuzz_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2)
     if not cricbuzz_match_id:
-        print(f"[Playing XI] Match {match_id}: no cached Cricbuzz match id found")
+        print(f"[Playing XI] Match {match_id}: no Cricbuzz match id found after schedule lookup")
         return {"announced": False, "url": "", "player_ids": []}
 
     url = build_cricbuzz_playing_xi_url(cricbuzz_match_id)

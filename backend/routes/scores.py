@@ -147,7 +147,7 @@ def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_da
         if playing_ids:
             match_obj.apply_playing_xi(playing_ids)
 
-    html_content = fetch_cricbuzz_scorecard_html(match_id)
+    html_content = fetch_cricbuzz_scorecard_html(match_id, team1, team2)
     if html_content:
         match_obj.parse_cricbuzz_scorecard_html(html_content, reset_players=False)
 

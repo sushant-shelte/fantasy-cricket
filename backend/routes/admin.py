@@ -307,7 +307,7 @@ async def recalculate_match(
     tournament_ref.ensure_match_teams_loaded([match_id_str], force=True)
 
     # Fetch and parse scorecard, compute points
-    tournament_ref.update_match_data(match_id_str)
+    tournament_ref.update_match_data(match_id_str, use_playing_xi=True)
     tournament_ref.compute_player_points_for_match(match_id_str)
     tournament_ref.compute_points_for_match(match_id_str)
     tournament_ref.persist_player_points_to_local()

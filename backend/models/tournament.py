@@ -178,7 +178,7 @@ class Tournament:
             else:
                 print(f"[Playing XI] Match {match_id}: no mapped playing XI players found")
 
-        cricbuzz_html = fetch_cricbuzz_scorecard_html(int(match_id))
+        cricbuzz_html = fetch_cricbuzz_scorecard_html(int(match_id), match.team1, match.team2)
         if cricbuzz_html:
             match.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
 
@@ -356,7 +356,7 @@ class Tournament:
                                     continue
 
                                 print(f"  Match {match_id}: OVER — computing for first time")
-                                self.update_match_data(match_id, use_playing_xi=False)
+                                self.update_match_data(match_id, use_playing_xi=True)
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
                                 processed += 1

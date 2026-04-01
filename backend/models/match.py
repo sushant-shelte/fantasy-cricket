@@ -32,6 +32,8 @@ class Match:
 
     def get_player_id(self, name, team):
         cleaned_name = clean_name(name)
+        if cleaned_name.lower() in {"", "not out", "batting"}:
+            return None
         normalized_name = self.registry.normalize(cleaned_name)
 
         # Exact full-name/alias lookup must win before any ambiguity fallback.
