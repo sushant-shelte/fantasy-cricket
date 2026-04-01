@@ -82,7 +82,14 @@ async def list_players(
             "player_ids": [],
             "substitute_ids": [],
         }
-        playing_xi_data = fetch_playing_xi(match_id, team1, team2, players)
+        playing_xi_data = fetch_playing_xi(
+            match_id,
+            team1,
+            team2,
+            players,
+            match["match_date"],
+            match["match_time"],
+        )
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))

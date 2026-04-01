@@ -147,7 +147,15 @@ class Tournament:
         players_rows = self.players_by_team.get(match.team1, []) + self.players_by_team.get(match.team2, [])
 
         if use_playing_xi:
-            playing_xi = fetch_playing_xi(int(match_id), match.team1, match.team2, players_rows)
+            match_row = self.match_rows.get(match_id, {})
+            playing_xi = fetch_playing_xi(
+                int(match_id),
+                match.team1,
+                match.team2,
+                players_rows,
+                match_row.get("Date"),
+                match_row.get("Time"),
+            )
             playing_ids = playing_xi.get("player_ids", [])
             print(f"[Playing XI] Match {match_id}: fetch result url={playing_xi.get('url')} players={len(playing_ids)}")
             if playing_ids:

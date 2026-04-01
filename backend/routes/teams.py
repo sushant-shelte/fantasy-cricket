@@ -125,7 +125,14 @@ async def my_lineup_statuses(
             (match["team1"], match["team2"]),
         ).fetchall()
         players = [dict(row) for row in player_rows]
-        playing_xi = fetch_playing_xi(match_id, match["team1"], match["team2"], players)
+        playing_xi = fetch_playing_xi(
+            match_id,
+            match["team1"],
+            match["team2"],
+            players,
+            match["match_date"],
+            match["match_time"],
+        )
 
         playing_ids = set(playing_xi.get("player_ids", []))
         substitute_ids = set(playing_xi.get("substitute_ids", []))

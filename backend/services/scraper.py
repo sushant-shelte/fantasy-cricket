@@ -1,6 +1,7 @@
 import json
 import re
 import time
+from datetime import datetime, timedelta
 import requests
 from difflib import SequenceMatcher
 from bs4 import BeautifulSoup
@@ -11,6 +12,7 @@ from backend.config import (
     ESPN_IPL_SERIES_ID,
     ESPN_IPL_SERIES_SLUG,
     ESPN_MATCH_ID_OFFSET,
+    IST,
     TEAM_MAP,
 )
 from backend.models.registry import PlayerRegistry
@@ -48,6 +50,18 @@ def _copy_playing_xi_payload(payload: dict) -> dict:
 
 def _is_finalized_playing_xi(payload: dict) -> bool:
     return len(payload.get("player_ids", [])) == 22 and len(payload.get("substitute_ids", [])) >= 10
+
+
+def _should_attempt_playing_xi_fetch(match_date: str | None, match_time: str | None) -> bool:
+    if not match_date or not match_time:
+        return True
+
+    try:
+        match_start = IST.localize(datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M"))
+    except Exception:
+        return True
+
+    return datetime.now(IST) >= (match_start - timedelta(minutes=30))
 
 
 def fetch_scorecard_html(scorecard_id):
@@ -524,7 +538,14 @@ def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_row
     return playing_ids, unmatched_names
 
 
-def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[dict]) -> dict:
+def fetch_playing_xi(
+    match_id: int,
+    team1: str,
+    team2: str,
+    players_rows: list[dict],
+    match_date: str | None = None,
+    match_time: str | None = None,
+) -> dict:
     cached = PLAYING_XI_CACHE.get(int(match_id))
     now_ts = time.time()
     if cached:
@@ -533,6 +554,9 @@ def fetch_playing_xi(match_id: int, team1: str, team2: str, players_rows: list[d
             return payload
         if now_ts - cached.get("fetched_at", 0) < PLAYING_XI_TTL_SECONDS:
             return payload
+
+    if not _should_attempt_playing_xi_fetch(match_date, match_time):
+        return {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
 
     cricbuzz_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
     if not cricbuzz_match_id:

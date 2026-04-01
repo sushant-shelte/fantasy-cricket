@@ -79,7 +79,14 @@ def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_da
     players_rows = _build_players_rows(players_data, team1, team2)
     playing_xi = {"announced": False, "url": "", "player_ids": []}
     if include_playing_xi:
-        playing_xi = fetch_playing_xi(match_id, team1, team2, players_rows)
+        playing_xi = fetch_playing_xi(
+            match_id,
+            team1,
+            team2,
+            players_rows,
+            match_row["match_date"],
+            match_row["match_time"],
+        )
         playing_ids = playing_xi.get("player_ids", [])
         if playing_ids:
             match_obj.apply_playing_xi(playing_ids)

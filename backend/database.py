@@ -65,17 +65,33 @@ class PgCursorWrapper:
 
 class PgConnectionWrapper:
     """Wraps psycopg2 connection to behave like sqlite3.Connection."""
-    def __init__(self, conn):
-        self._conn = conn
+    def __init__(self, dsn: str):
+        self._dsn = dsn
+        self._conn = _connect_postgres(dsn)
+
+    def _is_closed(self) -> bool:
+        return self._conn is None or bool(getattr(self._conn, "closed", 0))
+
+    def _ensure_connection(self):
+        if self._is_closed():
+            self._conn = _connect_postgres(self._dsn)
 
     def execute(self, sql, params=None):
-        cursor = self._conn.cursor()
+        self._ensure_connection()
         sql = sql.replace("?", "%s")
-        # For INSERT ... RETURNING id to get lastrowid
-        cursor.execute(sql, params)
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(sql, params)
+        except Exception as exc:
+            if not _should_reconnect_postgres(exc):
+                raise
+            self._conn = _connect_postgres(self._dsn)
+            cursor = self._conn.cursor()
+            cursor.execute(sql, params)
         return PgCursorWrapper(cursor, self._conn)
 
     def executescript(self, sql):
+        self._ensure_connection()
         cursor = self._conn.cursor()
         for stmt in sql.split(";"):
             stmt = stmt.strip()
@@ -84,17 +100,35 @@ class PgConnectionWrapper:
         self._conn.commit()
 
     def commit(self):
+        self._ensure_connection()
         self._conn.commit()
 
     def close(self):
-        self._conn.close()
+        if self._conn is not None and not self._is_closed():
+            self._conn.close()
 
     def cursor(self):
+        self._ensure_connection()
         return PgCursorWrapper(self._conn.cursor(), self._conn)
 
 
 def _is_postgres():
     return DATABASE_URL.startswith("postgres")
+
+
+def _postgres_dsn() -> str:
+    return DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+
+def _connect_postgres(dsn: str):
+    import psycopg2
+
+    return psycopg2.connect(dsn)
+
+
+def _should_reconnect_postgres(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "connection already closed" in message or "closed the connection unexpectedly" in message
 
 
 def _sqlite_column_exists(conn, table_name, column_name):
@@ -120,23 +154,21 @@ def _ensure_user_teams_updated_at_postgres(cursor):
 def get_db():
     if not hasattr(_local, "conn") or _local.conn is None:
         if _is_postgres():
-            import psycopg2
-            url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-            _local.conn = PgConnectionWrapper(psycopg2.connect(url))
+            _local.conn = PgConnectionWrapper(_postgres_dsn())
         else:
             conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             _local.conn = conn
+    elif _is_postgres() and getattr(_local.conn, "_is_closed", lambda: False)():
+        _local.conn = PgConnectionWrapper(_postgres_dsn())
     return _local.conn
 
 
 def init_db():
     if _is_postgres():
-        import psycopg2
-        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-        conn = psycopg2.connect(url)
+        conn = _connect_postgres(_postgres_dsn())
         cursor = conn.cursor()
 
         cursor.execute("""
