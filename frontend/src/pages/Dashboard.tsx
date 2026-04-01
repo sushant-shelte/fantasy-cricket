@@ -137,9 +137,9 @@ export default function DashboardPage() {
       case 'future': {
         const hasTeam = myTeams.has(match.id);
         return (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <Link to={`/select-team/${match.id}`}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all ${
+              className={`inline-flex min-w-[8.5rem] items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all ${
                 hasTeam ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20' : 'bg-green-500 hover:bg-green-400 text-black shadow-lg shadow-green-500/20'
               }`}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -152,7 +152,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => openContestantsModal(match)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm font-medium rounded-xl border border-white/10 transition-all"
+              className="inline-flex min-w-[8.5rem] items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm font-medium rounded-xl border border-white/10 transition-all"
             >
               Who&apos;s Playing
             </button>
