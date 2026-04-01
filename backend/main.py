@@ -1,13 +1,14 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
+import openpyxl
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from backend.database import init_db
+from backend.database import init_db, get_db
 from backend.firebase_setup import init_firebase
 from backend.services import data_service
 from backend.models.tournament import Tournament
@@ -40,10 +41,73 @@ app.include_router(admin.router)
 tournament = Tournament()
 
 
+def seed_db_if_needed():
+    db = get_db()
+    row = db.execute("SELECT COUNT(*) as cnt FROM players").fetchone()
+    count = row["cnt"] if isinstance(row, dict) else row[0]
+    if count > 0:
+        print(f"Database already has {count} players, skipping seed")
+        return
+
+    workbook_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "FantasyCricket.xlsx")
+    if not os.path.exists(workbook_path):
+        print(f"Seed file not found at {workbook_path}, skipping seed")
+        return
+
+    print("Seeding database from FantasyCricket.xlsx")
+    wb = openpyxl.load_workbook(workbook_path, read_only=True)
+
+    ws = wb["Players"]
+    player_count = 0
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None:
+            break
+        db.execute(
+            """
+            INSERT INTO players (id, name, team, role, aliases)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET
+                name = ?,
+                team = ?,
+                role = ?,
+                aliases = ?
+            """,
+            (int(row[0]), row[1], row[2], row[3], row[4] or "", row[1], row[2], row[3], row[4] or ""),
+        )
+        player_count += 1
+
+    ws = wb["Matches"]
+    match_count = 0
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None:
+            break
+        date_str = row[1].strftime("%Y-%m-%d")
+        time_str = row[2].strftime("%H:%M")
+        db.execute(
+            """
+            INSERT INTO matches (id, team1, team2, match_date, match_time, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET
+                team1 = ?,
+                team2 = ?,
+                match_date = ?,
+                match_time = ?,
+                status = ?
+            """,
+            (int(row[0]), row[3], row[4], date_str, time_str, "future", row[3], row[4], date_str, time_str, "future"),
+        )
+        match_count += 1
+
+    db.commit()
+    wb.close()
+    print(f"Seeded: {player_count} players, {match_count} matches")
+
+
 @app.on_event("startup")
 def startup():
     init_db()
     print("Database initialized")
+    seed_db_if_needed()
 
     init_firebase()
     data_service.prime_static_cache()
