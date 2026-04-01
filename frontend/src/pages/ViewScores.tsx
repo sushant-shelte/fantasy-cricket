@@ -297,12 +297,15 @@ export default function ViewScoresPage() {
                 ) : (
                   rankedContestants.map((c) => {
                     const isSelected = selectedContestantId === c.id;
+                    const isCurrentUser = c.id === profile?.id;
                     return (
                       <div key={c.id}>
                         <button
                           type="button"
                           onClick={() => handleContestantClick(c.id)}
-                          className={`flex w-full items-center px-4 py-3 text-left transition-colors ${isSelected ? 'bg-white/8' : 'hover:bg-white/5'}`}
+                          className={`flex w-full items-center px-4 py-3 text-left transition-colors ${
+                            isSelected ? 'bg-white/8' : isCurrentUser ? 'bg-amber-500/10 hover:bg-amber-500/15' : 'hover:bg-white/5'
+                          }`}
                         >
                           <div className="w-8 flex-shrink-0 text-center">
                             {c.rank === 1 ? <span className="text-lg">&#x1F947;</span>
@@ -313,6 +316,11 @@ export default function ViewScoresPage() {
                           <div className="ml-3 min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-white font-medium text-sm">{c.name}</span>
+                              {isCurrentUser && (
+                                <span className="inline-flex items-center rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                  You
+                                </span>
+                              )}
                             </div>
                           </div>
                           <span className="ml-4 flex-shrink-0 text-green-400 font-bold text-sm">{c.points} pts</span>

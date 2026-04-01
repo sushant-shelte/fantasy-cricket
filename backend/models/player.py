@@ -177,6 +177,7 @@ class Player:
 
         # Bowling: wickets
         points += self.wickets * 30
+        points += (self.bowled + self.lbw) * 8
 
         # Wicket haul bonus
         if self.wickets >= 5:
@@ -263,6 +264,9 @@ class Player:
 
         if self.wickets > 0:
             b.append({"label": f"Wickets ({self.wickets})", "points": self.wickets * 30})
+        bowled_lbw_bonus_count = self.bowled + self.lbw
+        if bowled_lbw_bonus_count > 0:
+            b.append({"label": f"Bowled/LBW ({bowled_lbw_bonus_count})", "points": bowled_lbw_bonus_count * 8})
         if self.wickets >= 5:
             b.append({"label": "5-wicket haul", "points": 16})
         elif self.wickets == 4:
