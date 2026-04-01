@@ -258,9 +258,62 @@ def _fetch_cricbuzz_schedule_lookup() -> dict[tuple[int, frozenset[str]], int] |
             cricbuzz_match_id = int(match_id_match.group(1))
             schedule_lookup[(match_no, frozenset({team_a, team_b}))] = cricbuzz_match_id
 
+        # Completed and older matches are consistently present in the embedded
+        # matchesData payload even when they are not rendered as title anchors.
+        matches_data_payload = _extract_cricbuzz_embedded_json(res.text, "matchesData")
+        if matches_data_payload:
+            for section in matches_data_payload.get("matchDetails", []):
+                match_map = section.get("matchDetailsMap", {})
+                for match in match_map.get("match", []):
+                    match_info = match.get("matchInfo", {})
+                    match_desc = str(match_info.get("matchDesc", ""))
+                    desc_match = re.match(r"(\d+)(?:st|nd|rd|th)? Match\b", match_desc, flags=re.IGNORECASE)
+                    if not desc_match:
+                        continue
+
+                    cricbuzz_match_id = int(match_info.get("matchId"))
+                    match_no = int(desc_match.group(1))
+                    team_a = _to_short_team_name((match_info.get("team1") or {}).get("teamSName", "").strip())
+                    team_b = _to_short_team_name((match_info.get("team2") or {}).get("teamSName", "").strip())
+                    if team_a and team_b:
+                        schedule_lookup[(match_no, frozenset({team_a, team_b}))] = cricbuzz_match_id
+
         return schedule_lookup
     except Exception as e:
         print(f"[Cricbuzz] Error loading schedule mapping: {e}")
+        return None
+
+
+def _extract_cricbuzz_embedded_json(html_text: str, key: str) -> dict | None:
+    marker = f'{key}\\":{{'
+    start = html_text.find(marker)
+    if start == -1:
+        return None
+
+    index = start + len(marker) - 1
+    brace_count = 0
+    payload_chars = []
+    started = False
+
+    for ch in html_text[index:]:
+        if ch == "{":
+            brace_count += 1
+            started = True
+        if started:
+            payload_chars.append(ch)
+        if ch == "}":
+            brace_count -= 1
+            if started and brace_count == 0:
+                break
+
+    if not payload_chars:
+        return None
+
+    try:
+        payload_text = "".join(payload_chars).encode("utf-8").decode("unicode_escape")
+        return json.loads(payload_text)
+    except Exception as exc:
+        print(f"[Cricbuzz] Failed to parse embedded {key} payload: {exc}")
         return None
 
 
