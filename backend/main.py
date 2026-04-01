@@ -1,4 +1,5 @@
 import os
+import threading
 from dotenv import load_dotenv
 load_dotenv()
 import openpyxl
@@ -39,6 +40,10 @@ app.include_router(admin.router)
 
 # Tournament singleton
 tournament = Tournament()
+bootstrap_lock = threading.Lock()
+bootstrap_started = False
+bootstrap_error = None
+bootstrap_ready = False
 
 
 def seed_db_if_needed():
@@ -103,33 +108,65 @@ def seed_db_if_needed():
     print(f"Seeded: {player_count} players, {match_count} matches")
 
 
+def bootstrap_app():
+    global bootstrap_ready, bootstrap_error
+    try:
+        init_db()
+        print("Database initialized")
+        seed_db_if_needed()
+
+        init_firebase()
+        data_service.prime_static_cache()
+
+        players_data = data_service.get_cached_data("players")
+        matches_data = data_service.get_cached_data("matches")
+
+        tournament.initialize(players_data, matches_data, [])
+        tournament.start_scheduler()
+
+        bootstrap_ready = True
+        bootstrap_error = None
+        print("Fantasy Cricket API started!")
+    except Exception as exc:
+        bootstrap_error = str(exc)
+        print(f"Bootstrap error: {exc}")
+        raise
+
+
+def start_bootstrap_if_needed():
+    global bootstrap_started
+    with bootstrap_lock:
+        if bootstrap_started:
+            return
+        bootstrap_started = True
+        thread = threading.Thread(target=bootstrap_app, daemon=True)
+        thread.start()
+
+
 @app.on_event("startup")
 def startup():
-    init_db()
-    print("Database initialized")
-    seed_db_if_needed()
-
-    init_firebase()
-    data_service.prime_static_cache()
-
     admin.set_tournament(tournament)
-
-    players_data = data_service.get_cached_data("players")
-    matches_data = data_service.get_cached_data("matches")
-
-    tournament.initialize(players_data, matches_data, [])
-    tournament.start_scheduler()
-
-    print("Fantasy Cricket API started!")
+    start_bootstrap_if_needed()
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    status = "ok" if bootstrap_ready else "starting"
+    payload = {"status": status}
+    if bootstrap_error:
+        payload["bootstrap_error"] = bootstrap_error
+    return payload
 
 
 @app.get("/api/status")
 def status():
+    if not bootstrap_ready:
+        return {
+            "status": "starting",
+            "scheduler": "booting",
+            "bootstrap_error": bootstrap_error,
+        }
+
     from backend.database import get_db
     db = get_db()
     try:
