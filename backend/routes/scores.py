@@ -17,7 +17,7 @@ MATCH_DATA_CACHE: dict[tuple[int, bool, str], dict] = {}
 LIVE_MATCH_CACHE_TTL_SECONDS = 30
 
 
-def _compute_contestants_from_player_points(db, match_id: int) -> list[dict]:
+def _compute_contestants_from_player_points(db, match_id: int, pp_lookup: dict[str, float] | None = None) -> list[dict]:
     team_rows = db.execute(
         """
         SELECT
@@ -25,13 +25,9 @@ def _compute_contestants_from_player_points(db, match_id: int) -> list[dict]:
             u.name AS user_name,
             ut.player_id,
             ut.is_captain,
-            ut.is_vice_captain,
-            COALESCE(pp.points, 0) AS player_points
+            ut.is_vice_captain
         FROM user_teams ut
         JOIN users u ON u.id = ut.user_id
-        LEFT JOIN player_points pp
-          ON pp.match_id = ut.match_id
-         AND pp.player_id = ut.player_id
         WHERE ut.match_id = ?
           AND u.is_active = 1
         ORDER BY u.id
@@ -47,7 +43,7 @@ def _compute_contestants_from_player_points(db, match_id: int) -> list[dict]:
             {"id": user_id, "name": row["user_name"], "points": 0.0},
         )
 
-        base_points = float(row["player_points"] or 0)
+        base_points = float((pp_lookup or {}).get(str(row["player_id"]), 0))
         if row["is_captain"]:
             base_points *= 2.0
         elif row["is_vice_captain"]:
@@ -204,6 +200,7 @@ async def match_scores(
     for row in pp_rows:
         pp_lookup[str(row["player_id"])] = float(row["points"])
         role_lookup[str(row["player_id"])] = row["role"]
+    pp_lookup, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup, role_lookup)
 
     result = []
     for p in match_obj.players.values():
@@ -253,8 +250,8 @@ async def match_scores(
     ).fetchall()
 
     contestants = [{"id": row["id"], "name": row["name"], "points": float(row["points"])} for row in contestant_rows]
-    if not contestants and pp_rows:
-        contestants = _compute_contestants_from_player_points(db, match_id)
+    if not contestants:
+        contestants = _compute_contestants_from_player_points(db, match_id, pp_lookup)
 
     return {"players": result, "contestants": contestants}
 
