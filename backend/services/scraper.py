@@ -76,6 +76,24 @@ def fetch_scorecard_html(scorecard_id):
         return None
 
 
+def fetch_cricbuzz_scorecard_html(match_id: int):
+    cricbuzz_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
+    if not cricbuzz_match_id:
+        print(f"[Cricbuzz Scorecard] Match {match_id}: no cached Cricbuzz match id found")
+        return None
+
+    url = f"https://www.cricbuzz.com/live-cricket-scorecard/{cricbuzz_match_id}"
+    try:
+        res = _session_get(url)
+        if res.status_code != 200:
+            print(f"[Cricbuzz Scorecard] Match {match_id}: status {res.status_code} for {url}")
+            return None
+        return res.text
+    except Exception as e:
+        print(f"[Cricbuzz Scorecard] Match {match_id}: error fetching {url}: {e}")
+        return None
+
+
 def build_cricbuzz_schedule_url() -> str:
     return f"https://www.cricbuzz.com/cricket-series/{CRICBUZZ_IPL_SERIES_ID}/{CRICBUZZ_IPL_SERIES_SLUG}/matches"
 

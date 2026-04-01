@@ -9,7 +9,7 @@ from backend.database import get_db
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services import data_service
-from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html
+from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html, fetch_cricbuzz_scorecard_html
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
@@ -147,11 +147,15 @@ def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_da
         if playing_ids:
             match_obj.apply_playing_xi(playing_ids)
 
-    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
-    html_content = fetch_scorecard_html(scorecard_id)
+    html_content = fetch_cricbuzz_scorecard_html(match_id)
     if html_content:
-        soup = BeautifulSoup(html_content, "html.parser")
-        match_obj.parse_scorecard(soup, reset_players=False)
+        match_obj.parse_cricbuzz_scorecard_html(html_content, reset_players=False)
+
+    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
+    espn_html = fetch_scorecard_html(scorecard_id)
+    if espn_html:
+        soup = BeautifulSoup(espn_html, "html.parser")
+        match_obj.parse_espn_bowling_dot_balls(soup)
         if include_playing_xi:
             _log_active_player_count(match_id, match_obj)
 

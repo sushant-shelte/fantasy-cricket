@@ -46,7 +46,7 @@ class Player:
         self.dismissal = " ".join(str(dismissal_text).strip().split())
         dismissal_lower = self.dismissal.lower()
 
-        if dismissal_lower == "not out":
+        if dismissal_lower in {"", "not out", "batting"}:
             self.is_out = False
             return
 
@@ -81,7 +81,7 @@ class Player:
                 fielder_name = m.group(1).strip()
                 bowler = get_player(m.group(2))
                 # "c & b Bowler" means caught-and-bowled by the bowler.
-                if fielder_name in {"&", "&amp;"}:
+                if fielder_name.lower() in {"&", "&amp;", "and"}:
                     fielder = bowler
                 else:
                     fielder = get_player(fielder_name)

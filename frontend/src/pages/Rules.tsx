@@ -42,6 +42,7 @@ export default function RulesPage() {
       icon: '🎯',
       rules: [
         'Wickets: +30 per wicket',
+        'Bowled/LBW dismissal: +8 pts',
         '3 wickets: +4 bonus',
         '4 wickets: +8 bonus',
         '5 wickets: +16 bonus',

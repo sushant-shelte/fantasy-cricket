@@ -1,4 +1,5 @@
 import re
+import json
 from bs4 import BeautifulSoup
 from backend.models.player import Player
 from backend.models.registry import PlayerRegistry
@@ -110,6 +111,139 @@ class Match:
         if reset_players:
             self.players = {}
         self.parse_espn_scorecard(soup)
+
+    def _sort_data_keys(self, key):
+        match = re.search(r"_(\d+)$", str(key))
+        return int(match.group(1)) if match else 10**9
+
+    def _extract_cricbuzz_scorecard_payload(self, html_text):
+        marker = 'ApiData\\":{'
+        start = html_text.find(marker)
+        if start == -1:
+            return None
+
+        index = start + len(marker) - 1
+        brace_count = 0
+        payload_chars = []
+        started = False
+
+        for ch in html_text[index:]:
+            if ch == "{":
+                brace_count += 1
+                started = True
+            if started:
+                payload_chars.append(ch)
+            if ch == "}":
+                brace_count -= 1
+                if started and brace_count == 0:
+                    break
+
+        if not payload_chars:
+            return None
+
+        try:
+            payload_text = "".join(payload_chars).encode("utf-8").decode("unicode_escape")
+            return json.loads(payload_text)
+        except Exception as exc:
+            print(f"[Match {self.match_id}] Failed to parse Cricbuzz scorecard payload: {exc}")
+            return None
+
+    def parse_cricbuzz_scorecard_html(self, html_text, reset_players=True):
+        if reset_players:
+            self.players = {}
+
+        payload = self._extract_cricbuzz_scorecard_payload(html_text)
+        if not payload:
+            return False
+
+        innings_list = payload.get("scoreCard", [])
+        valid_teams = {self.team1, self.team2}
+        parsed_any = False
+
+        for innings in innings_list:
+            bat_details = innings.get("batTeamDetails") or {}
+            bowl_details = innings.get("bowlTeamDetails") or {}
+
+            batting_team = clean_team_name(
+                bat_details.get("batTeamShortName") or bat_details.get("batTeamName") or ""
+            )
+            bowling_team = clean_team_name(
+                bowl_details.get("bowlTeamShortName") or bowl_details.get("bowlTeamName") or ""
+            )
+
+            if batting_team not in valid_teams or bowling_team not in valid_teams:
+                continue
+
+            batsmen_data = bat_details.get("batsmenData") or {}
+            for key in sorted(batsmen_data, key=self._sort_data_keys):
+                batter_data = batsmen_data.get(key) or {}
+                batter_name = clean_name(batter_data.get("batName", ""))
+                if not batter_name:
+                    continue
+
+                pid = self.get_player_id(batter_name, batting_team)
+                if not pid:
+                    continue
+
+                player = self.get_or_create_player(pid)
+                player.team = batting_team
+                player.played = True
+                player.runs = int(batter_data.get("runs") or 0)
+                player.balls = int(batter_data.get("balls") or 0)
+                player.fours = int(batter_data.get("fours") or 0)
+                player.sixes = int(batter_data.get("sixes") or 0)
+                player.strike_rate = float(batter_data.get("strikeRate") or 0)
+
+                dismissal = str(batter_data.get("outDesc") or "").strip()
+                if dismissal:
+                    player.apply_dismissal(dismissal, self, bowling_team)
+                else:
+                    player.dismissal = None
+                    player.is_out = False
+
+                parsed_any = True
+
+            bowlers_data = bowl_details.get("bowlersData") or {}
+            for key in sorted(bowlers_data, key=self._sort_data_keys):
+                bowler_data = bowlers_data.get(key) or {}
+                bowler_name = clean_name(bowler_data.get("bowlName", ""))
+                if not bowler_name:
+                    continue
+
+                pid = self.get_player_id(bowler_name, bowling_team)
+                if not pid:
+                    continue
+
+                player = self.get_or_create_player(pid)
+                player.team = bowling_team
+                player.played = True
+                player.overs = float(bowler_data.get("overs") or 0)
+                player.maidens = int(bowler_data.get("maidens") or 0)
+                player.runs_conceded = int(bowler_data.get("runs") or 0)
+                player.wickets = int(bowler_data.get("wickets") or 0)
+                player.economy = float(bowler_data.get("economy") or 0)
+
+                parsed_any = True
+
+        return parsed_any
+
+    def parse_espn_bowling_dot_balls(self, soup: BeautifulSoup):
+        temp_match = Match(self.match_id, self.team1, self.team2, self.registry)
+        if not temp_match.parse_espn_scorecard(soup):
+            return False
+
+        for pid, temp_player in temp_match.players.items():
+            if temp_player.dot_balls <= 0:
+                continue
+            player = self.get_or_create_player(pid)
+            if not player:
+                continue
+            if temp_player.team and not player.team:
+                player.team = temp_player.team
+            player.played = player.played or temp_player.played
+            player.dot_balls = temp_player.dot_balls
+
+        return True
 
     def parse_espn_scorecard(self, soup):
         lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]

@@ -7,7 +7,12 @@ from backend.config import IST, ESPN_MATCH_ID_OFFSET
 from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
-from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html, initialize_cricbuzz_match_map
+from backend.services.scraper import (
+    fetch_playing_xi,
+    fetch_scorecard_html,
+    fetch_cricbuzz_scorecard_html,
+    initialize_cricbuzz_match_map,
+)
 from backend.services import data_service
 from bs4 import BeautifulSoup
 
@@ -173,11 +178,15 @@ class Tournament:
             else:
                 print(f"[Playing XI] Match {match_id}: no mapped playing XI players found")
 
+        cricbuzz_html = fetch_cricbuzz_scorecard_html(int(match_id))
+        if cricbuzz_html:
+            match.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
+
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
-        html_text = fetch_scorecard_html(scorecard_id)
-        if html_text:
-            soup = BeautifulSoup(html_text, "html.parser")
-            match.parse_scorecard(soup, reset_players=False)
+        espn_html_text = fetch_scorecard_html(scorecard_id)
+        if espn_html_text:
+            soup = BeautifulSoup(espn_html_text, "html.parser")
+            match.parse_espn_bowling_dot_balls(soup)
             self._log_active_player_count(match_id, match)
 
     def get_match_status(self, match_row):
