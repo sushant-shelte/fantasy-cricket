@@ -2,13 +2,14 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useToast } from '../components/Toast';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { profile, refreshProfile } = useAuth();
+  const { toast } = useToast();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     setName(profile?.name || '');
@@ -18,18 +19,18 @@ export default function SettingsPage() {
     e.preventDefault();
     const cleanedName = name.trim();
     if (!cleanedName) {
-      setError('Name is required.');
+      toast('Name is required.', 'error');
       return;
     }
 
     setSaving(true);
-    setError('');
     try {
       await client.patch('/api/auth/me', { name: cleanedName });
       await refreshProfile();
+      toast('Name updated!', 'success');
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to update name.');
+      toast(err?.response?.data?.detail || 'Failed to update name.', 'error');
     } finally {
       setSaving(false);
     }
@@ -63,12 +64,6 @@ export default function SettingsPage() {
           placeholder="Your name"
         />
         <p className="mt-2 text-xs text-white/35">This name is shown across the app.</p>
-
-        {error && (
-          <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-            {error}
-          </div>
-        )}
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button

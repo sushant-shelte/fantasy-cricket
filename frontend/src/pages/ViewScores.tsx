@@ -387,116 +387,203 @@ export default function ViewScoresPage() {
               </div>
             </div>
 
-            {/* Player Stats */}
+            {/* Player Stats — Mobile: card view, Desktop: table */}
             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-white/10">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="text-white font-semibold">Player Statistics</h2>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/40">
-                    <span className="whitespace-nowrap">Tap player for analysis</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/70">🏏 Batter</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/70">◎ Bowler</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/70">🏏◎ All-Rounder</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/70">||| WK</span>
-                  </div>
+                  <span className="text-[11px] text-white/40">Tap player for details</span>
                 </div>
               </div>
-              <div className="max-h-[72vh] overflow-auto">
-                <table className="min-w-[1600px] w-full text-sm">
-                  <thead>
-                    <tr className="bg-white/5 text-white/50 text-xs uppercase tracking-wider">
-                      <th className="sticky top-0 left-0 z-20 min-w-[220px] border-r border-white/10 bg-black px-4 py-3 text-left font-medium shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)]">Player</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Pts</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-left font-medium">Team</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">Role</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">P</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">Out</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Runs</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Balls</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">4s</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">6s</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">SR</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Overs</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Mdns</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Runs Ag</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Wkts</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Dots</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Econ</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Ct</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">St</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">RO-D</th>
-                      <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">RO-I</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {playerScores.length === 0 ? (
-                      <tr><td colSpan={20} className="px-4 py-8 text-center text-white/40">No scores available yet.</td></tr>
-                    ) : (
-                      playerScores.map((p, i) => {
-                        const isMyPlayer = myTeam.has(p.name);
-                        const isExpanded = expandedPlayer === i;
-                        const bd = (p as any).breakdown || [];
-                        return (
-                          <React.Fragment key={i}>
-                            <tr
-                              onClick={() => setExpandedPlayer(isExpanded ? null : i)}
-                              className={`cursor-pointer bg-gradient-to-r ${getTeamTheme(p.team).tintClass} transition-colors ${isMyPlayer ? 'bg-yellow-500/10 hover:bg-yellow-500/15' : 'hover:bg-white/5'}`}>
-                              <td className={`sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] bg-black`}>
-                                <span className={`inline-block w-3 text-[10px] text-white/40 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
-                                {p.name}
-                                {isMyPlayer && <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-bold text-green-400">{p.points}</td>
-                              <td className="px-3 py-2.5 text-white/50">{renderTeamBadge(p.team)}</td>
-                              <td className="px-3 py-2.5 text-center">{renderRoleSymbol(p.role)}</td>
-                              <td className="px-3 py-2.5 text-center text-white">{p.played ? 'Y' : 'N'}</td>
-                              <td className="px-3 py-2.5 text-center text-white">{p.is_out ? 'Y' : 'N'}</td>
-                              <td className="px-3 py-2.5 text-right text-white">{p.runs}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.balls}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.fours}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.sixes}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.strike_rate?.toFixed(1)}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.overs}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.maidens}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.runs_conceded}</td>
-                              <td className="px-3 py-2.5 text-right text-white">{p.wickets}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.dot_balls}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.economy?.toFixed(1)}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.catches}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.stumpings}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.runout_direct}</td>
-                              <td className="px-3 py-2.5 text-right text-white/50">{p.runout_indirect}</td>
-                            </tr>
-                            {isExpanded && bd.length > 0 && (
-                              <tr className="bg-white/5">
-                                <td colSpan={21} className="px-4 py-3">
-                                  <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Player Analysis</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {bd.map((item: { label: string; points: number }, j: number) => (
-                                      <span key={j}
-                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${
-                                          item.points > 0
-                                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                                            : 'bg-red-500/10 text-red-400 border-red-500/20'
-                                        }`}>
-                                        {item.label}
-                                        <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
-                                      </span>
-                                    ))}
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/20">
-                                      Total: {p.points}
-                                    </span>
-                                  </div>
+
+              {playerScores.length === 0 ? (
+                <div className="px-4 py-8 text-center text-white/40">No scores available yet.</div>
+              ) : (
+                <>
+                  {/* Mobile card view */}
+                  <div className="md:hidden divide-y divide-white/5">
+                    {playerScores.map((p, i) => {
+                      const isMyPlayer = myTeam.has(p.name);
+                      const isExpanded = expandedPlayer === i;
+                      const bd = (p as any).breakdown || [];
+                      const hasBatting = p.runs > 0 || p.balls > 0;
+                      const hasBowling = p.overs > 0;
+                      const hasFielding = p.catches > 0 || p.stumpings > 0 || p.runout_direct > 0 || p.runout_indirect > 0;
+                      return (
+                        <div key={i}>
+                          <div
+                            onClick={() => setExpandedPlayer(isExpanded ? null : i)}
+                            className={`px-4 py-3 cursor-pointer transition-colors bg-gradient-to-r ${getTeamTheme(p.team).tintClass} ${isMyPlayer ? 'bg-yellow-500/10' : 'hover:bg-white/5'}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`text-[10px] text-white/40 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
+                                {renderTeamBadge(p.team, true)}
+                                <span className="text-white font-medium text-sm truncate">{p.name}</span>
+                                {isMyPlayer && <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />}
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {renderRoleSymbol(p.role)}
+                                <span className="text-green-400 font-bold text-sm min-w-[3rem] text-right">{p.points} pts</span>
+                              </div>
+                            </div>
+
+                            {/* Compact stats row */}
+                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
+                              {hasBatting && (
+                                <span>{p.runs}/{p.balls}b {p.fours > 0 && `${p.fours}x4 `}{p.sixes > 0 && `${p.sixes}x6 `}SR {p.strike_rate?.toFixed(0)}</span>
+                              )}
+                              {hasBowling && (
+                                <span>{p.wickets}W {p.overs}ov {p.runs_conceded}rc Econ {p.economy?.toFixed(1)}</span>
+                              )}
+                              {hasFielding && (
+                                <span>
+                                  {p.catches > 0 && `${p.catches}ct `}
+                                  {p.stumpings > 0 && `${p.stumpings}st `}
+                                  {p.runout_direct > 0 && `${p.runout_direct}ro `}
+                                  {p.runout_indirect > 0 && `${p.runout_indirect}ro-i`}
+                                </span>
+                              )}
+                              {!hasBatting && !hasBowling && !hasFielding && <span>{p.played ? 'Played' : 'DNP'}</span>}
+                            </div>
+                          </div>
+
+                          {/* Expanded breakdown */}
+                          {isExpanded && bd.length > 0 && (
+                            <div className="px-4 py-3 bg-white/5 border-t border-white/5">
+                              <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Analysis</p>
+
+                              {/* Full stat grid */}
+                              <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs mb-3">
+                                {hasBatting && <>
+                                  <div className="text-white/40">Runs</div><div className="text-white font-medium">{p.runs} ({p.balls}b)</div><div className="text-white/40">SR {p.strike_rate?.toFixed(1)}</div>
+                                  <div className="text-white/40">Fours</div><div className="text-white font-medium">{p.fours}</div><div />
+                                  <div className="text-white/40">Sixes</div><div className="text-white font-medium">{p.sixes}</div><div />
+                                </>}
+                                {hasBowling && <>
+                                  <div className="text-white/40">Wickets</div><div className="text-white font-medium">{p.wickets}</div><div className="text-white/40">Econ {p.economy?.toFixed(1)}</div>
+                                  <div className="text-white/40">Overs</div><div className="text-white font-medium">{p.overs}</div><div className="text-white/40">{p.maidens}mdn {p.dot_balls}dot</div>
+                                </>}
+                                {hasFielding && <>
+                                  <div className="text-white/40">Catches</div><div className="text-white font-medium">{p.catches}</div><div />
+                                  {p.stumpings > 0 && <><div className="text-white/40">Stumpings</div><div className="text-white font-medium">{p.stumpings}</div><div /></>}
+                                  {(p.runout_direct > 0 || p.runout_indirect > 0) && <><div className="text-white/40">Run-outs</div><div className="text-white font-medium">{p.runout_direct}d / {p.runout_indirect}i</div><div /></>}
+                                </>}
+                              </div>
+
+                              <div className="flex flex-wrap gap-1.5">
+                                {bd.map((item: { label: string; points: number }, j: number) => (
+                                  <span key={j}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                                      item.points > 0 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                    }`}>
+                                    {item.label} <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                                  </span>
+                                ))}
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-white/10 text-white border border-white/20">
+                                  Total: {p.points}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop table view */}
+                  <div className="hidden md:block max-h-[72vh] overflow-auto">
+                    <table className="min-w-[1600px] w-full text-sm">
+                      <thead>
+                        <tr className="bg-white/5 text-white/50 text-xs uppercase tracking-wider">
+                          <th className="sticky top-0 left-0 z-20 min-w-[220px] border-r border-white/10 bg-black px-4 py-3 text-left font-medium shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)]">Player</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Pts</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-left font-medium">Team</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">Role</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">P</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-center font-medium">Out</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Runs</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Balls</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">4s</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">6s</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">SR</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Overs</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Mdns</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Runs Ag</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Wkts</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Dots</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Econ</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">Ct</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">St</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">RO-D</th>
+                          <th className="sticky top-0 bg-black px-3 py-3 text-right font-medium">RO-I</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {playerScores.map((p, i) => {
+                          const isMyPlayer = myTeam.has(p.name);
+                          const isExpanded = expandedPlayer === i;
+                          const bd = (p as any).breakdown || [];
+                          return (
+                            <React.Fragment key={i}>
+                              <tr
+                                onClick={() => setExpandedPlayer(isExpanded ? null : i)}
+                                className={`cursor-pointer bg-gradient-to-r ${getTeamTheme(p.team).tintClass} transition-colors ${isMyPlayer ? 'bg-yellow-500/10 hover:bg-yellow-500/15' : 'hover:bg-white/5'}`}>
+                                <td className="sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] bg-black">
+                                  <span className={`inline-block w-3 text-[10px] text-white/40 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
+                                  {p.name}
+                                  {isMyPlayer && <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-yellow-400 rounded-full" />}
                                 </td>
+                                <td className="px-3 py-2.5 text-right font-bold text-green-400">{p.points}</td>
+                                <td className="px-3 py-2.5 text-white/50">{renderTeamBadge(p.team)}</td>
+                                <td className="px-3 py-2.5 text-center">{renderRoleSymbol(p.role)}</td>
+                                <td className="px-3 py-2.5 text-center text-white">{p.played ? 'Y' : 'N'}</td>
+                                <td className="px-3 py-2.5 text-center text-white">{p.is_out ? 'Y' : 'N'}</td>
+                                <td className="px-3 py-2.5 text-right text-white">{p.runs}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.balls}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.fours}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.sixes}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.strike_rate?.toFixed(1)}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.overs}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.maidens}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.runs_conceded}</td>
+                                <td className="px-3 py-2.5 text-right text-white">{p.wickets}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.dot_balls}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.economy?.toFixed(1)}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.catches}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.stumpings}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.runout_direct}</td>
+                                <td className="px-3 py-2.5 text-right text-white/50">{p.runout_indirect}</td>
                               </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                              {isExpanded && bd.length > 0 && (
+                                <tr className="bg-white/5">
+                                  <td colSpan={21} className="px-4 py-3">
+                                    <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Player Analysis</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {bd.map((item: { label: string; points: number }, j: number) => (
+                                        <span key={j}
+                                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                                            item.points > 0 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                          }`}>
+                                          {item.label}
+                                          <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                                        </span>
+                                      ))}
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/20">
+                                        Total: {p.points}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
 
           </>

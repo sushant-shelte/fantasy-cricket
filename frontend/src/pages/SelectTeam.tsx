@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import client from '../api/client';
 import type { Player, TeamSelection } from '../types';
 import { getTeamTheme } from '../utils/teamTheme';
+import { useToast } from '../components/Toast';
 
 interface SelectedPlayer {
   player_id: number;
@@ -77,6 +78,7 @@ function EmptySlot({ label }: { label?: string }) {
 export default function SelectTeamPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [selected, setSelected] = useState<Map<number, SelectedPlayer>>(new Map());
@@ -84,7 +86,6 @@ export default function SelectTeamPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [playingXi, setPlayingXi] = useState<PlayingXiState>({ announced: false, url: null });
 
@@ -232,11 +233,10 @@ export default function SelectTeamPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
 
     const validationError = validate();
     if (validationError) {
-      setError(validationError);
+      toast(validationError, 'error');
       return;
     }
 
@@ -247,12 +247,11 @@ export default function SelectTeamPage() {
         players: [...selected.values()],
       };
       await client.post('/api/teams', payload);
-      setSuccess('Team saved successfully!');
+      toast('Team saved successfully!', 'success');
       setShowPreview(true);
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.response?.data?.error || 'Failed to save team.';
-      setError(msg);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      toast(msg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -331,17 +330,6 @@ export default function SelectTeamPage() {
               </div>
             ))}
           </div>
-
-          {error && (
-            <div className="p-3 bg-red-500/20 border border-red-400/30 rounded-xl text-red-200 text-sm text-center">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="p-3 bg-green-500/20 border border-green-400/30 rounded-xl text-green-200 text-sm text-center">
-              {success}
-            </div>
-          )}
 
           {/* Captain / VC legend */}
           <div className="flex items-center gap-4 text-xs text-white/50">

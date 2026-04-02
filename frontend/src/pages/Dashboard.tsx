@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Match } from '../types';
+import { getTeamTheme } from '../utils/teamTheme';
 
 type MatchTab = 'today' | 'upcoming' | 'completed';
 type TodayTeamLineupInfo = { announced: boolean; unannouncedSelected: number; substituteSelected: number };
@@ -276,7 +277,7 @@ export default function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {currentMatches.map((match) => (
               <div key={match.id}
-                className="bg-white/5 hover:bg-white/[0.08] border border-white/10 rounded-2xl p-5 transition-all duration-200 backdrop-blur-sm">
+                className={`bg-gradient-to-br ${getTeamTheme(match.team1).tintClass} bg-white/5 hover:bg-white/[0.08] border border-white/10 rounded-2xl p-5 transition-all duration-200 backdrop-blur-sm`}>
                 <div className="flex items-center justify-between mb-3">
                   {statusBadge(match.status)}
                   {match.locked && (
@@ -292,9 +293,19 @@ export default function DashboardPage() {
                   Match #{match.id}
                 </p>
                 <div className="flex items-center justify-center gap-3 mb-2">
-                  <span className="text-white font-bold text-lg">{match.team1}</span>
+                  <span className={`inline-flex items-center gap-1.5 font-bold text-lg text-white`}>
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getTeamTheme(match.team1).badgeClass}`}>
+                      {getTeamTheme(match.team1).label}
+                    </span>
+                    {match.team1}
+                  </span>
                   <span className="text-white/40 text-sm font-medium px-2 py-0.5 bg-white/5 rounded-lg">vs</span>
-                  <span className="text-white font-bold text-lg">{match.team2}</span>
+                  <span className={`inline-flex items-center gap-1.5 font-bold text-lg text-white`}>
+                    {match.team2}
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getTeamTheme(match.team2).badgeClass}`}>
+                      {getTeamTheme(match.team2).label}
+                    </span>
+                  </span>
                 </div>
                 <p className="text-white/40 text-xs text-center mb-3">
                   {formatDate(match.match_date, match.match_time)}

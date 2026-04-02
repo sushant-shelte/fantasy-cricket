@@ -2,17 +2,28 @@ import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import type { PointsTableEntry } from '../types';
+import { getTeamTheme } from '../utils/teamTheme';
+import type { PointsTableEntry, Match } from '../types';
 
 export default function PointsTablePage() {
   const [data, setData] = useState<(PointsTableEntry & { net?: number })[]>([]);
+  const [matchInfo, setMatchInfo] = useState<Record<string, { team1: string; team2: string }>>({});
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
 
   useEffect(() => {
-    client
-      .get('/api/points-table')
-      .then((res) => setData(res.data || []))
+    Promise.all([
+      client.get('/api/points-table'),
+      client.get('/api/matches'),
+    ])
+      .then(([ptRes, matchRes]) => {
+        setData(ptRes.data || []);
+        const info: Record<string, { team1: string; team2: string }> = {};
+        (matchRes.data || []).forEach((m: Match) => {
+          info[String(m.id)] = { team1: m.team1, team2: m.team2 };
+        });
+        setMatchInfo(info);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -103,11 +114,23 @@ export default function PointsTablePage() {
                   <th className="sticky left-[11.5rem] z-20 bg-black px-2 py-3 text-center text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap border-r border-white/5 min-w-[4.5rem]">
                     ₹
                   </th>
-                  {matchIds.map((mid) => (
-                    <th key={mid} className="px-2 py-3 text-center text-xs font-medium text-white/30 uppercase tracking-wider whitespace-nowrap min-w-[5rem]">
-                      M{mid}
-                    </th>
-                  ))}
+                  {matchIds.map((mid) => {
+                    const mi = matchInfo[mid];
+                    const t1 = mi ? getTeamTheme(mi.team1).label : '';
+                    const t2 = mi ? getTeamTheme(mi.team2).label : '';
+                    return (
+                      <th key={mid} className="px-2 py-3 text-center text-xs font-medium text-white/30 whitespace-nowrap min-w-[5rem]">
+                        {mi ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-white/50 font-semibold text-[10px]">{t1} v {t2}</span>
+                            <span className="text-white/20 text-[9px]">M{mid}</span>
+                          </div>
+                        ) : (
+                          <span className="uppercase tracking-wider">M{mid}</span>
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">

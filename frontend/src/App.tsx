@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute, AdminRoute } from './auth/ProtectedRoute';
 import Navbar from './components/Navbar';
+import { ToastProvider } from './components/Toast';
 import { lazy, Suspense } from 'react';
 import LoadingSpinner from './components/LoadingSpinner';
 
@@ -43,6 +44,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ToastProvider>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             {/* Public */}
@@ -71,6 +73,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );
