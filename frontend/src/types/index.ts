@@ -99,6 +99,8 @@ export type PointsTableEntry = {
   match_id: number;
   points: number;
   last_updated: string;
+  adjusted?: boolean;
+  participated?: boolean;
 };
 
 export type AdminMatchWithTeamCount = {

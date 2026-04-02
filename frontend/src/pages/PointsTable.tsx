@@ -31,14 +31,17 @@ export default function PointsTablePage() {
   const contestantSet = new Set<string>();
   const matchMap = new Map<string, Record<string, number>>();
   const netMap = new Map<string, Record<string, number>>();
+  const adjustedMap = new Map<string, Record<string, boolean>>();
 
   data.forEach((entry) => {
     contestantSet.add(entry.name);
     const mid = String(entry.match_id);
     if (!matchMap.has(mid)) matchMap.set(mid, {});
     if (!netMap.has(mid)) netMap.set(mid, {});
+    if (!adjustedMap.has(mid)) adjustedMap.set(mid, {});
     matchMap.get(mid)![entry.name] = entry.points;
     netMap.get(mid)![entry.name] = entry.net || 0;
+    adjustedMap.get(mid)![entry.name] = Boolean(entry.adjusted);
   });
 
   const contestants = Array.from(contestantSet);
@@ -92,6 +95,9 @@ export default function PointsTablePage() {
           Back
         </Link>
       </div>
+      <p className="mb-4 text-xs text-white/40">
+        <span className="font-semibold text-amber-300">Adj.</span> marks non-participant adjustment points used only for standings.
+      </p>
 
       {loading ? (
         <div className="flex justify-center py-16">
@@ -157,17 +163,22 @@ export default function PointsTablePage() {
                         const pts = matchMap.get(mid)?.[c] || 0;
                         const net = netMap.get(mid)?.[c] || 0;
                         const rank = matchRanks.get(mid)?.[c];
+                        const isAdjusted = adjustedMap.get(mid)?.[c] || false;
                         return (
                           <td key={mid} className="px-2 py-2 text-center whitespace-nowrap min-w-[5rem]">
                             {pts ? (
                               <div>
                                 <div className="flex items-center justify-center gap-1">
                                   {rankBadge(rank || 99)}
-                                  <span className="text-white font-medium">{pts}</span>
+                                  <span className={`font-medium ${isAdjusted ? 'text-amber-300' : 'text-white'}`}>{pts}</span>
                                 </div>
-                                <div className={`text-[10px] ${net > 0 ? 'text-green-400' : net < 0 ? 'text-red-400' : 'text-white/20'}`}>
-                                  {net > 0 ? '+' : ''}{net}
-                                </div>
+                                {isAdjusted ? (
+                                  <div className="text-[10px] text-amber-400">Adj.</div>
+                                ) : (
+                                  <div className={`text-[10px] ${net > 0 ? 'text-green-400' : net < 0 ? 'text-red-400' : 'text-white/20'}`}>
+                                    {net > 0 ? '+' : ''}{net}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-white/10">-</span>

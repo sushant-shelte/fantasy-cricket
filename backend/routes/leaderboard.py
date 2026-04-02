@@ -9,6 +9,10 @@ from backend.services import data_service
 
 ENTRY_FEE = 50
 PRIZE_SPLIT = [0.50, 0.30, 0.20]  # 1st, 2nd, 3rd
+NON_PARTICIPANT_ADJUSTMENT = {
+    "type": "percentage",  # "percentage" or "direct"
+    "value": 15.0,
+}
 
 router = APIRouter(prefix="/api", tags=["leaderboard"])
 LEADERBOARD_CACHE = {
@@ -22,6 +26,14 @@ def invalidate_leaderboard_cache():
     LEADERBOARD_CACHE["leaderboard"] = None
     LEADERBOARD_CACHE["points_table"] = None
     LEADERBOARD_CACHE["player_points_version"] = ""
+
+
+def _compute_non_participant_points(lowest_points: float) -> float:
+    adjustment_type = NON_PARTICIPANT_ADJUSTMENT["type"]
+    adjustment_value = float(NON_PARTICIPANT_ADJUSTMENT["value"])
+    if adjustment_type == "direct":
+        return round(lowest_points - adjustment_value, 2)
+    return round(lowest_points - (lowest_points * adjustment_value / 100.0), 2)
 
 
 def _compute_match_contestant_points(db, match_id: int) -> list[dict]:
@@ -91,6 +103,15 @@ def _load_effective_match_points(db) -> dict[int, list[dict]]:
         row["id"]
         for row in db.execute("SELECT id FROM matches").fetchall()
     ]
+    active_users = db.execute(
+        """
+        SELECT id, name
+        FROM users
+        WHERE is_active = 1
+        ORDER BY name
+        """
+    ).fetchall()
+    active_user_map = {row["id"]: row["name"] for row in active_users}
     effective = {}
 
     for match_id in match_ids:
@@ -108,6 +129,40 @@ def _load_effective_match_points(db) -> dict[int, list[dict]]:
         recomputed = _compute_match_contestant_points(db, match_id)
         effective[match_id] = recomputed
 
+    for match_id, contestants in list(effective.items()):
+        if not contestants:
+            continue
+
+        normalized = []
+        for contestant in contestants:
+            normalized.append({
+                "user_id": contestant["user_id"],
+                "name": contestant["name"],
+                "points": round(float(contestant["points"]), 2),
+                "last_updated": contestant.get("last_updated", ""),
+                "adjusted": bool(contestant.get("adjusted", False)),
+                "participated": bool(contestant.get("participated", True)),
+            })
+
+        participant_ids = {entry["user_id"] for entry in normalized if entry["participated"]}
+        lowest_points = min(entry["points"] for entry in normalized if entry["participated"])
+        adjusted_points = _compute_non_participant_points(lowest_points)
+
+        for user_id, name in active_user_map.items():
+            if user_id in participant_ids:
+                continue
+            normalized.append({
+                "user_id": user_id,
+                "name": name,
+                "points": adjusted_points,
+                "last_updated": "",
+                "adjusted": True,
+                "participated": False,
+            })
+
+        normalized.sort(key=lambda item: (-item["points"], item["name"]))
+        effective[match_id] = normalized
+
     return effective
 
 
@@ -116,6 +171,8 @@ def _calculate_balances(db):
     matches = defaultdict(list)
     for match_id, contestants in _load_effective_match_points(db).items():
         for contestant in contestants:
+            if not contestant.get("participated", True):
+                continue
             matches[match_id].append({
                 "user_id": contestant["user_id"],
                 "points": float(contestant["points"]),
@@ -221,6 +278,8 @@ def _build_points_table(db):
                 "points": contestant["points"],
                 "last_updated": contestant.get("last_updated", ""),
                 "net": match_results.get(uid, {}).get(match_id, 0),
+                "adjusted": contestant.get("adjusted", False),
+                "participated": contestant.get("participated", True),
             })
     return result
 
