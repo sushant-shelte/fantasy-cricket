@@ -36,7 +36,7 @@ class Tournament:
         self.players_by_team = {}
 
     def initialize(self, players_data, matches_data, teams_data):
-        self.refresh_static_data(players_data, matches_data)
+        self.refresh_static_data(players_data, matches_data, refresh_schedule_map=True)
 
         self.contestants = {}
         self.match_participants = {}
@@ -44,10 +44,11 @@ class Tournament:
         if teams_data:
             self.load_teams(teams_data)
 
-    def refresh_static_data(self, players_data, matches_data):
+    def refresh_static_data(self, players_data, matches_data, refresh_schedule_map=False):
         self.registry = PlayerRegistry(players_data)
         self.player_roles = build_player_role_map(players_data)
-        initialize_cricbuzz_match_map(matches_data)
+        if refresh_schedule_map:
+            initialize_cricbuzz_match_map(matches_data)
         self.players_by_team = {}
         for player in players_data:
             self.players_by_team.setdefault(player["Team"], []).append({
@@ -142,7 +143,7 @@ class Tournament:
         if active_count < 22 or active_count > 24:
             print(f"[ALERT] Match {match_id}: active scoring player count is {active_count} (expected 22 to 24)")
 
-    def update_match_data(self, match_id, use_playing_xi=False):
+    def update_match_data(self, match_id, use_playing_xi=False, include_scorecards=True):
         match = self.matches.get(match_id)
         if not match:
             return
@@ -177,6 +178,9 @@ class Tournament:
                 print(f"  {match.team2}: {', '.join(team2_players) if team2_players else 'none'}")
             else:
                 print(f"[Playing XI] Match {match_id}: no mapped playing XI players found")
+
+        if not include_scorecards:
+            return
 
         cricbuzz_html = fetch_cricbuzz_scorecard_html(int(match_id), match.team1, match.team2)
         if cricbuzz_html:
@@ -318,7 +322,7 @@ class Tournament:
         print(f"\n--- Completed matches recompute ({reason}) ---")
         players_data = data_service.get_cached_data("players")
         matches_data = data_service.get_cached_data("matches")
-        self.refresh_static_data(players_data, matches_data)
+        self.refresh_static_data(players_data, matches_data, refresh_schedule_map=True)
 
         completed_match_ids = [
             str(match_row["MatchID"])
@@ -338,7 +342,7 @@ class Tournament:
         for match_id in completed_match_ids:
             try:
                 print(f"  Match {match_id}: OVER - recomputing completed match")
-                self.update_match_data(match_id, use_playing_xi=True)
+                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
                 self.compute_player_points_for_match(match_id)
                 self.compute_points_for_match(match_id)
                 processed += 1
@@ -360,9 +364,7 @@ class Tournament:
             while True:
                 try:
                     print("\n--- Scheduler tick ---")
-                    players_data = data_service.get_cached_data("players")
                     matches_data = data_service.get_cached_data("matches")
-                    self.refresh_static_data(players_data, matches_data)
                     computed_matches = data_service.get_computed_match_ids()
                     locked_match_ids_to_load = []
 
@@ -387,9 +389,12 @@ class Tournament:
 
                         # Per-match error handling — one failure doesn't stop others
                         try:
-                            if status in ("lineups", "live"):
+                            if status == "lineups":
                                 print(f"  Match {match_id}: {status.upper()} — fetching scores")
-                                self.update_match_data(match_id, use_playing_xi=True)
+                                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=False)
+                            elif status == "live":
+                                print(f"  Match {match_id}: LIVE - fetching scores")
+                                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
                                 processed += 1
@@ -400,7 +405,7 @@ class Tournament:
                                     continue
 
                                 print(f"  Match {match_id}: OVER — computing for first time")
-                                self.update_match_data(match_id, use_playing_xi=True)
+                                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
                                 processed += 1

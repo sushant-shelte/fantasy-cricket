@@ -30,6 +30,16 @@ def set_tournament(t):
     tournament_ref = t
 
 
+def _refresh_tournament_static_state(refresh_schedule_map: bool = False):
+    if tournament_ref is None:
+        return
+    tournament_ref.refresh_static_data(
+        data_service.get_cached_data("players"),
+        data_service.get_cached_data("matches"),
+        refresh_schedule_map=refresh_schedule_map,
+    )
+
+
 # --- User Management ---
 
 class UpdateUserBody(BaseModel):
@@ -116,6 +126,7 @@ async def create_player(
     )
     db.commit()
     data_service.invalidate_cache("players")
+    _refresh_tournament_static_state()
 
     player = db.execute(
         "SELECT * FROM players WHERE id = ?", (cursor.lastrowid,)
@@ -158,6 +169,7 @@ async def update_player(
     db.execute(f"UPDATE players SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
     data_service.invalidate_cache("players")
+    _refresh_tournament_static_state()
 
     updated = db.execute("SELECT * FROM players WHERE id = ?", (player_id,)).fetchone()
     return dict(updated)
@@ -177,6 +189,7 @@ async def delete_player(
     db.execute("DELETE FROM players WHERE id = ?", (player_id,))
     db.commit()
     data_service.invalidate_cache("players")
+    _refresh_tournament_static_state()
 
     return {"success": True}
 
@@ -218,6 +231,7 @@ async def create_match(
     db.commit()
     data_service.invalidate_cache("matches")
     invalidate_matches_response_cache()
+    _refresh_tournament_static_state(refresh_schedule_map=True)
 
     match = db.execute(
         "SELECT * FROM matches WHERE id = ?", (cursor.lastrowid,)
@@ -264,6 +278,7 @@ async def update_match(
     db.commit()
     data_service.invalidate_cache("matches")
     invalidate_matches_response_cache()
+    _refresh_tournament_static_state(refresh_schedule_map=True)
 
     updated = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
     return dict(updated)
@@ -284,6 +299,7 @@ async def delete_match(
     db.commit()
     data_service.invalidate_cache("matches")
     invalidate_matches_response_cache()
+    _refresh_tournament_static_state(refresh_schedule_map=True)
 
     return {"success": True}
 
@@ -305,10 +321,7 @@ async def recalculate_match(
 
     match_id_str = str(match_id)
 
-    tournament_ref.refresh_static_data(
-        data_service.get_cached_data("players"),
-        data_service.get_cached_data("matches"),
-    )
+    _refresh_tournament_static_state()
     tournament_ref.ensure_match_teams_loaded([match_id_str], force=True)
 
     # Fetch and parse scorecard, compute points
@@ -552,6 +565,9 @@ async def clear_table(
         data_service.invalidate_cache(table_name)
     if table_name == "matches":
         invalidate_matches_response_cache()
+        _refresh_tournament_static_state(refresh_schedule_map=True)
+    elif table_name == "players":
+        _refresh_tournament_static_state()
 
     return {"success": True, "message": f"Cleared all data from {table_name}"}
 
