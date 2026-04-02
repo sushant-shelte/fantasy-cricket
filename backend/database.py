@@ -203,10 +203,12 @@ def init_db():
                 venue TEXT DEFAULT NULL
             )
         """)
-        try:
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'matches' AND column_name = 'venue'
+        """)
+        if not cursor.fetchone():
             cursor.execute("ALTER TABLE matches ADD COLUMN venue TEXT DEFAULT NULL")
-        except Exception:
-            pass
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_teams (
                 id SERIAL PRIMARY KEY,
