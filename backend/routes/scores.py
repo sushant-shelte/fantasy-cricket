@@ -58,15 +58,48 @@ def _compute_contestants_from_player_points(db, match_id: int, pp_lookup: dict[s
     return contestants
 
 
-def _needs_contestant_points_fallback(contestants: list[dict], pp_lookup: dict[str, float] | None = None) -> bool:
-    if not contestants:
-        return True
-    if not pp_lookup:
-        return False
-    has_nonzero_player_points = any(float(points) != 0 for points in pp_lookup.values())
-    if not has_nonzero_player_points:
-        return False
-    return all(float(contestant.get("points", 0)) == 0 for contestant in contestants)
+def _merge_contestant_points(
+    db,
+    match_id: int,
+    stored_contestants: list[dict],
+    pp_lookup: dict[str, float] | None = None,
+) -> list[dict]:
+    computed_contestants = _compute_contestants_from_player_points(db, match_id, pp_lookup)
+    if not computed_contestants:
+        return stored_contestants
+
+    merged_by_user = {
+        contestant["id"]: {
+            "id": contestant["id"],
+            "name": contestant["name"],
+            "points": round(float(contestant.get("points", 0)), 2),
+        }
+        for contestant in computed_contestants
+    }
+
+    has_nonzero_player_points = any(float(points) != 0 for points in (pp_lookup or {}).values())
+    all_stored_zero = bool(stored_contestants) and all(float(contestant.get("points", 0)) == 0 for contestant in stored_contestants)
+
+    for contestant in stored_contestants:
+        user_id = contestant["id"]
+        stored_points = round(float(contestant.get("points", 0)), 2)
+
+        if user_id not in merged_by_user:
+            merged_by_user[user_id] = {
+                "id": contestant["id"],
+                "name": contestant["name"],
+                "points": stored_points,
+            }
+            continue
+
+        if not has_nonzero_player_points:
+            merged_by_user[user_id]["points"] = stored_points
+        elif not all_stored_zero and stored_points != 0:
+            merged_by_user[user_id]["points"] = stored_points
+
+    merged = list(merged_by_user.values())
+    merged.sort(key=lambda item: (-item["points"], item["name"]))
+    return merged
 
 
 def _fill_missing_player_points(match_obj, registry, pp_lookup: dict, role_lookup: dict) -> tuple[dict, dict]:
@@ -265,8 +298,7 @@ async def match_scores(
     ).fetchall()
 
     contestants = [{"id": row["id"], "name": row["name"], "points": float(row["points"])} for row in contestant_rows]
-    if _needs_contestant_points_fallback(contestants, pp_lookup):
-        contestants = _compute_contestants_from_player_points(db, match_id, pp_lookup)
+    contestants = _merge_contestant_points(db, match_id, contestants, pp_lookup)
 
     return {"players": result, "contestants": contestants}
 
