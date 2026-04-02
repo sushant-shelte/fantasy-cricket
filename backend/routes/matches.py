@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, date
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.config import IST
+from backend.services.venue_stats import get_venue_stats
 
 router = APIRouter(prefix="/api", tags=["matches"])
 
@@ -48,6 +49,7 @@ async def list_matches(user: dict = Depends(get_current_user)):
         status, locked = compute_match_status(match["match_date"], match["match_time"])
         match["status"] = status
         match["locked"] = locked
+        match["venue"] = get_venue_stats(match["team1"], match["team2"], match.get("venue"))
         result.append(match)
 
     today_matches = [m for m in result if datetime.strptime(m["match_date"], "%Y-%m-%d").date() == today]

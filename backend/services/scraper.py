@@ -723,3 +723,65 @@ def fetch_playing_xi(
             "finalized": False,
         }
         return _copy_playing_xi_payload(payload)
+
+
+def fetch_venues_from_cricbuzz() -> dict[int, str]:
+    """Fetch venue info for all matches from Cricbuzz schedule. Returns {match_no: 'Ground, City'}. Fails silently."""
+    try:
+        schedule_url = build_cricbuzz_schedule_url()
+        res = _session_get(schedule_url)
+        if res.status_code != 200:
+            return {}
+
+        venues: dict[int, str] = {}
+        data = _extract_cricbuzz_embedded_json(res.text, "matchesData")
+        if not data:
+            return {}
+
+        for section in data.get("matchDetails", []):
+            match_map = section.get("matchDetailsMap", {})
+            for match in match_map.get("match", []):
+                match_info = match.get("matchInfo", {})
+                match_desc = str(match_info.get("matchDesc", ""))
+                desc_match = re.match(r"(\d+)(?:st|nd|rd|th)? Match\b", match_desc, flags=re.IGNORECASE)
+                if not desc_match:
+                    continue
+
+                match_no = int(desc_match.group(1))
+                venue_info = match_info.get("venueInfo", {})
+                ground = venue_info.get("ground", "")
+                city = venue_info.get("city", "")
+                if ground:
+                    venues[match_no] = f"{ground}, {city}" if city else ground
+
+        print(f"[Cricbuzz] Fetched venues for {len(venues)} matches")
+        return venues
+    except Exception as e:
+        print(f"[Cricbuzz] Error fetching venues: {e}")
+        return {}
+
+
+def populate_match_venues(db) -> None:
+    """Populate venue column in matches table from Cricbuzz. Fails silently."""
+    try:
+        # Check which matches are missing venue
+        rows = db.execute("SELECT id FROM matches WHERE venue IS NULL OR venue = ''").fetchall()
+        if not rows:
+            return
+
+        missing_ids = {r["id"] for r in rows}
+        venues = fetch_venues_from_cricbuzz()
+        if not venues:
+            return
+
+        updated = 0
+        for match_no, venue_str in venues.items():
+            if match_no in missing_ids:
+                db.execute("UPDATE matches SET venue = ? WHERE id = ?", (venue_str, match_no))
+                updated += 1
+
+        if updated:
+            db.commit()
+            print(f"[Venues] Updated venue for {updated} matches")
+    except Exception as e:
+        print(f"[Venues] Error populating venues: {e}")

@@ -199,9 +199,14 @@ def init_db():
                 team2 TEXT NOT NULL,
                 match_date TEXT NOT NULL,
                 match_time TEXT NOT NULL,
-                status TEXT DEFAULT 'future'
+                status TEXT DEFAULT 'future',
+                venue TEXT DEFAULT NULL
             )
         """)
+        try:
+            cursor.execute("ALTER TABLE matches ADD COLUMN venue TEXT DEFAULT NULL")
+        except Exception:
+            pass
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_teams (
                 id SERIAL PRIMARY KEY,
@@ -277,7 +282,8 @@ def init_db():
                 team2 TEXT NOT NULL,
                 match_date TEXT NOT NULL,
                 match_time TEXT NOT NULL,
-                status TEXT DEFAULT 'future'
+                status TEXT DEFAULT 'future',
+                venue TEXT DEFAULT NULL
             );
             CREATE TABLE IF NOT EXISTS user_teams (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -318,5 +324,9 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid);
         """)
         _ensure_user_teams_updated_at_sqlite(conn)
+        try:
+            conn.execute("ALTER TABLE matches ADD COLUMN venue TEXT DEFAULT NULL")
+        except Exception:
+            pass
         conn.commit()
         conn.close()

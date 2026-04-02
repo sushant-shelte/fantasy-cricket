@@ -147,6 +147,13 @@ def start_bootstrap_if_needed():
 def startup():
     admin.set_tournament(tournament)
     start_bootstrap_if_needed()
+    # Populate venue data from Cricbuzz (fails silently)
+    try:
+        from backend.services.scraper import populate_match_venues
+        from backend.database import get_db
+        populate_match_venues(get_db())
+    except Exception:
+        pass
 
 
 @app.get("/api/health")

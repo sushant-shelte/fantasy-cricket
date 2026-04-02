@@ -8,6 +8,16 @@ export type User = {
   is_active: boolean;
 };
 
+export type VenueStats = {
+  venue: string;
+  city: string;
+  matches: number;
+  avg_first_innings: number;
+  bat_first_win_pct: number;
+  chase_win_pct: number;
+  pitch_type: string;
+};
+
 export type Match = {
   id: number;
   team1: string;
@@ -16,6 +26,7 @@ export type Match = {
   match_time: string;
   status: 'future' | 'live' | 'over';
   locked: boolean;
+  venue?: VenueStats | null;
 };
 
 export type Player = {

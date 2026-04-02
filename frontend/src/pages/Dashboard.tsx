@@ -336,6 +336,26 @@ export default function DashboardPage() {
                 <p className="text-white/40 text-xs text-center mb-1">
                   {formatDate(match.match_date, match.match_time)}
                 </p>
+                {match.venue && (
+                  <div className="mb-2 mx-auto max-w-[280px]">
+                    <p className="text-white/50 text-[11px] text-center font-medium mb-1">
+                      {match.venue.venue}, {match.venue.city}
+                    </p>
+                    <div className="flex items-center justify-center gap-2 text-[10px]">
+                      <span className={`px-2 py-0.5 rounded-full border ${
+                        match.venue.pitch_type === 'Batting-friendly'
+                          ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                          : match.venue.pitch_type === 'Bowling-friendly'
+                          ? 'bg-sky-500/10 border-sky-500/20 text-sky-300'
+                          : 'bg-white/5 border-white/10 text-white/50'
+                      }`}>
+                        {match.venue.pitch_type}
+                      </span>
+                      <span className="text-white/30">Avg {match.venue.avg_first_innings}</span>
+                      <span className="text-white/30">Chase {match.venue.chase_win_pct}%</span>
+                    </div>
+                  </div>
+                )}
                 {tab === 'today' && match.status === 'future' && getCountdown(match) && (
                   <p className="text-center mb-2">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[11px] font-semibold">
