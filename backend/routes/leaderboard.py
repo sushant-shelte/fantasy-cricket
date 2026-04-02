@@ -32,8 +32,10 @@ def _compute_non_participant_points(lowest_points: float) -> float:
     adjustment_type = NON_PARTICIPANT_ADJUSTMENT["type"]
     adjustment_value = float(NON_PARTICIPANT_ADJUSTMENT["value"])
     if adjustment_type == "direct":
-        return round(lowest_points - adjustment_value, 2)
-    return round(lowest_points - (lowest_points * adjustment_value / 100.0), 2)
+        adjusted = lowest_points - adjustment_value
+    else:
+        adjusted = lowest_points - (lowest_points * adjustment_value / 100.0)
+    return round(adjusted * 2) / 2
 
 
 def _compute_match_contestant_points(db, match_id: int) -> list[dict]:

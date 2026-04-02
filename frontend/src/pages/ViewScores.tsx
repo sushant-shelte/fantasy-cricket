@@ -232,7 +232,11 @@ export default function ViewScoresPage() {
   };
 
   const renderRoleSymbol = (role: string) => {
-    const config = ROLE_SYMBOLS[role] || { symbol: role.slice(0, 2).toUpperCase(), label: role };
+    let config = ROLE_SYMBOLS[role] || { symbol: role.slice(0, 2).toUpperCase(), label: role };
+    if (role === 'Batter') config = { symbol: '\u{1F3CF}', label: 'Batter' };
+    else if (role === 'Bowler') config = { symbol: '\u26BE', label: 'Bowler' };
+    else if (role === 'AllRounder') config = { symbol: '\u{1F3CF}\u26BE', label: 'All-Rounder' };
+    else if (role === 'Wicketkeeper') config = { symbol: '\u{1F9E4}', label: 'Wicketkeeper' };
     return (
       <span
         title={config.label}
