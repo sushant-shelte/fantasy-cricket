@@ -86,7 +86,6 @@ export default function SelectTeamPage() {
   const [activeRole, setActiveRole] = useState<(typeof REQUIRED_ROLES)[number]>('Wicketkeeper');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [playingXi, setPlayingXi] = useState<PlayingXiState>({ announced: false, url: null });
 
@@ -122,7 +121,7 @@ export default function SelectTeamPage() {
           setSelected(map);
         }
       } catch {
-        setError('Failed to load players.');
+        toast('Failed to load players.', 'error');
       } finally {
         setLoading(false);
       }
@@ -233,7 +232,6 @@ export default function SelectTeamPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError('');
 
     const validationError = validate();
     if (validationError) {

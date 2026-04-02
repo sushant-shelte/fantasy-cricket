@@ -6,7 +6,7 @@ import type { Match } from '../types';
 import { getTeamTheme } from '../utils/teamTheme';
 import { DashboardSkeleton } from '../components/Skeleton';
 
-function useCountdown(matches: Match[]) {
+function useCountdown() {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MatchTab>('today');
   const { profile } = useAuth();
-  const getCountdown = useCountdown(matches);
+  const getCountdown = useCountdown();
 
   useEffect(() => {
     const loadDashboard = async () => {
