@@ -110,7 +110,7 @@ def _cached_users() -> list[dict]:
 def _cached_matches() -> list[dict]:
     db = get_db()
     rows = db.execute(
-        "SELECT id, team1, team2, match_date, match_time, status FROM matches"
+        "SELECT id, team1, team2, match_date, match_time, status, venue FROM matches"
     ).fetchall()
     return [
         {
@@ -119,6 +119,7 @@ def _cached_matches() -> list[dict]:
             "Team2": r["team2"],
             "Date": r["match_date"],
             "Time": r["match_time"],
+            "Venue": r["venue"],
         }
         for r in rows
     ]
@@ -220,6 +221,21 @@ def get_matches() -> list[dict]:
     db = get_db()
     rows = db.execute("SELECT * FROM matches").fetchall()
     return _rows_to_dicts(rows)
+
+
+def get_matches_api_rows() -> list[dict]:
+    rows = get_cached_data("matches")
+    return [
+        {
+            "id": int(row["MatchID"]),
+            "team1": row["Team1"],
+            "team2": row["Team2"],
+            "match_date": row["Date"],
+            "match_time": row["Time"],
+            "venue": row.get("Venue"),
+        }
+        for row in rows
+    ]
 
 
 # ---------------------------------------------------------------------------

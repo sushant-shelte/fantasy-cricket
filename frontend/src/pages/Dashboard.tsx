@@ -52,7 +52,7 @@ export default function DashboardPage() {
     const loadDashboard = async () => {
       try {
         const [matchRes, teamsRes] = await Promise.all([
-          client.get('/api/matches'),
+          client.get('/api/dashboard/matches'),
           client.get('/api/teams/my-matches'),
         ]);
 

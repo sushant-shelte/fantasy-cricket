@@ -782,6 +782,13 @@ def populate_match_venues(db) -> None:
 
         if updated:
             db.commit()
+            from backend.services import data_service
+            from backend.routes.matches import invalidate_matches_response_cache
+            from backend.services.venue_stats import invalidate_today_venue_cache
+
+            data_service.invalidate_cache("matches")
+            invalidate_matches_response_cache()
+            invalidate_today_venue_cache()
             print(f"[Venues] Updated venue for {updated} matches")
     except Exception as e:
         print(f"[Venues] Error populating venues: {e}")

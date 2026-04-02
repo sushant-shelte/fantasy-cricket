@@ -3,8 +3,7 @@ IPL venue stats — hardcoded defaults with optional Howstat refresh.
 All scraping fails silently, returning cached/hardcoded data.
 """
 
-import threading
-import time
+from datetime import datetime
 
 try:
     import requests
@@ -12,6 +11,8 @@ try:
 except ImportError:
     requests = None
     BeautifulSoup = None
+
+from backend.config import IST
 
 
 # Team -> home ground mapping
@@ -168,6 +169,11 @@ DEFAULT_VENUE_STATS = {
     },
 }
 
+TODAY_VENUE_CACHE = {
+    "date": "",
+    "by_match_id": {},
+}
+
 
 def get_venue_for_match(team1: str, team2: str) -> str | None:
     """Return the venue name for a match. team1 is assumed to be the home team."""
@@ -235,3 +241,39 @@ def get_venue_stats(team1: str, team2: str, venue_name: str | None = None) -> di
         return DEFAULT_VENUE_STATS.get(venue_key)
     except Exception:
         return None
+
+
+def invalidate_today_venue_cache() -> None:
+    TODAY_VENUE_CACHE["date"] = ""
+    TODAY_VENUE_CACHE["by_match_id"] = {}
+
+
+def prime_today_venue_cache(match_rows: list[dict]) -> dict[int, dict | None]:
+    today_key = datetime.now(IST).strftime("%Y-%m-%d")
+    by_match_id: dict[int, dict | None] = {}
+
+    for match in match_rows:
+        if match.get("match_date") != today_key:
+            continue
+        if match.get("status") != "future":
+            continue
+        by_match_id[int(match["id"])] = get_venue_stats(
+            match.get("team1", ""),
+            match.get("team2", ""),
+            match.get("venue"),
+        )
+
+    TODAY_VENUE_CACHE["date"] = today_key
+    TODAY_VENUE_CACHE["by_match_id"] = by_match_id
+    return by_match_id
+
+
+def get_today_cached_venue_stats(match_id: int, match_date: str, status: str) -> dict | None:
+    today_key = datetime.now(IST).strftime("%Y-%m-%d")
+    if match_date != today_key or status != "future":
+        return None
+
+    if TODAY_VENUE_CACHE["date"] != today_key:
+        return None
+
+    return TODAY_VENUE_CACHE["by_match_id"].get(int(match_id))

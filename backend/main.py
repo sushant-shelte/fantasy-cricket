@@ -1,5 +1,7 @@
 import os
 import threading
+import time
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 import openpyxl
@@ -12,6 +14,7 @@ from fastapi.responses import FileResponse
 from backend.database import init_db, get_db
 from backend.firebase_setup import init_firebase
 from backend.services import data_service
+from backend.services.venue_stats import prime_today_venue_cache
 from backend.models.tournament import Tournament
 from backend.routes import auth, matches, players, teams, scores, leaderboard, admin
 
@@ -44,6 +47,7 @@ bootstrap_lock = threading.Lock()
 bootstrap_started = False
 bootstrap_error = None
 bootstrap_ready = False
+completed_recompute_started = False
 
 
 def seed_db_if_needed():
@@ -117,12 +121,18 @@ def bootstrap_app():
 
         init_firebase()
         data_service.prime_static_cache()
+        match_rows = data_service.get_matches_api_rows()
+        for match in match_rows:
+            status, _ = matches.compute_match_status(match["match_date"], match["match_time"])
+            match["status"] = status
+        prime_today_venue_cache(match_rows)
 
         players_data = data_service.get_cached_data("players")
         matches_data = data_service.get_cached_data("matches")
 
         tournament.initialize(players_data, matches_data, [])
         tournament.start_scheduler()
+        start_completed_match_recompute_if_needed()
 
         bootstrap_ready = True
         bootstrap_error = None
@@ -141,6 +151,43 @@ def start_bootstrap_if_needed():
         bootstrap_started = True
         thread = threading.Thread(target=bootstrap_app, daemon=True)
         thread.start()
+
+
+def _seconds_until_next_completed_recompute() -> float:
+    now = datetime.now(IST)
+    candidates = [
+        now.replace(hour=19, minute=0, second=0, microsecond=0),
+        now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1),
+    ]
+    future_candidates = [candidate for candidate in candidates if candidate > now]
+    next_run = min(future_candidates)
+    return max((next_run - now).total_seconds(), 1.0)
+
+
+def start_completed_match_recompute_if_needed():
+    global completed_recompute_started
+    with bootstrap_lock:
+        if completed_recompute_started:
+            return
+        completed_recompute_started = True
+
+    def _run_completed_recompute_scheduler():
+        try:
+            tournament.recompute_completed_matches("startup")
+        except Exception as exc:
+            print(f"Completed matches startup recompute error: {exc}")
+
+        while True:
+            sleep_seconds = _seconds_until_next_completed_recompute()
+            time.sleep(sleep_seconds)
+            try:
+                now_label = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+                tournament.recompute_completed_matches(f"scheduled {now_label}")
+            except Exception as exc:
+                print(f"Completed matches scheduled recompute error: {exc}")
+
+    thread = threading.Thread(target=_run_completed_recompute_scheduler, daemon=True)
+    thread.start()
 
 
 @app.on_event("startup")

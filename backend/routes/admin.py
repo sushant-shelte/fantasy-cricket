@@ -12,6 +12,7 @@ from backend.config import IST
 from backend.config import ROLES
 from backend.services import data_service
 from backend.routes.leaderboard import invalidate_leaderboard_cache
+from backend.routes.matches import invalidate_matches_response_cache
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -216,6 +217,7 @@ async def create_match(
     )
     db.commit()
     data_service.invalidate_cache("matches")
+    invalidate_matches_response_cache()
 
     match = db.execute(
         "SELECT * FROM matches WHERE id = ?", (cursor.lastrowid,)
@@ -261,6 +263,7 @@ async def update_match(
     db.execute(f"UPDATE matches SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
     data_service.invalidate_cache("matches")
+    invalidate_matches_response_cache()
 
     updated = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
     return dict(updated)
@@ -280,6 +283,7 @@ async def delete_match(
     db.execute("DELETE FROM matches WHERE id = ?", (match_id,))
     db.commit()
     data_service.invalidate_cache("matches")
+    invalidate_matches_response_cache()
 
     return {"success": True}
 
@@ -546,6 +550,8 @@ async def clear_table(
     db.commit()
     if table_name in {"players", "matches"}:
         data_service.invalidate_cache(table_name)
+    if table_name == "matches":
+        invalidate_matches_response_cache()
 
     return {"success": True, "message": f"Cleared all data from {table_name}"}
 

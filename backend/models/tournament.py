@@ -311,6 +311,50 @@ class Tournament:
         if rows:
             data_service.save_player_points(rows)
 
+    def recompute_completed_matches(self, reason: str = "manual"):
+        from backend.routes.leaderboard import invalidate_leaderboard_cache
+        from backend.routes.matches import invalidate_matches_response_cache
+
+        print(f"\n--- Completed matches recompute ({reason}) ---")
+        players_data = data_service.get_cached_data("players")
+        matches_data = data_service.get_cached_data("matches")
+        self.refresh_static_data(players_data, matches_data)
+
+        completed_match_ids = [
+            str(match_row["MatchID"])
+            for match_row in matches_data
+            if self.get_match_status(match_row) == "over"
+        ]
+
+        if not completed_match_ids:
+            invalidate_leaderboard_cache()
+            invalidate_matches_response_cache()
+            print("  No completed matches found for recompute")
+            return 0
+
+        self.ensure_match_teams_loaded(completed_match_ids, force=True)
+
+        processed = 0
+        for match_id in completed_match_ids:
+            try:
+                print(f"  Match {match_id}: OVER - recomputing completed match")
+                self.update_match_data(match_id, use_playing_xi=True)
+                self.compute_player_points_for_match(match_id)
+                self.compute_points_for_match(match_id)
+                processed += 1
+            except Exception as exc:
+                print(f"  Match {match_id}: ERROR - {exc}")
+                traceback.print_exc()
+
+        if processed > 0:
+            self.persist_player_points_to_local()
+            self.persist_to_local()
+
+        invalidate_leaderboard_cache()
+        invalidate_matches_response_cache()
+        print(f"  Recomputed {processed} completed matches")
+        return processed
+
     def start_scheduler(self):
         def run():
             while True:
