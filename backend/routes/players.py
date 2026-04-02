@@ -54,7 +54,7 @@ async def list_players(
                 COALESCE(SUM(pp.points), 0) AS total_points,
                 COUNT(pp.match_id) AS matches_played,
                 CASE WHEN COUNT(pp.match_id) > 0
-                     THEN ROUND(COALESCE(SUM(pp.points), 0) * 1.0 / COUNT(pp.match_id), 2)
+                     THEN ROUND(CAST(COALESCE(SUM(pp.points), 0) * 1.0 / COUNT(pp.match_id) AS numeric), 2)
                      ELSE 0 END AS avg_points
             FROM players p
             LEFT JOIN player_points pp ON pp.player_id = p.id
