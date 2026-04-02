@@ -62,6 +62,10 @@ class PgCursorWrapper:
     def lastrowid(self):
         return self._cursor.fetchone()[0] if self._cursor.description else None
 
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
 
 class PgConnectionWrapper:
     """Wraps psycopg2 connection to behave like sqlite3.Connection."""

@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
+from backend.config import IST
 from backend.database import init_db, get_db
 from backend.firebase_setup import init_firebase
 from backend.services import data_service
