@@ -4,6 +4,7 @@ import client from '../api/client';
 import type { Player, TeamSelection } from '../types';
 import { getTeamTheme } from '../utils/teamTheme';
 import { useToast } from '../components/Toast';
+import { PlayerListSkeleton } from '../components/Skeleton';
 
 interface SelectedPlayer {
   player_id: number;
@@ -280,8 +281,22 @@ export default function SelectTeamPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+      <div className="min-h-screen bg-black">
+        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-lg border-b border-white/10">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/10 animate-pulse" />
+              <div className="space-y-1.5">
+                <div className="h-5 w-36 rounded bg-white/10 animate-pulse" />
+                <div className="h-3 w-20 rounded bg-white/10 animate-pulse" />
+              </div>
+            </div>
+            <div className="h-8 w-14 rounded-xl bg-white/10 animate-pulse" />
+          </div>
+        </header>
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <PlayerListSkeleton />
+        </div>
       </div>
     );
   }
@@ -499,10 +514,23 @@ export default function SelectTeamPage() {
                           {renderTeamBadge(player.team)}
                           <p className="min-w-0 truncate text-sm font-medium text-white">{player.name}</p>
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <span className="text-emerald-300 font-semibold">
-                            {(player.total_points || 0).toFixed(2)} pts
+                            {(player.total_points || 0).toFixed(1)} pts
                           </span>
+                          {(player.matches_played ?? 0) > 0 && (
+                            <>
+                              <span className="text-white/35" title="Average points per match">
+                                Avg {(player.avg_points || 0).toFixed(1)}
+                              </span>
+                              <span className="text-white/35" title="Last match points">
+                                Last {player.last_match_points != null ? player.last_match_points.toFixed(1) : '-'}
+                              </span>
+                              <span className="text-white/25" title="Matches played">
+                                {player.matches_played}M
+                              </span>
+                            </>
+                          )}
                           {playingXi.announced && availabilityStatus === 'available' && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
                               <span className="h-2 w-2 rounded-full bg-emerald-400"></span>

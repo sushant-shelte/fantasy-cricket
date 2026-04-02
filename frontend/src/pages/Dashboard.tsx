@@ -1,9 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Match } from '../types';
 import { getTeamTheme } from '../utils/teamTheme';
+import { DashboardSkeleton } from '../components/Skeleton';
+
+function useCountdown(matches: Match[]) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const getCountdown = useCallback((match: Match) => {
+    if (match.status !== 'future') return null;
+    const matchTime = new Date(`${match.match_date}T${match.match_time}`).getTime();
+    const diff = matchTime - now;
+    if (diff <= 0) return null;
+
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  }, [now]);
+
+  return getCountdown;
+}
 
 type MatchTab = 'today' | 'upcoming' | 'completed';
 type TodayTeamLineupInfo = { announced: boolean; unannouncedSelected: number; substituteSelected: number };
@@ -19,6 +46,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MatchTab>('today');
   const { profile } = useAuth();
+  const getCountdown = useCountdown(matches);
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -266,9 +294,7 @@ export default function DashboardPage() {
 
         {/* Match Cards */}
         {loading ? (
-          <div className="flex justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
-          </div>
+          <DashboardSkeleton />
         ) : currentMatches.length === 0 ? (
           <div className="text-center py-12 text-white/40 text-sm">
             {tab === 'today' ? "No matches today." : tab === 'upcoming' ? 'No upcoming matches.' : 'No completed matches yet.'}
@@ -307,9 +333,19 @@ export default function DashboardPage() {
                     </span>
                   </span>
                 </div>
-                <p className="text-white/40 text-xs text-center mb-3">
+                <p className="text-white/40 text-xs text-center mb-1">
                   {formatDate(match.match_date, match.match_time)}
                 </p>
+                {tab === 'today' && match.status === 'future' && getCountdown(match) && (
+                  <p className="text-center mb-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[11px] font-semibold">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Starts in {getCountdown(match)}
+                    </span>
+                  </p>
+                )}
                 {tab === 'today' && match.status === 'future' && myTeams.has(match.id) && todayTeamLineup[match.id]?.announced && (
                   <div className="mb-3 space-y-1 text-center text-xs font-medium">
                     <p className={todayTeamLineup[match.id].unannouncedSelected > 0 ? 'text-red-300' : 'text-emerald-300'}>

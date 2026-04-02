@@ -25,6 +25,9 @@ export type Player = {
   role: string;
   aliases: string;
   total_points?: number;
+  matches_played?: number;
+  avg_points?: number;
+  last_match_points?: number | null;
   is_playing_xi?: boolean | null;
   is_substitute?: boolean | null;
   availability_status?: 'available' | 'substitute' | 'unavailable' | null;

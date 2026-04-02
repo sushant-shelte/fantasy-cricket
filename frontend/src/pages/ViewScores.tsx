@@ -4,6 +4,7 @@ import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { PlayerScore, ContestantScore } from '../types';
 import { getTeamTheme } from '../utils/teamTheme';
+import { ScoresSkeleton } from '../components/Skeleton';
 
 interface TeamDiffEntry {
   player_id: number;
@@ -172,11 +173,26 @@ export default function ViewScoresPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white mx-auto mb-4" />
-          <p className="text-white/50 text-sm">Loading scores...</p>
-        </div>
+      <div className="min-h-screen bg-black">
+        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-lg border-b border-white/10">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/10 animate-pulse" />
+              <div className="space-y-1.5">
+                <div className="h-5 w-28 rounded bg-white/10 animate-pulse" />
+                <div className="h-3 w-20 rounded bg-white/10 animate-pulse" />
+              </div>
+            </div>
+            <div className="flex gap-1 bg-white/5 rounded-xl p-1">
+              <div className="h-7 w-16 rounded-lg bg-white/10 animate-pulse" />
+              <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
+              <div className="h-7 w-20 rounded-lg bg-white/10 animate-pulse" />
+            </div>
+          </div>
+        </header>
+        <main className="max-w-6xl mx-auto px-4 py-6">
+          <ScoresSkeleton />
+        </main>
       </div>
     );
   }

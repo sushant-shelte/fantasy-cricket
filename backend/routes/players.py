@@ -51,7 +51,11 @@ async def list_players(
                 p.team,
                 p.role,
                 p.aliases,
-                COALESCE(SUM(pp.points), 0) AS total_points
+                COALESCE(SUM(pp.points), 0) AS total_points,
+                COUNT(pp.match_id) AS matches_played,
+                CASE WHEN COUNT(pp.match_id) > 0
+                     THEN ROUND(COALESCE(SUM(pp.points), 0) * 1.0 / COUNT(pp.match_id), 2)
+                     ELSE 0 END AS avg_points
             FROM players p
             LEFT JOIN player_points pp ON pp.player_id = p.id
             WHERE p.team IN (?, ?)
@@ -70,10 +74,27 @@ async def list_players(
             (team1, team2),
         ).fetchall()
 
+        # Fetch last match points per player in one query
+        last_match_rows = db.execute(
+            """
+            SELECT pp.player_id, pp.points
+            FROM player_points pp
+            INNER JOIN (
+                SELECT player_id, MAX(match_id) AS max_mid
+                FROM player_points
+                GROUP BY player_id
+            ) latest ON pp.player_id = latest.player_id AND pp.match_id = latest.max_mid
+            """
+        ).fetchall()
+        last_match_map = {r["player_id"]: round(float(r["points"]), 2) for r in last_match_rows}
+
         players = []
         for row in rows:
             player = dict(row)
             player["total_points"] = round(float(player.get("total_points") or 0), 2)
+            player["matches_played"] = int(player.get("matches_played") or 0)
+            player["avg_points"] = round(float(player.get("avg_points") or 0), 2)
+            player["last_match_points"] = last_match_map.get(player["id"])
             players.append(player)
 
         playing_xi_data = {
