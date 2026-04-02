@@ -58,6 +58,17 @@ def _compute_contestants_from_player_points(db, match_id: int, pp_lookup: dict[s
     return contestants
 
 
+def _needs_contestant_points_fallback(contestants: list[dict], pp_lookup: dict[str, float] | None = None) -> bool:
+    if not contestants:
+        return True
+    if not pp_lookup:
+        return False
+    has_nonzero_player_points = any(float(points) != 0 for points in pp_lookup.values())
+    if not has_nonzero_player_points:
+        return False
+    return all(float(contestant.get("points", 0)) == 0 for contestant in contestants)
+
+
 def _fill_missing_player_points(match_obj, registry, pp_lookup: dict, role_lookup: dict) -> tuple[dict, dict]:
     if not match_obj:
         return pp_lookup, role_lookup
@@ -254,7 +265,7 @@ async def match_scores(
     ).fetchall()
 
     contestants = [{"id": row["id"], "name": row["name"], "points": float(row["points"])} for row in contestant_rows]
-    if not contestants:
+    if _needs_contestant_points_fallback(contestants, pp_lookup):
         contestants = _compute_contestants_from_player_points(db, match_id, pp_lookup)
 
     return {"players": result, "contestants": contestants}

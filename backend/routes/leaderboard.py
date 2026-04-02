@@ -24,12 +24,53 @@ def invalidate_leaderboard_cache():
     LEADERBOARD_CACHE["player_points_version"] = ""
 
 
-def _calculate_balances(db):
-    """Calculate running balance for each user across all completed matches."""
-    # Get all contestant points grouped by match
-    rows = db.execute(
+def _compute_match_contestant_points(db, match_id: int) -> list[dict]:
+    team_rows = db.execute(
         """
-        SELECT cp.user_id, cp.match_id, cp.points
+        SELECT
+            u.id AS user_id,
+            u.name AS user_name,
+            ut.player_id,
+            ut.is_captain,
+            ut.is_vice_captain,
+            COALESCE(pp.points, 0) AS player_points
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.user_id
+        LEFT JOIN player_points pp ON pp.match_id = ut.match_id AND pp.player_id = ut.player_id
+        WHERE ut.match_id = ?
+          AND u.is_active = 1
+        ORDER BY u.id
+        """,
+        (match_id,),
+    ).fetchall()
+
+    totals = {}
+    for row in team_rows:
+        user_id = row["user_id"]
+        entry = totals.setdefault(
+            user_id,
+            {"user_id": user_id, "name": row["user_name"], "points": 0.0},
+        )
+
+        base_points = float(row["player_points"] or 0)
+        if row["is_captain"]:
+            base_points *= 2.0
+        elif row["is_vice_captain"]:
+            base_points *= 1.5
+
+        entry["points"] += base_points
+
+    result = list(totals.values())
+    for row in result:
+        row["points"] = round(row["points"], 2)
+    result.sort(key=lambda item: (-item["points"], item["name"]))
+    return result
+
+
+def _load_effective_match_points(db) -> dict[int, list[dict]]:
+    stored_rows = db.execute(
+        """
+        SELECT cp.user_id, u.name, cp.match_id, cp.points, cp.last_updated
         FROM contestant_points cp
         JOIN users u ON u.id = cp.user_id
         WHERE u.is_active = 1
@@ -37,13 +78,48 @@ def _calculate_balances(db):
         """
     ).fetchall()
 
-    # Group by match
     matches = defaultdict(list)
-    for row in rows:
+    for row in stored_rows:
         matches[row["match_id"]].append({
             "user_id": row["user_id"],
-            "points": float(row["points"]),
+            "name": row["name"],
+            "points": round(float(row["points"]), 2),
+            "last_updated": row["last_updated"],
         })
+
+    match_ids = [
+        row["id"]
+        for row in db.execute("SELECT id FROM matches").fetchall()
+    ]
+    effective = {}
+
+    for match_id in match_ids:
+        contestants = matches.get(match_id, [])
+        if contestants:
+            has_nonzero = any(entry["points"] != 0 for entry in contestants)
+            player_points_exist = db.execute(
+                "SELECT 1 FROM player_points WHERE match_id = ? AND points <> 0 LIMIT 1",
+                (match_id,),
+            ).fetchone()
+            if has_nonzero or not player_points_exist:
+                effective[match_id] = contestants
+                continue
+
+        recomputed = _compute_match_contestant_points(db, match_id)
+        effective[match_id] = recomputed
+
+    return effective
+
+
+def _calculate_balances(db):
+    """Calculate running balance for each user across all completed matches."""
+    matches = defaultdict(list)
+    for match_id, contestants in _load_effective_match_points(db).items():
+        for contestant in contestants:
+            matches[match_id].append({
+                "user_id": contestant["user_id"],
+                "points": float(contestant["points"]),
+            })
 
     # Calculate balance per user
     balances = defaultdict(float)  # user_id -> running balance
@@ -89,23 +165,31 @@ def _has_live_matches(db) -> bool:
 
 def _build_leaderboard(db):
     balances, _ = _calculate_balances(db)
+    effective_match_points = _load_effective_match_points(db)
+    totals_by_user = defaultdict(float)
+    for contestants in effective_match_points.values():
+        for contestant in contestants:
+            totals_by_user[contestant["user_id"]] += float(contestant["points"])
 
     users = db.execute(
         """
-        SELECT u.id, u.name, COALESCE(SUM(cp.points), 0) AS total_points
+        SELECT u.id, u.name
         FROM users u
-        LEFT JOIN contestant_points cp ON cp.user_id = u.id
         WHERE u.is_active = 1
-        GROUP BY u.id, u.name
-        ORDER BY total_points DESC
+        ORDER BY u.name
         """
     ).fetchall()
 
+    sorted_users = sorted(
+        users,
+        key=lambda row: (-round(float(totals_by_user.get(row["id"], 0)), 2), row["name"]),
+    )
+
     result = []
     rank = 1
-    for i, row in enumerate(users):
+    for i, row in enumerate(sorted_users):
         uid = row["id"]
-        pts = round(float(row["total_points"]), 2)
+        pts = round(float(totals_by_user.get(uid, 0)), 2)
 
         if i > 0 and pts == result[i - 1]["points"]:
             rank = result[i - 1]["rank"]
@@ -125,23 +209,19 @@ def _build_leaderboard(db):
 
 def _build_points_table(db):
     _, match_results = _calculate_balances(db)
-    rows = db.execute(
-        """
-        SELECT cp.user_id, u.name, cp.match_id, cp.points, cp.last_updated
-        FROM contestant_points cp
-        JOIN users u ON u.id = cp.user_id
-        WHERE u.is_active = 1
-        ORDER BY cp.match_id, cp.points DESC
-        """
-    ).fetchall()
-
     result = []
-    for row in rows:
-        entry = dict(row)
-        uid = row["user_id"]
-        mid = row["match_id"]
-        entry["net"] = match_results.get(uid, {}).get(mid, 0)
-        result.append(entry)
+    for match_id, contestants in _load_effective_match_points(db).items():
+        sorted_contestants = sorted(contestants, key=lambda item: (-item["points"], item["name"]))
+        for contestant in sorted_contestants:
+            uid = contestant["user_id"]
+            result.append({
+                "user_id": uid,
+                "name": contestant["name"],
+                "match_id": match_id,
+                "points": contestant["points"],
+                "last_updated": contestant.get("last_updated", ""),
+                "net": match_results.get(uid, {}).get(match_id, 0),
+            })
     return result
 
 
