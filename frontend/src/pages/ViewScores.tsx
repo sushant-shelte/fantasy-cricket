@@ -44,12 +44,6 @@ interface Contestant { id: number; name: string; }
 interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; is_backup?: boolean; replaced_player_id?: number | null; }
 interface BreakdownData { user_name: string; total: number; players: BreakdownPlayer[]; error?: string; }
 
-const ROLE_SYMBOLS: Record<string, { symbol: string; label: string }> = {
-  Batter: { symbol: '🏏', label: 'Batter' },
-  Bowler: { symbol: '◎', label: 'Bowler' },
-  AllRounder: { symbol: '🏏◎', label: 'All-Rounder' },
-  Wicketkeeper: { symbol: '|||', label: 'Wicketkeeper' },
-};
 
 export default function ViewScoresPage() {
   const { matchId } = useParams<{ matchId: string }>();
