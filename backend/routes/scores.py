@@ -284,21 +284,10 @@ async def match_scores(
 
     result.sort(key=lambda x: x["points"], reverse=True)
 
-    # Contestants for this match
-    contestant_rows = db.execute(
-        """
-        SELECT u.id, u.name, cp.points
-        FROM contestant_points cp
-        JOIN users u ON u.id = cp.user_id
-        WHERE cp.match_id = ?
-          AND u.is_active = 1
-        ORDER BY cp.points DESC
-        """,
-        (match_id,),
-    ).fetchall()
-
-    contestants = [{"id": row["id"], "name": row["name"], "points": float(row["points"])} for row in contestant_rows]
-    contestants = _merge_contestant_points(db, match_id, contestants, pp_lookup)
+    # Contestants for this match:
+    # accuracy-first source of truth for the View Scores screen is always
+    # user_teams + current player points, so rankings match the breakdown view.
+    contestants = _compute_contestants_from_player_points(db, match_id, pp_lookup)
 
     return {"players": result, "contestants": contestants}
 
