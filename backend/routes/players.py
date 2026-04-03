@@ -114,6 +114,10 @@ async def list_players(
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))
+        playing_order = {player_id: index for index, player_id in enumerate(playing_xi_data["player_ids"])}
+        substitute_order = {
+            player_id: index for index, player_id in enumerate(playing_xi_data.get("substitute_ids", []))
+        }
         playing_ids_complete = len(playing_ids) == 22 and len(substitute_ids) >= 10
 
         # Group by role
@@ -123,27 +127,33 @@ async def list_players(
                 player["is_playing_xi"] = None
                 player["is_substitute"] = None
                 player["availability_status"] = None
+                player["availability_order"] = None
             elif player["id"] in playing_ids:
                 player["is_playing_xi"] = True
                 player["is_substitute"] = False
                 player["availability_status"] = "available"
+                player["availability_order"] = playing_order.get(player["id"])
             elif player["id"] in substitute_ids:
                 player["is_playing_xi"] = False
                 player["is_substitute"] = True
                 player["availability_status"] = "substitute"
+                player["availability_order"] = substitute_order.get(player["id"])
             elif playing_ids_complete:
                 player["is_playing_xi"] = False
                 player["is_substitute"] = False
                 player["availability_status"] = "unavailable"
+                player["availability_order"] = None
             else:
                 player["is_playing_xi"] = None
                 player["is_substitute"] = None
                 player["availability_status"] = None
+                player["availability_order"] = None
             if player["role"] in grouped:
                 grouped[player["role"]].append(player)
 
         return {
             "players": grouped,
+            "match_teams": [team1, team2],
             "playing_xi": {
                 "announced": playing_xi_data["announced"],
                 "url": playing_xi_data["url"],

@@ -500,7 +500,7 @@ def _extract_named_players_from_cricbuzz_section(
     team1: str,
     team2: str,
     players_rows: list[dict],
-) -> tuple[set[int], list[str], bool]:
+) -> tuple[list[int], list[str], bool]:
     soup = BeautifulSoup(html, "html.parser")
     heading = _find_cricbuzz_section_heading(soup, section_name)
 
@@ -527,7 +527,8 @@ def _extract_named_players_from_cricbuzz_section(
         return set(), [], True
 
     registry = _build_registry_from_players_rows(players_rows)
-    playing_ids: set[int] = set()
+    ordered_ids: list[int] = []
+    seen_ids: set[int] = set()
     unmatched_names: list[str] = []
     seen_unmatched: set[str] = set()
 
@@ -540,12 +541,14 @@ def _extract_named_players_from_cricbuzz_section(
             if not player_id:
                 player_id = _find_close_team_player_id(raw_name, team, players_rows)
             if player_id:
-                playing_ids.add(player_id)
+                if player_id not in seen_ids:
+                    seen_ids.add(player_id)
+                    ordered_ids.append(player_id)
             elif normalized not in seen_unmatched:
                 seen_unmatched.add(normalized)
                 unmatched_names.append(raw_name)
 
-    return playing_ids, unmatched_names, True
+    return ordered_ids, unmatched_names, True
 
 
 def _extract_playing_xi_from_json(html: str, players_rows: list[dict]) -> tuple[set[int], list[str]]:
@@ -661,7 +664,7 @@ def fetch_playing_xi(
     cricbuzz_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2)
     if not cricbuzz_match_id:
         print(f"[Playing XI] Match {match_id}: no Cricbuzz match id found after schedule lookup")
-        return {"announced": False, "url": "", "player_ids": []}
+        return {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
 
     url = build_cricbuzz_playing_xi_url(cricbuzz_match_id)
 
@@ -705,8 +708,8 @@ def fetch_playing_xi(
         payload = {
             "announced": len(playing_ids) >= 18,
             "url": url,
-            "player_ids": sorted(playing_ids),
-            "substitute_ids": sorted(substitute_ids),
+            "player_ids": list(playing_ids),
+            "substitute_ids": list(substitute_ids),
         }
         PLAYING_XI_CACHE[int(match_id)] = {
             "payload": payload,

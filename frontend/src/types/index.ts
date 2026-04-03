@@ -42,6 +42,7 @@ export type Player = {
   is_playing_xi?: boolean | null;
   is_substitute?: boolean | null;
   availability_status?: 'available' | 'substitute' | 'unavailable' | null;
+  availability_order?: number | null;
 };
 
 export type TeamSelection = {
