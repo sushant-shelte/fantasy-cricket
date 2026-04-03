@@ -97,6 +97,7 @@ export default function SelectTeamPage() {
   const [showBackupPanel, setShowBackupPanel] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const backupPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -143,6 +144,14 @@ export default function SelectTeamPage() {
     };
     fetchData();
   }, [matchId, toast]);
+
+  useEffect(() => {
+    if (!showBackupPanel) return;
+    const timer = window.setTimeout(() => {
+      backupPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [showBackupPanel]);
 
   const togglePlayer = (playerId: number) => {
     setSelected((prev) => {
@@ -513,19 +522,19 @@ export default function SelectTeamPage() {
                 <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
               </div>
             ))}
-            <span className="flex items-center gap-1.5">
-              <span className="w-5 h-5 bg-amber-500/30 border border-amber-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-amber-300">
-                C
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-5 bg-amber-500/30 border border-amber-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-amber-300">
+                  C
+                </span>
+                2x
               </span>
-              Captain (2x)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-5 h-5 bg-sky-500/30 border border-sky-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-sky-300">
-                VC
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-5 bg-sky-500/30 border border-sky-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-sky-300">
+                  VC
+                </span>
+                1.5x
               </span>
-              Vice Captain (1.5x)
-            </span>
-          </div>
+            </div>
 
           <div
             className={`rounded-2xl border px-4 py-3 text-sm ${
@@ -566,21 +575,39 @@ export default function SelectTeamPage() {
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-white">Backup Players</p>
+          <button
+            type="button"
+            onClick={() => setShowBackupPanel((prev) => !prev)}
+            className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+              showBackupPanel
+                ? 'border-sky-400/25 bg-sky-500/[0.06]'
+                : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.05]'
+            }`}
+            aria-expanded={showBackupPanel}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white">Optional Backup (upto 3)</p>
               <p className="text-xs text-white/45">
-                Optional. Up to 3 backups in order 1, 2, 3.
+                {backups.length > 0 ? `${backups.length}/3 selected` : 'Collapsed'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowBackupPanel((prev) => !prev)}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white"
-            >
-              {backups.length > 0 ? `Backups ${backups.length}/3` : 'Add Backups'}
-            </button>
-          </div>
+            <div className="flex items-center gap-2">
+              {backups.length > 0 && (
+                <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300">
+                  {backups.length}/3
+                </span>
+              )}
+              <span
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-white/60 transition ${
+                  showBackupPanel
+                    ? 'border-sky-400/30 bg-sky-500/10 rotate-180'
+                    : 'border-white/10 bg-white/5'
+                }`}
+              >
+                ▼
+              </span>
+            </div>
+          </button>
 
           {/* Role Tabs */}
           <form onSubmit={handleSubmit}>
@@ -991,7 +1018,7 @@ export default function SelectTeamPage() {
             )}
 
             {(showBackupPanel || backups.length > 0) && (
-              <div className="mt-4 rounded-2xl border border-sky-400/15 bg-sky-500/[0.04] p-4">
+              <div ref={backupPanelRef} className="mt-4 rounded-2xl border border-sky-400/15 bg-sky-500/[0.04] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-white">Backup Order</p>
@@ -1282,14 +1309,14 @@ export default function SelectTeamPage() {
                 ))}
               </div>
 
-              <div className="flex justify-center gap-4 pb-4 text-[10px] text-white/50">
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-full bg-amber-400"></span> Captain (2x)
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-full bg-sky-400"></span> Vice Captain (1.5x)
-                </span>
-              </div>
+                <div className="flex justify-center gap-4 pb-4 text-[10px] text-white/50">
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-amber-400"></span> C 2x
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-sky-400"></span> VC 1.5x
+                  </span>
+                </div>
             </div>
 
             <button
