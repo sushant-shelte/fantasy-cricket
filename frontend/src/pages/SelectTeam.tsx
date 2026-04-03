@@ -493,7 +493,11 @@ export default function SelectTeamPage() {
             </div>
 
             {activeTab === LINEUPS_TAB ? (
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="mt-4 space-y-2">
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] text-white/55">
+                  XI View shows average fantasy points for each player.
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                 {teamsInMatch.map((team) => (
                   <div
                     key={team}
@@ -515,7 +519,7 @@ export default function SelectTeamPage() {
                               <div className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${section.accent}`}>
                                 {section.label}
                               </div>
-                              <div className="space-y-1.5">
+                              <div className="space-y-1">
                                 {sectionPlayers.length > 0 ? (
                                   sectionPlayers.map((player) => {
                                     const isSelected = selected.has(player.id);
@@ -529,7 +533,7 @@ export default function SelectTeamPage() {
                                         onClick={() => {
                                           if (isSelected || selectionAllowed) togglePlayer(player.id);
                                         }}
-                                        className={`cursor-pointer rounded-xl border px-2 py-2 transition-all ${
+                                        className={`cursor-pointer rounded-lg border px-2 py-1.5 transition-all ${
                                           isSelected
                                             ? 'border-white/20 bg-white/12'
                                             : !selectionAllowed
@@ -538,64 +542,61 @@ export default function SelectTeamPage() {
                                         }`}
                                       >
                                         <div className="flex items-start gap-2">
-                                          <div
-                                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                                              isSelected ? 'bg-green-500 text-white' : 'bg-white/10 text-white/45'
-                                            }`}
-                                          >
-                                            {isSelected ? 'S' : player.name.charAt(0)}
-                                          </div>
                                           <div className="min-w-0 flex-1">
-                                            <div className="truncate text-[11px] font-semibold text-white">{player.name}</div>
-                                            <div className="mt-1 flex items-center gap-2 text-[10px] text-white/50">
-                                              <span className="font-semibold text-emerald-300">
-                                                Avg {(player.avg_points || 0).toFixed(1)}
-                                              </span>
-                                              <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
+                                            <div className="text-[11px] font-semibold leading-tight text-white whitespace-normal break-words">
+                                              {player.name}
                                             </div>
-                                          </div>
-                                          <div className="flex items-center gap-1">
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (isSelected) setCaptain(player.id);
-                                              }}
-                                              disabled={!isSelected}
-                                              className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
-                                                isCaptain
-                                                  ? 'border-amber-400 bg-amber-500 text-white'
-                                                  : isSelected
-                                                  ? 'border-amber-400/40 text-amber-300'
-                                                  : 'border-white/10 text-white/15'
-                                              }`}
-                                            >
-                                              C
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (isSelected) setViceCaptain(player.id);
-                                              }}
-                                              disabled={!isSelected}
-                                              className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
-                                                isVC
-                                                  ? 'border-sky-400 bg-sky-500 text-white'
-                                                  : isSelected
-                                                  ? 'border-sky-400/40 text-sky-300'
-                                                  : 'border-white/10 text-white/15'
-                                              }`}
-                                            >
-                                              VC
-                                            </button>
+                                            <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
+                                              <div className="flex items-center gap-2">
+                                                <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
+                                                <span className="font-semibold text-emerald-300">
+                                                  Avg {Math.round(player.avg_points || 0)}
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (isSelected) setCaptain(player.id);
+                                                  }}
+                                                  disabled={!isSelected}
+                                                  className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
+                                                    isCaptain
+                                                      ? 'border-amber-400 bg-amber-500 text-white'
+                                                      : isSelected
+                                                      ? 'border-amber-400/40 text-amber-300'
+                                                      : 'border-white/10 text-white/15'
+                                                  }`}
+                                                >
+                                                  C
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (isSelected) setViceCaptain(player.id);
+                                                  }}
+                                                  disabled={!isSelected}
+                                                  className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
+                                                    isVC
+                                                      ? 'border-sky-400 bg-sky-500 text-white'
+                                                      : isSelected
+                                                      ? 'border-sky-400/40 text-sky-300'
+                                                      : 'border-white/10 text-white/15'
+                                                  }`}
+                                                >
+                                                  VC
+                                                </button>
+                                              </div>
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
                                     );
                                   })
                                 ) : (
-                                  <div className="rounded-xl border border-dashed border-white/10 px-2 py-3 text-center text-[10px] text-white/30">
+                                  <div className="rounded-lg border border-dashed border-white/10 px-2 py-2 text-center text-[10px] text-white/30">
                                     No players
                                   </div>
                                 )}
@@ -608,7 +609,7 @@ export default function SelectTeamPage() {
                           <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
                             Squad Order
                           </div>
-                          <div className="space-y-1.5">
+                          <div className="space-y-1">
                             {getPreAnnouncementPlayers(team).map((player) => {
                               const isSelected = selected.has(player.id);
                               const isCaptain = captainId === player.id;
@@ -621,7 +622,7 @@ export default function SelectTeamPage() {
                                   onClick={() => {
                                     if (isSelected || selectionAllowed) togglePlayer(player.id);
                                   }}
-                                  className={`cursor-pointer rounded-xl border px-2 py-2 transition-all ${
+                                  className={`cursor-pointer rounded-lg border px-2 py-1.5 transition-all ${
                                     isSelected
                                       ? 'border-white/20 bg-white/12'
                                       : !selectionAllowed
@@ -630,57 +631,54 @@ export default function SelectTeamPage() {
                                   }`}
                                 >
                                   <div className="flex items-start gap-2">
-                                    <div
-                                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                                        isSelected ? 'bg-green-500 text-white' : 'bg-white/10 text-white/45'
-                                      }`}
-                                    >
-                                      {isSelected ? 'S' : player.name.charAt(0)}
-                                    </div>
                                     <div className="min-w-0 flex-1">
-                                      <div className="truncate text-[11px] font-semibold text-white">{player.name}</div>
-                                      <div className="mt-1 flex items-center gap-2 text-[10px] text-white/50">
-                                        <span className="font-semibold text-emerald-300">
-                                          {(player.total_points || 0).toFixed(1)} pts
-                                        </span>
-                                        <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
+                                      <div className="text-[11px] font-semibold leading-tight text-white whitespace-normal break-words">
+                                        {player.name}
                                       </div>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isSelected) setCaptain(player.id);
-                                        }}
-                                        disabled={!isSelected}
-                                        className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
-                                          isCaptain
-                                            ? 'border-amber-400 bg-amber-500 text-white'
-                                            : isSelected
-                                            ? 'border-amber-400/40 text-amber-300'
-                                            : 'border-white/10 text-white/15'
-                                        }`}
-                                      >
-                                        C
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isSelected) setViceCaptain(player.id);
-                                        }}
-                                        disabled={!isSelected}
-                                        className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
-                                          isVC
-                                            ? 'border-sky-400 bg-sky-500 text-white'
-                                            : isSelected
-                                            ? 'border-sky-400/40 text-sky-300'
-                                            : 'border-white/10 text-white/15'
-                                        }`}
-                                      >
-                                        VC
-                                      </button>
+                                      <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
+                                        <div className="flex items-center gap-2">
+                                          <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
+                                          <span className="font-semibold text-emerald-300">
+                                            Avg {Math.round(player.avg_points || 0)}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (isSelected) setCaptain(player.id);
+                                            }}
+                                            disabled={!isSelected}
+                                            className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
+                                              isCaptain
+                                                ? 'border-amber-400 bg-amber-500 text-white'
+                                                : isSelected
+                                                ? 'border-amber-400/40 text-amber-300'
+                                                : 'border-white/10 text-white/15'
+                                            }`}
+                                          >
+                                            C
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (isSelected) setViceCaptain(player.id);
+                                            }}
+                                            disabled={!isSelected}
+                                            className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
+                                              isVC
+                                                ? 'border-sky-400 bg-sky-500 text-white'
+                                                : isSelected
+                                                ? 'border-sky-400/40 text-sky-300'
+                                                : 'border-white/10 text-white/15'
+                                            }`}
+                                          >
+                                            VC
+                                          </button>
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
@@ -691,6 +689,7 @@ export default function SelectTeamPage() {
                       )}
                   </div>
                 ))}
+                </div>
               </div>
             ) : (
             <div className="mt-4 bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
