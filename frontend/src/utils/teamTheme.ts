@@ -20,53 +20,53 @@ const TEAM_ALIASES: Record<string, string> = {
 const TEAM_THEMES: Record<string, TeamTheme> = {
   CSK: {
     label: "CSK",
-    badgeClass: "border-amber-300/30 bg-gradient-to-r from-amber-300/20 to-blue-400/12 text-amber-100",
-    tintClass: "from-amber-300/12 to-blue-400/6",
+    badgeClass: "border-amber-300/35 bg-gradient-to-r from-yellow-300/30 to-blue-500/18 text-amber-50",
+    tintClass: "from-yellow-300/18 via-amber-400/12 to-blue-500/12",
   },
   MI: {
     label: "MI",
-    badgeClass: "border-blue-300/30 bg-gradient-to-r from-blue-400/18 to-yellow-300/10 text-blue-100",
-    tintClass: "from-blue-400/12 to-yellow-300/6",
+    badgeClass: "border-blue-300/35 bg-gradient-to-r from-blue-500/28 to-yellow-300/18 text-blue-50",
+    tintClass: "from-blue-500/18 via-sky-400/12 to-yellow-300/12",
   },
   RCB: {
     label: "RCB",
-    badgeClass: "border-red-400/30 bg-gradient-to-r from-red-500/18 to-zinc-500/12 text-red-100",
-    tintClass: "from-red-500/12 to-zinc-500/8",
+    badgeClass: "border-red-400/35 bg-gradient-to-r from-red-600/30 to-zinc-500/18 text-red-50",
+    tintClass: "from-red-600/18 via-red-500/12 to-zinc-500/12",
   },
   KKR: {
     label: "KKR",
-    badgeClass: "border-fuchsia-400/30 bg-gradient-to-r from-fuchsia-500/18 to-amber-300/12 text-fuchsia-100",
-    tintClass: "from-fuchsia-500/12 to-amber-300/8",
+    badgeClass: "border-fuchsia-400/35 bg-gradient-to-r from-purple-600/28 to-amber-300/18 text-fuchsia-50",
+    tintClass: "from-purple-600/18 via-fuchsia-500/12 to-amber-300/12",
   },
   RR: {
     label: "RR",
-    badgeClass: "border-pink-400/30 bg-gradient-to-r from-pink-500/20 to-blue-400/12 text-pink-100",
-    tintClass: "from-pink-500/12 to-blue-400/8",
+    badgeClass: "border-pink-400/35 bg-gradient-to-r from-pink-500/30 to-blue-500/18 text-pink-50",
+    tintClass: "from-pink-500/18 via-rose-400/12 to-blue-500/12",
   },
   GT: {
     label: "GT",
-    badgeClass: "border-sky-300/30 bg-gradient-to-r from-sky-500/14 to-teal-300/12 text-sky-100",
-    tintClass: "from-sky-500/10 to-teal-300/8",
+    badgeClass: "border-sky-300/35 bg-gradient-to-r from-sky-600/24 to-teal-300/18 text-sky-50",
+    tintClass: "from-sky-600/16 via-sky-400/10 to-teal-300/12",
   },
   DC: {
     label: "DC",
-    badgeClass: "border-blue-400/30 bg-gradient-to-r from-blue-500/18 to-red-500/12 text-blue-100",
-    tintClass: "from-blue-500/12 to-red-500/8",
+    badgeClass: "border-blue-400/35 bg-gradient-to-r from-blue-600/28 to-red-500/18 text-blue-50",
+    tintClass: "from-blue-600/18 via-blue-500/12 to-red-500/12",
   },
   LSG: {
     label: "LSG",
-    badgeClass: "border-cyan-300/30 bg-gradient-to-r from-cyan-400/18 to-orange-400/12 text-cyan-100",
-    tintClass: "from-cyan-400/12 to-orange-400/8",
+    badgeClass: "border-cyan-300/35 bg-gradient-to-r from-cyan-400/28 to-orange-400/18 text-cyan-50",
+    tintClass: "from-cyan-400/18 via-sky-300/10 to-orange-400/12",
   },
   PBKS: {
     label: "PBKS",
-    badgeClass: "border-rose-400/30 bg-gradient-to-r from-rose-500/18 to-slate-300/12 text-rose-100",
-    tintClass: "from-rose-500/12 to-slate-300/8",
+    badgeClass: "border-rose-400/35 bg-gradient-to-r from-rose-600/28 to-slate-300/18 text-rose-50",
+    tintClass: "from-rose-600/18 via-rose-500/12 to-slate-300/12",
   },
   SRH: {
     label: "SRH",
-    badgeClass: "border-orange-400/30 bg-gradient-to-r from-orange-500/18 to-zinc-500/12 text-orange-100",
-    tintClass: "from-orange-500/12 to-zinc-500/8",
+    badgeClass: "border-orange-400/35 bg-gradient-to-r from-orange-500/28 to-zinc-500/18 text-orange-50",
+    tintClass: "from-orange-500/18 via-amber-400/10 to-zinc-500/12",
   },
 };
 

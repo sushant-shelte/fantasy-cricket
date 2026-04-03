@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends
 
 from backend.config import IST
+from backend.database import get_db
 from backend.middleware.auth import get_current_user
 from backend.services import data_service
 from backend.services.venue_stats import (
@@ -54,7 +55,10 @@ async def list_matches(user: dict = Depends(get_current_user)):
 
 @router.get("/dashboard/matches")
 async def dashboard_matches(user: dict = Depends(get_current_user)):
-    return _get_matches_payload(cache_key="dashboard")
+    payload = _get_matches_payload(cache_key="dashboard")
+    if not user:
+        return payload
+    return _attach_user_match_ranks(payload, user["id"])
 
 
 def invalidate_matches_response_cache():
@@ -117,3 +121,32 @@ def _get_matches_payload(cache_key: str) -> list[dict]:
     MATCHES_RESPONSE_CACHE["generated_at"] = time.time()
     MATCHES_RESPONSE_CACHE["today_key"] = today_key
     return payload
+
+
+def _attach_user_match_ranks(payload: list[dict], user_id: int) -> list[dict]:
+    db = get_db()
+    rank_rows = db.execute(
+        """
+        SELECT ranked.match_id, ranked.match_rank
+        FROM (
+            SELECT
+                cp.match_id,
+                cp.user_id,
+                RANK() OVER (PARTITION BY cp.match_id ORDER BY cp.points DESC) AS match_rank
+            FROM contestant_points cp
+        ) ranked
+        WHERE ranked.user_id = ?
+        """,
+        (user_id,),
+    ).fetchall()
+    rank_map = {row["match_id"]: row["match_rank"] for row in rank_rows}
+
+    result = []
+    for match in payload:
+        match_copy = dict(match)
+        if match_copy.get("status") in {"live", "over"}:
+            match_copy["current_rank"] = rank_map.get(match_copy["id"])
+        else:
+            match_copy["current_rank"] = None
+        result.append(match_copy)
+    return result

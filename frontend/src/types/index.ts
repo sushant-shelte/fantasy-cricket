@@ -27,6 +27,7 @@ export type Match = {
   status: 'future' | 'live' | 'over';
   locked: boolean;
   venue?: VenueStats | null;
+  current_rank?: number | null;
 };
 
 export type Player = {

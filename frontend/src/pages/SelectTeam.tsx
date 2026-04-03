@@ -432,21 +432,16 @@ export default function SelectTeamPage() {
       <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col lg:flex-row gap-4">
         {/* LEFT — Player selection */}
         <div className="flex-1 min-w-0 space-y-4">
-          {/* Team counts */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-white/50">
             {teamsInMatch.map((team) => (
               <div
                 key={team}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border bg-gradient-to-r ${getTeamTheme(team).tintClass} border-white/10 text-white/80`}
+                className={`inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(team).tintClass} px-3 py-1.5 font-semibold text-white/80`}
               >
-                <span className="mr-1.5">{getTeamTheme(team).label}</span>
+                <span>{getTeamTheme(team).label}</span>
                 <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
               </div>
             ))}
-          </div>
-
-          {/* Captain / VC legend */}
-          <div className="flex items-center gap-4 text-xs text-white/50">
             <span className="flex items-center gap-1.5">
               <span className="w-5 h-5 bg-amber-500/30 border border-amber-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-amber-300">
                 C
@@ -564,9 +559,6 @@ export default function SelectTeamPage() {
 
             {activeTab === LINEUPS_TAB ? (
               <div className="mt-4 space-y-2">
-                <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] text-white/55">
-                  XI View shows average fantasy points for each player.
-                </div>
                 <div className="grid grid-cols-2 gap-3">
                 {teamsInMatch.map((team) => (
                   <div
@@ -574,8 +566,10 @@ export default function SelectTeamPage() {
                     className={`overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b ${getTeamTheme(team).tintClass} bg-white/5`}
                   >
                     <div className="border-b border-white/10 px-3 py-3">
-                      <div className="text-xs font-bold text-white">{team}</div>
-                      <div className="mt-1 text-[11px] text-white/45">{selectedByTeam[team] || 0} selected</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-bold text-white">{team}</div>
+                        <div className="text-[11px] text-white/45">{selectedByTeam[team] || 0} selected</div>
+                      </div>
                     </div>
                     {playingXi.announced
                       ? [

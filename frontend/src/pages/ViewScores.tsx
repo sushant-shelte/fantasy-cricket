@@ -220,7 +220,7 @@ export default function ViewScoresPage() {
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-white/40">
             {renderTeamBadge(entry.team, true)}
-            <span>{entry.role}</span>
+            <span>{getShortRole(entry.role)}</span>
           </div>
           <span className="text-green-400 font-bold">{entry.adjusted_points} pts</span>
         </div>
@@ -231,12 +231,16 @@ export default function ViewScoresPage() {
     );
   };
 
+  const getShortRole = (role: string) => {
+    if (role === 'Batter') return 'Bat';
+    if (role === 'Bowler') return 'Bowl';
+    if (role === 'AllRounder') return 'AR';
+    if (role === 'Wicketkeeper') return 'WK';
+    return role;
+  };
+
   const renderRoleSymbol = (role: string) => {
-    let config = ROLE_SYMBOLS[role] || { symbol: role.slice(0, 2).toUpperCase(), label: role };
-    if (role === 'Batter') config = { symbol: '\u{1F3CF}', label: 'Batter' };
-    else if (role === 'Bowler') config = { symbol: '\u26BE', label: 'Bowler' };
-    else if (role === 'AllRounder') config = { symbol: '\u{1F3CF}\u26BE', label: 'All-Rounder' };
-    else if (role === 'Wicketkeeper') config = { symbol: '\u{1F9E4}', label: 'Wicketkeeper' };
+    const config = ROLE_SYMBOLS[role] || { symbol: getShortRole(role), label: role };
     return (
       <span
         title={config.label}
@@ -381,7 +385,7 @@ export default function ViewScoresPage() {
                                           </div>
                                           <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
                                             {renderTeamBadge(player.team)}
-                                            <span>{player.role}</span>
+                                            <span>{getShortRole(player.role)}</span>
                                           </div>
                                         </div>
                                         <div className="text-right">
@@ -688,7 +692,7 @@ export default function ViewScoresPage() {
                               <p className="text-white text-sm font-medium truncate">{p.name}</p>
                               <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
                                 {renderTeamBadge(p.team)}
-                                <span>{p.role}</span>
+                                <span>{getShortRole(p.role)}</span>
                               </div>
                             </div>
                             <div className="text-right flex-shrink-0 ml-2 min-w-[56px]">
