@@ -6,6 +6,7 @@ from datetime import datetime
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.config import IST, ROLES
+from backend.services import data_service
 from backend.services.scraper import fetch_playing_xi
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
@@ -20,6 +21,7 @@ class PlayerSelection(BaseModel):
 class SubmitTeamBody(BaseModel):
     match_id: int
     players: List[PlayerSelection]
+    backups: List[int] = []
 
 
 def get_now():
@@ -61,6 +63,14 @@ async def my_team(
     return [dict(row) for row in rows]
 
 
+@router.get("/my-backups")
+async def my_backups(
+    match_id: int = Query(...),
+    user: dict = Depends(get_current_user),
+):
+    return data_service.get_user_backups(user["id"], match_id)
+
+
 @router.get("/my-matches")
 async def my_team_matches(user: dict = Depends(get_current_user)):
     """Returns list of match IDs where user has picked a team."""
@@ -89,6 +99,7 @@ async def my_lineup_statuses(
         requested_ids,
     ).fetchall()
     match_lookup = {row["id"]: dict(row) for row in match_rows}
+    backup_counts = data_service.get_backup_counts_for_user(user["id"], requested_ids)
 
     team_rows = db.execute(
         f"""
@@ -113,6 +124,7 @@ async def my_lineup_statuses(
                 "announced": False,
                 "unannouncedSelected": 0,
                 "substituteSelected": 0,
+                "backupCount": backup_counts.get(match_id, 0),
             }
             continue
 
@@ -149,9 +161,22 @@ async def my_lineup_statuses(
             "announced": announced,
             "unannouncedSelected": unavailable_selected,
             "substituteSelected": substitute_selected,
+            "backupCount": backup_counts.get(match_id, 0),
         }
 
     return result
+
+
+@router.get("/my-backup-counts")
+async def my_backup_counts(
+    match_ids: str = Query(...),
+    user: dict = Depends(get_current_user),
+):
+    requested_ids = [int(match_id.strip()) for match_id in match_ids.split(",") if match_id.strip()]
+    if not requested_ids:
+        return {}
+    counts = data_service.get_backup_counts_for_user(user["id"], requested_ids)
+    return {str(match_id): counts.get(match_id, 0) for match_id in requested_ids}
 
 
 @router.post("")
@@ -176,6 +201,16 @@ async def submit_team(
     if len(body.players) != 11:
         raise HTTPException(status_code=400, detail="Exactly 11 players required")
 
+    normalized_backups: list[int] = []
+    seen_backups = set()
+    selected_player_ids = {int(player.player_id) for player in body.players}
+    for backup_player_id in body.backups[:3]:
+        normalized_id = int(backup_player_id)
+        if normalized_id in selected_player_ids or normalized_id in seen_backups:
+            continue
+        seen_backups.add(normalized_id)
+        normalized_backups.append(normalized_id)
+
     # Validate captain and vice captain
     captains = [p for p in body.players if p.is_captain]
     vice_captains = [p for p in body.players if p.is_vice_captain]
@@ -196,6 +231,14 @@ async def submit_team(
 
     if len(players_db) != 11:
         raise HTTPException(status_code=400, detail="Some player IDs are invalid")
+
+    if normalized_backups:
+        backup_players = db.execute(
+            f"SELECT id FROM players WHERE id IN ({','.join('?' * len(normalized_backups))})",
+            normalized_backups,
+        ).fetchall()
+        if len(backup_players) != len(normalized_backups):
+            raise HTTPException(status_code=400, detail="Some backup player IDs are invalid")
 
     role_counts = {role: 0 for role in ROLES}
     for p in players_db:
@@ -221,6 +264,8 @@ async def submit_team(
         )
 
     db.commit()
+    data_service.save_user_backups(user["id"], body.match_id, normalized_backups)
+    data_service.prune_user_backups(user["id"], body.match_id, player_ids)
 
     return {"success": True}
 

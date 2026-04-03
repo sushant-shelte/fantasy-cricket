@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [myTeams, setMyTeams] = useState<Set<number>>(new Set());
   const [todayTeamLineup, setTodayTeamLineup] = useState<Record<number, TodayTeamLineupInfo>>({});
+  const [backupCounts, setBackupCounts] = useState<Record<number, number>>({});
   const [showContestantsForMatch, setShowContestantsForMatch] = useState<Match | null>(null);
   const [matchContestants, setMatchContestants] = useState<MatchContestant[]>([]);
   const [contestantsLoading, setContestantsLoading] = useState(false);
@@ -64,6 +65,7 @@ export default function DashboardPage() {
         const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
         const todayMatches = loadedMatches.filter((match) => match.match_date === todayIST || match.status === 'live');
         const matchesToCheck = todayMatches.filter((match) => loadedMyTeams.has(match.id));
+        const futureMatchesWithTeams = loadedMatches.filter((match) => match.status === 'future' && loadedMyTeams.has(match.id));
 
         if (matchesToCheck.length > 0) {
           const ids = matchesToCheck.map((match) => match.id).join(',');
@@ -72,8 +74,21 @@ export default function DashboardPage() {
         } else {
           setTodayTeamLineup({});
         }
+
+        if (futureMatchesWithTeams.length > 0) {
+          const ids = futureMatchesWithTeams.map((match) => match.id).join(',');
+          const backupRes = await client.get(`/api/teams/my-backup-counts?match_ids=${ids}`);
+          const counts: Record<number, number> = {};
+          Object.entries(backupRes.data || {}).forEach(([matchId, count]) => {
+            counts[Number(matchId)] = Number(count || 0);
+          });
+          setBackupCounts(counts);
+        } else {
+          setBackupCounts({});
+        }
       } catch {
         setTodayTeamLineup({});
+        setBackupCounts({});
       } finally {
         setLoading(false);
       }
@@ -378,6 +393,13 @@ export default function DashboardPage() {
                         {todayTeamLineup[match.id].substituteSelected} substitutes selected
                       </p>
                     )}
+                  </div>
+                )}
+                {match.status === 'future' && (backupCounts[match.id] || 0) > 0 && (
+                  <div className="mb-3 text-center">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300">
+                      Backups: {backupCounts[match.id]}/3
+                    </span>
                   </div>
                 )}
                 {(match.status === 'live' || match.status === 'over') && match.current_rank != null && (

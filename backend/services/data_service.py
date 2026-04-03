@@ -307,6 +307,199 @@ def get_user_team(user_id, match_id) -> list[dict]:
     return _rows_to_dicts(rows)
 
 
+def get_user_backups(user_id: int, match_id: int) -> list[dict]:
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            tb.backup_order,
+            tb.backup_player_id,
+            tb.replaced_player_id,
+            bp.name AS backup_player_name,
+            bp.team AS backup_team,
+            bp.role AS backup_role,
+            rp.name AS replaced_player_name
+        FROM team_backups tb
+        JOIN players bp ON bp.id = tb.backup_player_id
+        LEFT JOIN players rp ON rp.id = tb.replaced_player_id
+        WHERE tb.user_id = ? AND tb.match_id = ?
+        ORDER BY tb.backup_order
+        """,
+        (int(user_id), int(match_id)),
+    ).fetchall()
+    return _rows_to_dicts(rows)
+
+
+def save_user_backups(user_id: int, match_id: int, backup_player_ids: list[int]) -> None:
+    db = get_db()
+    db.execute(
+        "DELETE FROM team_backups WHERE user_id = ? AND match_id = ?",
+        (int(user_id), int(match_id)),
+    )
+    for index, player_id in enumerate(backup_player_ids[:3], start=1):
+        db.execute(
+            """
+            INSERT INTO team_backups (user_id, match_id, backup_order, backup_player_id, replaced_player_id)
+            VALUES (?, ?, ?, ?, NULL)
+            """,
+            (int(user_id), int(match_id), index, int(player_id)),
+        )
+    db.commit()
+
+
+def prune_user_backups(user_id: int, match_id: int, selected_player_ids: list[int]) -> None:
+    db = get_db()
+    selected_ids = [int(player_id) for player_id in selected_player_ids]
+    if selected_ids:
+        placeholders = ",".join("?" * len(selected_ids))
+        db.execute(
+            f"""
+            DELETE FROM team_backups
+            WHERE user_id = ? AND match_id = ? AND backup_player_id IN ({placeholders})
+            """,
+            [int(user_id), int(match_id), *selected_ids],
+        )
+    rows = db.execute(
+        """
+        SELECT id, backup_player_id
+        FROM team_backups
+        WHERE user_id = ? AND match_id = ?
+        ORDER BY backup_order
+        """,
+        (int(user_id), int(match_id)),
+    ).fetchall()
+    for order_index, row in enumerate(rows, start=1):
+        db.execute(
+            "UPDATE team_backups SET backup_order = ? WHERE id = ?",
+            (order_index, row["id"]),
+        )
+    db.commit()
+
+
+def get_backup_counts_for_user(user_id: int, match_ids: list[int | str]) -> dict[int, int]:
+    if not match_ids:
+        return {}
+    db = get_db()
+    normalized_ids = [int(match_id) for match_id in match_ids]
+    placeholders = ",".join("?" * len(normalized_ids))
+    rows = db.execute(
+        f"""
+        SELECT match_id, COUNT(*) AS backup_count
+        FROM team_backups
+        WHERE user_id = ? AND match_id IN ({placeholders}) AND replaced_player_id IS NULL
+        GROUP BY match_id
+        """,
+        [int(user_id), *normalized_ids],
+    ).fetchall()
+    return {int(row["match_id"]): int(row["backup_count"]) for row in rows}
+
+
+def get_active_backup_replacements(match_id: int, user_id: int | None = None) -> dict[int, dict]:
+    db = get_db()
+    params: list[int] = [int(match_id)]
+    query = """
+        SELECT
+            tb.user_id,
+            tb.backup_player_id,
+            tb.replaced_player_id
+        FROM team_backups tb
+        WHERE tb.match_id = ?
+          AND tb.replaced_player_id IS NOT NULL
+    """
+    if user_id is not None:
+        query += " AND tb.user_id = ?"
+        params.append(int(user_id))
+    rows = db.execute(query, params).fetchall()
+    return {
+        int(row["backup_player_id"]): {
+            "user_id": int(row["user_id"]),
+            "replaced_player_id": int(row["replaced_player_id"]),
+        }
+        for row in rows
+    }
+
+
+def apply_backups_for_match(match_id: int | str, playing_ids: list[int], substitute_ids: list[int]) -> int:
+    if len(playing_ids) != 22 or len(substitute_ids) < 10:
+        return 0
+
+    db = get_db()
+    mid = int(match_id)
+    playing_set = {int(pid) for pid in playing_ids}
+    substitute_set = {int(pid) for pid in substitute_ids}
+
+    team_rows = db.execute(
+        """
+        SELECT
+            ut.id,
+            ut.user_id,
+            ut.player_id,
+            ut.is_captain,
+            ut.is_vice_captain
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.user_id
+        WHERE ut.match_id = ?
+          AND u.is_active = 1
+        ORDER BY ut.user_id, ut.is_captain DESC, ut.is_vice_captain DESC, ut.id
+        """,
+        (mid,),
+    ).fetchall()
+
+    backups = db.execute(
+        """
+        SELECT id, user_id, backup_order, backup_player_id, replaced_player_id
+        FROM team_backups
+        WHERE match_id = ?
+        ORDER BY user_id, backup_order
+        """,
+        (mid,),
+    ).fetchall()
+
+    team_rows_by_user: dict[int, list[dict]] = {}
+    for row in team_rows:
+        team_rows_by_user.setdefault(int(row["user_id"]), []).append(dict(row))
+
+    backups_by_user: dict[int, list[dict]] = {}
+    for row in backups:
+        backups_by_user.setdefault(int(row["user_id"]), []).append(dict(row))
+
+    swap_count = 0
+    for user_id, user_team_rows in team_rows_by_user.items():
+        selected_ids = {int(row["player_id"]) for row in user_team_rows}
+        invalid_rows = [
+            row for row in user_team_rows
+            if int(row["player_id"]) in substitute_set or int(row["player_id"]) not in playing_set
+        ]
+        if not invalid_rows:
+            continue
+
+        available_backups = [
+            row for row in backups_by_user.get(user_id, [])
+            if row["replaced_player_id"] is None
+            and int(row["backup_player_id"]) in playing_set
+            and int(row["backup_player_id"]) not in selected_ids
+        ]
+
+        for invalid_row, backup_row in zip(invalid_rows, available_backups):
+            old_player_id = int(invalid_row["player_id"])
+            new_player_id = int(backup_row["backup_player_id"])
+            db.execute(
+                "UPDATE user_teams SET player_id = ? WHERE id = ?",
+                (new_player_id, int(invalid_row["id"])),
+            )
+            db.execute(
+                "UPDATE team_backups SET replaced_player_id = ? WHERE id = ?",
+                (old_player_id, int(backup_row["id"])),
+            )
+            selected_ids.discard(old_player_id)
+            selected_ids.add(new_player_id)
+            swap_count += 1
+
+    if swap_count:
+        db.commit()
+    return swap_count
+
+
 def save_team(mobile, name, match_id, selected_players, captain, vice_captain, players_data=None):
     """Persist a user's team selection for a match.
 
@@ -341,9 +534,10 @@ def save_team(mobile, name, match_id, selected_players, captain, vice_captain, p
             """INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain, updated_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (user_id, mid, int(pid), is_cap, is_vc, updated_at),
-        )
+          )
 
     db.commit()
+    prune_user_backups(user_id, mid, [int(pid) for pid in selected_players])
 
 
 # ---------------------------------------------------------------------------

@@ -516,6 +516,7 @@ async def update_team(
         )
 
     db.commit()
+    data_service.prune_user_backups(body.user_id, body.match_id, [player.player_id for player in body.players])
 
     return {
         "success": True,
@@ -529,6 +530,7 @@ CLEARABLE_TABLES = {
     "players": "DELETE FROM players",
     "matches": "DELETE FROM matches",
     "user_teams": "DELETE FROM user_teams",
+    "team_backups": "DELETE FROM team_backups",
     "contestant_points": "DELETE FROM contestant_points",
     "player_points": "DELETE FROM player_points",
 }
@@ -550,12 +552,14 @@ async def clear_table(
     # If clearing matches, also clear dependent data
     if table_name == "matches":
         db.execute("DELETE FROM user_teams")
+        db.execute("DELETE FROM team_backups")
         db.execute("DELETE FROM contestant_points")
         db.execute("DELETE FROM player_points")
 
     # If clearing players, also clear dependent data
     if table_name == "players":
         db.execute("DELETE FROM user_teams")
+        db.execute("DELETE FROM team_backups")
         db.execute("DELETE FROM contestant_points")
         db.execute("DELETE FROM player_points")
 
@@ -599,4 +603,5 @@ async def admin_submit_team(body: AdminSubmitTeamBody, user: dict = Depends(requ
             (body.user_id, body.match_id, p.player_id, int(p.is_captain), int(p.is_vice_captain), updated_at),
         )
     db.commit()
+    data_service.prune_user_backups(body.user_id, body.match_id, [player.player_id for player in body.players])
     return {"success": True}

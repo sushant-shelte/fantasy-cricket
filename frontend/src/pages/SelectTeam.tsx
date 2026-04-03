@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import client from '../api/client';
-import type { Player, TeamSelection } from '../types';
+import type { Player, TeamSelection, TeamBackup } from '../types';
 import { getTeamTheme } from '../utils/teamTheme';
 import { useToast } from '../components/Toast';
 import { PlayerListSkeleton } from '../components/Skeleton';
@@ -92,15 +92,19 @@ export default function SelectTeamPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [playingXi, setPlayingXi] = useState<PlayingXiState>({ announced: false, url: null });
   const [matchTeams, setMatchTeams] = useState<string[]>([]);
+  const [backups, setBackups] = useState<number[]>([]);
+  const [backupDetails, setBackupDetails] = useState<TeamBackup[]>([]);
+  const [showBackupPanel, setShowBackupPanel] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [playersRes, teamRes] = await Promise.all([
+        const [playersRes, teamRes, backupsRes] = await Promise.all([
           client.get(`/api/players?match_id=${matchId}`),
           client.get(`/api/teams/my?match_id=${matchId}`).catch(() => ({ data: [] })),
+          client.get(`/api/teams/my-backups?match_id=${matchId}`).catch(() => ({ data: [] })),
         ]);
         const data = playersRes.data || {};
         const groupedPlayers = data.players || data;
@@ -127,6 +131,10 @@ export default function SelectTeamPage() {
           });
           setSelected(map);
         }
+        const existingBackups: TeamBackup[] = (backupsRes as any).data || [];
+        setBackupDetails(existingBackups);
+        setBackups(existingBackups.map((entry) => entry.backup_player_id));
+        if (existingBackups.length > 0) setShowBackupPanel(true);
       } catch {
         toast('Failed to load players.', 'error');
       } finally {
@@ -134,7 +142,7 @@ export default function SelectTeamPage() {
       }
     };
     fetchData();
-  }, [matchId]);
+  }, [matchId, toast]);
 
   const togglePlayer = (playerId: number) => {
     setSelected((prev) => {
@@ -144,6 +152,11 @@ export default function SelectTeamPage() {
       } else {
         next.set(playerId, { player_id: playerId, is_captain: false, is_vice_captain: false });
       }
+      return next;
+    });
+    setBackups((prev) => {
+      const next = prev.filter((id) => id !== playerId);
+      setBackupDetails(rebuildBackupDetails(next));
       return next;
     });
   };
@@ -170,12 +183,30 @@ export default function SelectTeamPage() {
 
   const selectedCount = selected.size;
   const selectedIds = new Set(selected.keys());
+  const playerById = new Map(players.map((player) => [player.id, player]));
   let captainId: number | undefined;
   let vcId: number | undefined;
   selected.forEach((entry) => {
     if (entry.is_captain) captainId = entry.player_id;
     if (entry.is_vice_captain) vcId = entry.player_id;
   });
+
+  const rebuildBackupDetails = (ids: number[]) =>
+    ids
+      .slice(0, 3)
+      .map((playerId, index) => {
+        const existing = backupDetails.find((entry) => entry.backup_player_id === playerId);
+        const player = playerById.get(playerId);
+        return {
+          backup_order: index + 1,
+          backup_player_id: playerId,
+          backup_player_name: existing?.backup_player_name || player?.name || `Player ${playerId}`,
+          backup_team: existing?.backup_team || player?.team || '',
+          backup_role: existing?.backup_role || player?.role || '',
+          replaced_player_id: existing?.replaced_player_id ?? null,
+          replaced_player_name: existing?.replaced_player_name ?? null,
+        };
+      });
 
   const selectedByTeam: Record<string, number> = {};
   const playersByRole = REQUIRED_ROLES.reduce<Record<string, Player[]>>((acc, role) => {
@@ -302,6 +333,7 @@ export default function SelectTeamPage() {
       const payload = {
         match_id: Number(matchId),
         players: [...selected.values()],
+        backups: backups.filter((playerId) => !selectedIds.has(playerId)).slice(0, 3),
       };
       await client.post('/api/teams', payload);
       toast('Team saved successfully!', 'success');
@@ -350,9 +382,48 @@ export default function SelectTeamPage() {
       return a.name.localeCompare(b.name);
     });
 
+  const getBackupEligiblePlayers = (team: string) =>
+    [...(preAnnouncementPlayersByTeam[team] || [])]
+      .filter((player) => !selectedIds.has(player.id))
+      .sort((a, b) => {
+        const pointsDiff = (b.avg_points || 0) - (a.avg_points || 0);
+        if (pointsDiff !== 0) return pointsDiff;
+        return a.name.localeCompare(b.name);
+      });
+
   const handleTabSwipeStart = (clientX: number, clientY: number) => {
     touchStartXRef.current = clientX;
     touchStartYRef.current = clientY;
+  };
+
+  const removeBackupAtIndex = (index: number) => {
+    setBackups((prev) => {
+      const next = prev.filter((_, currentIndex) => currentIndex !== index);
+      setBackupDetails(rebuildBackupDetails(next));
+      return next;
+    });
+  };
+
+  const toggleBackupPlayer = (player: Player) => {
+    if (selected.has(player.id)) return;
+
+    const existingIndex = backups.indexOf(player.id);
+    if (existingIndex >= 0) {
+      removeBackupAtIndex(existingIndex);
+      return;
+    }
+
+    if (backups.length >= 3) {
+      toast('You can select at most 3 backup players.', 'error');
+      return;
+    }
+
+    setBackups((prev) => {
+      const next = [...prev, player.id];
+      setBackupDetails(rebuildBackupDetails(next));
+      return next;
+    });
+    setShowBackupPanel(true);
   };
 
   const handleTabSwipeEnd = (clientX: number, clientY: number) => {
@@ -423,7 +494,7 @@ export default function SelectTeamPage() {
                 : 'bg-white/10 text-white/70 border border-white/20'
             }`}
           >
-            {selectedCount}/11
+            {selectedCount}/11{backups.length > 0 ? ` · B ${backups.length}/3` : ''}
           </div>
         </div>
       </header>
@@ -494,6 +565,22 @@ export default function SelectTeamPage() {
               </span>
             </div>
           )}
+
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Backup Players</p>
+              <p className="text-xs text-white/45">
+                Optional. Up to 3 backups in order 1, 2, 3.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowBackupPanel((prev) => !prev)}
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white"
+            >
+              {backups.length > 0 ? `Backups ${backups.length}/3` : 'Add Backups'}
+            </button>
+          </div>
 
           {/* Role Tabs */}
           <form onSubmit={handleSubmit}>
@@ -902,6 +989,100 @@ export default function SelectTeamPage() {
               </div>
             </div>
             )}
+
+            {(showBackupPanel || backups.length > 0) && (
+              <div className="mt-4 rounded-2xl border border-sky-400/15 bg-sky-500/[0.04] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Backup Order</p>
+                    <p className="text-xs text-white/45">
+                      Used in order only if your XI has unavailable or substitute players at cutoff.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300">
+                    {backups.length}/3
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[0, 1, 2].map((index) => {
+                    const entry = backupDetails.find((detail) => detail.backup_order === index + 1);
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => {
+                          if (entry) removeBackupAtIndex(index);
+                        }}
+                        className={`rounded-xl border px-3 py-3 text-left transition ${
+                          entry
+                            ? 'border-sky-400/20 bg-sky-500/10 hover:bg-sky-500/15'
+                            : 'border-white/10 bg-white/[0.03]'
+                        }`}
+                      >
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-300">
+                          Backup {index + 1}
+                        </div>
+                        <div className="mt-1 text-xs font-medium text-white">
+                          {entry ? entry.backup_player_name : 'Empty'}
+                        </div>
+                        {entry && (
+                          <div className="mt-1 text-[10px] text-white/45">
+                            {getTeamTheme(entry.backup_team).label} · {ROLE_CONFIG[entry.backup_role]?.label || entry.backup_role}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {teamsInMatch.map((team) => (
+                    <div key={`backup-${team}`} className={`rounded-2xl border border-white/10 bg-gradient-to-b ${getTeamTheme(team).tintClass} bg-white/[0.03]`}>
+                      <div className="flex items-center justify-between border-b border-white/10 px-3 py-3">
+                        <div className="text-xs font-bold text-white">{team}</div>
+                        <div className="text-[11px] text-white/45">
+                          {backups.filter((playerId) => playerById.get(playerId)?.team === team).length} backup
+                        </div>
+                      </div>
+                      <div className="max-h-[22rem] space-y-1 overflow-y-auto px-2.5 py-2">
+                        {getBackupEligiblePlayers(team).map((player) => {
+                          const backupIndex = backups.indexOf(player.id);
+                          const isBackup = backupIndex >= 0;
+                          return (
+                            <button
+                              key={`backup-player-${player.id}`}
+                              type="button"
+                              onClick={() => toggleBackupPlayer(player)}
+                              className={`flex w-full items-start justify-between gap-2 rounded-lg px-2 py-2 text-left transition ${
+                                isBackup ? 'bg-sky-500/12 ring-1 ring-sky-300/25' : 'bg-white/[0.04] hover:bg-white/[0.08]'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[11px] font-semibold leading-tight text-white whitespace-normal break-words">
+                                  {player.name}
+                                </div>
+                                <div className="mt-0.5 flex items-center gap-2 text-[10px] text-white/50">
+                                  <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
+                                  <span className="font-semibold text-emerald-300">
+                                    Avg {Math.round(player.avg_points || 0)}
+                                  </span>
+                                </div>
+                              </div>
+                              {isBackup && (
+                                <span className="rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold text-sky-300">
+                                  #{backupIndex + 1}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             </div>
           </form>
         </div>
@@ -1022,6 +1203,7 @@ export default function SelectTeamPage() {
               {selectedCount}/11
             </span>
             <span className="text-white/50 ml-2">
+              {backups.length > 0 ? `B ${backups.length}/3 • ` : ''}
               {captainId ? 'C' : ''}
               {captainId && vcId ? ' / ' : ''}
               {vcId ? 'VC' : ''}

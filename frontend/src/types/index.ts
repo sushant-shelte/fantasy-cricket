@@ -55,6 +55,16 @@ export type TeamSelection = {
   is_vice_captain: boolean;
 };
 
+export type TeamBackup = {
+  backup_order: number;
+  backup_player_id: number;
+  backup_player_name: string;
+  backup_team: string;
+  backup_role: string;
+  replaced_player_id?: number | null;
+  replaced_player_name?: string | null;
+};
+
 export type PlayerScore = {
   name: string;
   team: string;

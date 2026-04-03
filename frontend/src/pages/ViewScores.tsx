@@ -15,6 +15,8 @@ interface TeamDiffEntry {
   multiplier: number;
   tag: string;
   adjusted_points: number;
+  is_backup?: boolean;
+  replaced_player_id?: number | null;
 }
 
 interface TeamDiffRow {
@@ -39,7 +41,7 @@ interface TeamDiffData {
 
 interface Contestant { id: number; name: string; }
 
-interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; }
+interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; is_backup?: boolean; replaced_player_id?: number | null; }
 interface BreakdownData { user_name: string; total: number; players: BreakdownPlayer[]; error?: string; }
 
 const ROLE_SYMBOLS: Record<string, { symbol: string; label: string }> = {
@@ -214,7 +216,10 @@ export default function ViewScoresPage() {
     return (
       <div className={`flex-1 rounded-xl border p-3 bg-gradient-to-r ${theme.tintClass} ${side === 'left' ? 'border-white/20' : 'border-red-500/20'}`}>
         <div className="flex items-center justify-between mb-1">
-          <span className="text-white text-sm font-medium truncate">{entry.name}</span>
+          <span className="flex items-center gap-1.5 min-w-0">
+            {renderBackupDot(entry.is_backup)}
+            <span className="text-white text-sm font-medium truncate">{entry.name}</span>
+          </span>
           {entry.tag && <span className={`text-[10px] text-white font-bold px-1.5 py-0.5 rounded ${tagColor}`}>{entry.tag}</span>}
         </div>
         <div className="flex items-center justify-between text-xs">
@@ -239,8 +244,16 @@ export default function ViewScoresPage() {
     return role;
   };
 
+  const renderBackupDot = (isBackup?: boolean) =>
+    isBackup ? (
+      <span
+        className="inline-block h-2 w-2 flex-shrink-0 rounded-full bg-sky-400"
+        title="Backup replacement"
+      />
+    ) : null;
+
   const renderRoleSymbol = (role: string) => {
-    const config = ROLE_SYMBOLS[role] || { symbol: getShortRole(role), label: role };
+    const config = { symbol: getShortRole(role), label: role };
     return (
       <span
         title={config.label}
@@ -373,8 +386,9 @@ export default function ViewScoresPage() {
                                     <div key={`${player.name}-${index}`} className={`rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(player.team).tintClass} px-3 py-2.5`}>
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
-                                          <div className="flex items-center gap-2">
-                                            <p className="truncate text-sm font-medium text-white">{player.name}</p>
+                                            <div className="flex items-center gap-2">
+                                              {renderBackupDot(player.is_backup)}
+                                              <p className="truncate text-sm font-medium text-white">{player.name}</p>
                                             {player.tag && (
                                               <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
                                                 player.tag === 'C' ? 'bg-amber-500 text-black' : 'bg-sky-500 text-black'
@@ -651,7 +665,10 @@ export default function ViewScoresPage() {
                                 }`}>
                                   {p.tag || p.adjusted_points}
                                 </div>
-                                <p className="text-white text-[9px] font-medium mt-0.5 max-w-[55px] text-center truncate">{p.name.split(' ').pop()}</p>
+                                <div className="mt-0.5 flex items-center gap-1">
+                                  {renderBackupDot(p.is_backup)}
+                                  <p className="max-w-[55px] truncate text-center text-[9px] font-medium text-white">{p.name.split(' ').pop()}</p>
+                                </div>
                                 <p className="text-green-300 text-[9px] font-bold">{p.adjusted_points}</p>
                               </div>
                             ))}
@@ -689,7 +706,10 @@ export default function ViewScoresPage() {
                               {p.tag === 'VC' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>}
                             </div>
                             <div className="min-w-0 flex-[1.35] ml-2">
-                              <p className="text-white text-sm font-medium truncate">{p.name}</p>
+                              <div className="flex items-center gap-2">
+                                {renderBackupDot(p.is_backup)}
+                                <p className="text-white text-sm font-medium truncate">{p.name}</p>
+                              </div>
                               <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
                                 {renderTeamBadge(p.team)}
                                 <span>{getShortRole(p.role)}</span>

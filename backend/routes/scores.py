@@ -123,6 +123,10 @@ def _build_registry(db):
     return PlayerRegistry(players_data), players_data
 
 
+def _backup_map_for_user(match_id: int, user_id: int) -> dict[int, dict]:
+    return data_service.get_active_backup_replacements(match_id, user_id)
+
+
 def _build_players_rows(players_data, team1=None, team2=None):
     rows = []
     for row in players_data:
@@ -375,6 +379,7 @@ async def team_breakdown(
 
     breakdown = []
     total = 0.0
+    backup_map = _backup_map_for_user(match_id, target_user_id)
 
     for row in team_rows:
         pid = row["player_id"]
@@ -408,6 +413,8 @@ async def team_breakdown(
             "multiplier": multiplier,
             "tag": tag,
             "adjusted_points": adjusted,
+            "is_backup": pid in backup_map,
+            "replaced_player_id": backup_map.get(pid, {}).get("replaced_player_id"),
             "breakdown": player_breakdown,
         })
 
@@ -457,6 +464,7 @@ def _build_team_snapshot(db, user_id, match_id, match_obj, pp_lookup, role_looku
 
     entries = {}
     total = 0.0
+    backup_map = _backup_map_for_user(match_id, user_id)
 
     for row in rows:
         pid = row["player_id"]
@@ -488,6 +496,8 @@ def _build_team_snapshot(db, user_id, match_id, match_obj, pp_lookup, role_looku
             "multiplier": multiplier,
             "tag": tag,
             "adjusted_points": adjusted,
+            "is_backup": pid in backup_map,
+            "replaced_player_id": backup_map.get(pid, {}).get("replaced_player_id"),
         }
 
     return entries, round(total, 2)

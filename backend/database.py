@@ -155,6 +155,34 @@ def _ensure_user_teams_updated_at_postgres(cursor):
     )
 
 
+def _ensure_team_backups_postgres(cursor):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS team_backups (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            match_id INTEGER NOT NULL REFERENCES matches(id),
+            backup_order INTEGER NOT NULL,
+            backup_player_id INTEGER NOT NULL REFERENCES players(id),
+            replaced_player_id INTEGER REFERENCES players(id),
+            UNIQUE(user_id, match_id, backup_order)
+        )
+    """)
+
+
+def _ensure_team_backups_sqlite(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS team_backups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            match_id INTEGER NOT NULL REFERENCES matches(id),
+            backup_order INTEGER NOT NULL,
+            backup_player_id INTEGER NOT NULL REFERENCES players(id),
+            replaced_player_id INTEGER REFERENCES players(id),
+            UNIQUE(user_id, match_id, backup_order)
+        )
+    """)
+
+
 def get_db():
     if not hasattr(_local, "conn") or _local.conn is None:
         if _is_postgres():
@@ -249,6 +277,7 @@ def init_db():
                 UNIQUE(match_id, player_id)
             )
         """)
+        _ensure_team_backups_postgres(cursor)
 
         # Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_teams_user_match ON user_teams(user_id, match_id)")
@@ -259,6 +288,8 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_player_points_match ON player_points(match_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_player_points_last_updated ON player_points(last_updated)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_team_backups_user_match ON team_backups(user_id, match_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_team_backups_match ON team_backups(match_id)")
 
         conn.commit()
         conn.close()
@@ -320,6 +351,15 @@ def init_db():
                 last_updated TEXT NOT NULL,
                 UNIQUE(match_id, player_id)
             );
+            CREATE TABLE IF NOT EXISTS team_backups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                match_id INTEGER NOT NULL REFERENCES matches(id),
+                backup_order INTEGER NOT NULL,
+                backup_player_id INTEGER NOT NULL REFERENCES players(id),
+                replaced_player_id INTEGER REFERENCES players(id),
+                UNIQUE(user_id, match_id, backup_order)
+            );
             CREATE INDEX IF NOT EXISTS idx_user_teams_user_match ON user_teams(user_id, match_id);
             CREATE INDEX IF NOT EXISTS idx_user_teams_match ON user_teams(match_id);
             CREATE INDEX IF NOT EXISTS idx_user_teams_match_user ON user_teams(match_id, user_id);
@@ -328,8 +368,11 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_player_points_match ON player_points(match_id);
             CREATE INDEX IF NOT EXISTS idx_player_points_last_updated ON player_points(last_updated);
             CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid);
+            CREATE INDEX IF NOT EXISTS idx_team_backups_user_match ON team_backups(user_id, match_id);
+            CREATE INDEX IF NOT EXISTS idx_team_backups_match ON team_backups(match_id);
         """)
         _ensure_user_teams_updated_at_sqlite(conn)
+        _ensure_team_backups_sqlite(conn)
         try:
             conn.execute("ALTER TABLE matches ADD COLUMN venue TEXT DEFAULT NULL")
         except Exception:
