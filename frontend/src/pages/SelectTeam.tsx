@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import client from '../api/client';
 import type { Player, TeamSelection } from '../types';
@@ -92,6 +92,8 @@ export default function SelectTeamPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [playingXi, setPlayingXi] = useState<PlayingXiState>({ announced: false, url: null });
   const [matchTeams, setMatchTeams] = useState<string[]>([]);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -167,25 +169,72 @@ export default function SelectTeamPage() {
   };
 
   const selectedCount = selected.size;
-  const captainId = [...selected.values()].find((s) => s.is_captain)?.player_id;
-  const vcId = [...selected.values()].find((s) => s.is_vice_captain)?.player_id;
+  const selectedIds = new Set(selected.keys());
+  let captainId: number | undefined;
+  let vcId: number | undefined;
+  selected.forEach((entry) => {
+    if (entry.is_captain) captainId = entry.player_id;
+    if (entry.is_vice_captain) vcId = entry.player_id;
+  });
+
   const selectedByTeam: Record<string, number> = {};
-  const selectedPlayers = players.filter((player) => selected.has(player.id));
-  const selectedRoleCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
-    acc[role] = selectedPlayers.filter((player) => player.role === role).length;
+  const playersByRole = REQUIRED_ROLES.reduce<Record<string, Player[]>>((acc, role) => {
+    acc[role] = [];
     return acc;
   }, {});
+  const selectedPlayersByRole = REQUIRED_ROLES.reduce<Record<string, Player[]>>((acc, role) => {
+    acc[role] = [];
+    return acc;
+  }, {});
+  const selectedRoleCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
+    acc[role] = 0;
+    return acc;
+  }, {});
+  const selectedUnavailableCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
+    acc[role] = 0;
+    return acc;
+  }, {});
+  const selectedSubstituteCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
+    acc[role] = 0;
+    return acc;
+  }, {});
+  const lineupPlayersByTeam: Record<string, Record<string, Player[]>> = {};
+  const preAnnouncementPlayersByTeam: Record<string, Player[]> = {};
 
   players.forEach((player) => {
-    if (!selected.has(player.id)) return;
+    if (player.role in playersByRole) {
+      playersByRole[player.role].push(player);
+    }
+
+    if (!preAnnouncementPlayersByTeam[player.team]) {
+      preAnnouncementPlayersByTeam[player.team] = [];
+    }
+    preAnnouncementPlayersByTeam[player.team].push(player);
+
+    if (!lineupPlayersByTeam[player.team]) {
+      lineupPlayersByTeam[player.team] = { available: [], substitute: [], unavailable: [] };
+    }
+    const availabilityKey = player.availability_status;
+    if (availabilityKey && availabilityKey in lineupPlayersByTeam[player.team]) {
+      lineupPlayersByTeam[player.team][availabilityKey].push(player);
+    }
+
+    if (!selectedIds.has(player.id)) return;
+
     selectedByTeam[player.team] = (selectedByTeam[player.team] || 0) + 1;
+    if (player.role in selectedPlayersByRole) {
+      selectedPlayersByRole[player.role].push(player);
+      selectedRoleCounts[player.role] += 1;
+      if (player.availability_status === 'unavailable') selectedUnavailableCounts[player.role] += 1;
+      if (player.availability_status === 'substitute') selectedSubstituteCounts[player.role] += 1;
+    }
   });
 
   const teamsInMatch =
     matchTeams.length === 2 ? matchTeams : [...new Set(players.map((player) => player.team))].sort();
 
   const canSelectPlayer = (player: Player) => {
-    if (selected.has(player.id)) return true;
+    if (selectedIds.has(player.id)) return true;
     if (selectedCount >= 11) return false;
 
     const simulatedCounts = { ...selectedRoleCounts };
@@ -266,15 +315,16 @@ export default function SelectTeamPage() {
   };
 
   const rolePlayers = REQUIRED_ROLES.reduce<Record<string, Player[]>>((acc, role) => {
-    acc[role] = sortPlayersForDisplay(players.filter((player) => player.role === role));
+    acc[role] = sortPlayersForDisplay(playersByRole[role]);
     return acc;
   }, {});
 
   const activeRole = activeTab === LINEUPS_TAB ? REQUIRED_ROLES[0] : activeTab;
   const selectionTabs = [
-    { key: LINEUPS_TAB, label: 'XI View' },
+    { key: LINEUPS_TAB, label: 'XI' },
     ...REQUIRED_ROLES.map((role) => ({ key: role, label: ROLE_CONFIG[role].label })),
   ] as const;
+  const tabKeys = selectionTabs.map((tab) => tab.key);
 
   const sortPlayersForLineupView = (list: Player[]) =>
     [...list].sort((a, b) => {
@@ -286,13 +336,11 @@ export default function SelectTeamPage() {
       return a.name.localeCompare(b.name);
     });
 
-  const getLineupSectionPlayers = (
-    team: string,
-    status: Player['availability_status']
-  ) => sortPlayersForLineupView(players.filter((player) => player.team === team && player.availability_status === status));
+  const getLineupSectionPlayers = (team: string, status: Player['availability_status']) =>
+    sortPlayersForLineupView(lineupPlayersByTeam[team]?.[status || ''] || []);
 
   const getPreAnnouncementPlayers = (team: string) =>
-    [...players.filter((player) => player.team === team)].sort((a, b) => {
+    [...(preAnnouncementPlayersByTeam[team] || [])].sort((a, b) => {
       const roleDiff =
         REQUIRED_ROLES.indexOf(a.role as (typeof REQUIRED_ROLES)[number]) -
         REQUIRED_ROLES.indexOf(b.role as (typeof REQUIRED_ROLES)[number]);
@@ -302,26 +350,38 @@ export default function SelectTeamPage() {
       return a.name.localeCompare(b.name);
     });
 
-  const selectedUnavailableCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
-    acc[role] = players.filter(
-      (player) => player.role === role && player.availability_status === 'unavailable' && selected.has(player.id)
-    ).length;
-    return acc;
-  }, {});
-  const selectedSubstituteCounts = REQUIRED_ROLES.reduce<Record<string, number>>((acc, role) => {
-    acc[role] = players.filter(
-      (player) => player.role === role && player.availability_status === 'substitute' && selected.has(player.id)
-    ).length;
-    return acc;
-  }, {});
+  const handleTabSwipeStart = (clientX: number, clientY: number) => {
+    touchStartXRef.current = clientX;
+    touchStartYRef.current = clientY;
+  };
+
+  const handleTabSwipeEnd = (clientX: number, clientY: number) => {
+    if (touchStartXRef.current == null || touchStartYRef.current == null) return;
+
+    const deltaX = clientX - touchStartXRef.current;
+    const deltaY = clientY - touchStartYRef.current;
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+
+    if (Math.abs(deltaX) < 45 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+
+    const currentIndex = tabKeys.indexOf(activeTab);
+    if (currentIndex === -1) return;
+
+    if (deltaX < 0 && currentIndex < tabKeys.length - 1) {
+      setActiveTab(tabKeys[currentIndex + 1]);
+    } else if (deltaX > 0 && currentIndex > 0) {
+      setActiveTab(tabKeys[currentIndex - 1]);
+    }
+  };
 
   /* Ground view helpers */
-  const getSelectedByRole = (role: string) => players.filter((p) => selected.has(p.id) && p.role === role);
+  const getSelectedByRole = (role: string) => selectedPlayersByRole[role] || [];
 
   if (loading) {
     return (
       <div className="min-h-screen bg-black">
-        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-lg border-b border-white/10">
+        <header className="sticky top-0 z-30 bg-black/90 border-b border-white/10 md:bg-black/80 md:backdrop-blur-lg">
           <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-white/10 animate-pulse" />
@@ -343,7 +403,7 @@ export default function SelectTeamPage() {
   return (
     <div className="min-h-screen bg-black pb-24">
       {/* Sticky header */}
-      <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-lg border-b border-white/10">
+      <header className="sticky top-0 z-30 bg-black/90 border-b border-white/10 md:bg-black/80 md:backdrop-blur-lg">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
@@ -442,6 +502,16 @@ export default function SelectTeamPage() {
 
           {/* Role Tabs */}
           <form onSubmit={handleSubmit}>
+            <div
+              onTouchStart={(e) => {
+                const touch = e.changedTouches[0];
+                if (touch) handleTabSwipeStart(touch.clientX, touch.clientY);
+              }}
+              onTouchEnd={(e) => {
+                const touch = e.changedTouches[0];
+                if (touch) handleTabSwipeEnd(touch.clientX, touch.clientY);
+              }}
+            >
             <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
               {selectionTabs.map(({ key, label }) => {
                 const hasUnavailableSelected =
@@ -533,12 +603,12 @@ export default function SelectTeamPage() {
                                         onClick={() => {
                                           if (isSelected || selectionAllowed) togglePlayer(player.id);
                                         }}
-                                        className={`cursor-pointer rounded-lg border px-2 py-1.5 transition-all ${
+                                        className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                           isSelected
-                                            ? 'border-white/20 bg-white/12'
+                                            ? 'bg-emerald-500/12 ring-1 ring-emerald-300/25'
                                             : !selectionAllowed
-                                            ? 'cursor-not-allowed border-white/5 bg-white/[0.03] opacity-45'
-                                            : 'border-white/8 bg-white/[0.04] hover:bg-white/[0.08]'
+                                            ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
+                                            : 'bg-white/[0.04] hover:bg-white/[0.08]'
                                         }`}
                                       >
                                         <div className="flex items-start gap-2">
@@ -622,12 +692,12 @@ export default function SelectTeamPage() {
                                   onClick={() => {
                                     if (isSelected || selectionAllowed) togglePlayer(player.id);
                                   }}
-                                  className={`cursor-pointer rounded-lg border px-2 py-1.5 transition-all ${
+                                  className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                     isSelected
-                                      ? 'border-white/20 bg-white/12'
+                                      ? 'bg-emerald-500/12 ring-1 ring-emerald-300/25'
                                       : !selectionAllowed
-                                      ? 'cursor-not-allowed border-white/5 bg-white/[0.03] opacity-45'
-                                      : 'border-white/8 bg-white/[0.04] hover:bg-white/[0.08]'
+                                      ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
+                                      : 'bg-white/[0.04] hover:bg-white/[0.08]'
                                   }`}
                                 >
                                   <div className="flex items-start gap-2">
@@ -838,6 +908,7 @@ export default function SelectTeamPage() {
               </div>
             </div>
             )}
+            </div>
           </form>
         </div>
 
@@ -845,7 +916,7 @@ export default function SelectTeamPage() {
         <div className="lg:w-[340px] flex-shrink-0">
           <div className="lg:sticky lg:top-[73px]">
             <div
-              className="rounded-2xl overflow-hidden shadow-xl"
+              className="rounded-2xl overflow-hidden shadow-lg md:shadow-xl"
               style={{
                 background: 'linear-gradient(180deg, #1a5e1a 0%, #2d8a2d 30%, #3da33d 50%, #2d8a2d 70%, #1a5e1a 100%)',
               }}
@@ -950,7 +1021,7 @@ export default function SelectTeamPage() {
       </div>
 
       {/* Sticky submit bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-black/90 backdrop-blur-lg border-t border-white/10">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-black/95 border-t border-white/10 md:bg-black/90 md:backdrop-blur-lg">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="text-sm min-w-0">
             <span className={`font-bold ${selectedCount === 11 ? 'text-green-400' : 'text-white/70'}`}>
@@ -989,7 +1060,7 @@ export default function SelectTeamPage() {
 
       {/* Team Preview Modal — after save */}
       {showPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 md:bg-black/70 md:backdrop-blur-sm">
           <div className="w-full max-w-md relative">
             <div
               className="rounded-3xl overflow-hidden shadow-2xl"

@@ -303,7 +303,7 @@ export default function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {currentMatches.map((match) => (
               <div key={match.id}
-                className={`bg-gradient-to-br ${getTeamTheme(match.team1).tintClass} bg-white/5 hover:bg-white/[0.08] border border-white/10 rounded-2xl p-5 transition-all duration-200 backdrop-blur-sm`}>
+                className={`bg-gradient-to-br ${getTeamTheme(match.team1).tintClass} bg-white/5 hover:bg-white/[0.08] border border-white/10 rounded-2xl p-5 transition-all duration-200 md:backdrop-blur-sm`}>
                 <div className="flex items-center justify-between mb-3">
                   {statusBadge(match.status)}
                   {match.locked && (
@@ -392,7 +392,7 @@ export default function DashboardPage() {
       </div>
 
       {showContestantsForMatch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 md:bg-black/70 md:backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0f0f0f] p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
