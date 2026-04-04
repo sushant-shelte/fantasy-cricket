@@ -22,6 +22,7 @@ CRICBUZZ_MATCH_ID_MAP: dict[int, int] = {}
 PLAYING_XI_CACHE: dict[int, dict] = {}
 PLAYING_XI_TTL_SECONDS = 60
 TOSS_INFO_CACHE: dict[int, dict] = {}
+TOSS_INFO_TTL_SECONDS = 60
 
 
 def _session_get(url):
@@ -73,6 +74,19 @@ def _should_attempt_playing_xi_fetch(match_date: str | None, match_time: str | N
         return True
 
     return datetime.now(IST) >= (match_start - timedelta(minutes=30))
+
+
+def should_attempt_toss_fetch(match_date: str | None, match_time: str | None) -> bool:
+    if not match_date or not match_time:
+        return False
+
+    try:
+        match_start = IST.localize(datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M"))
+    except Exception:
+        return False
+
+    now = datetime.now(IST)
+    return (match_start - timedelta(minutes=30)) <= now < match_start
 
 
 def _is_before_match_start(match_date: str | None, match_time: str | None) -> bool:
@@ -1002,15 +1016,31 @@ def fetch_toss_info(
     match_time: str | None = None,
 ) -> dict:
     cached = TOSS_INFO_CACHE.get(int(match_id))
-    if cached and cached.get("announced"):
-        return _copy_toss_payload(cached["payload"])
+    now_ts = time.time()
+    if cached:
+        if cached.get("announced"):
+            return _copy_toss_payload(cached["payload"])
+        if now_ts - cached.get("fetched_at", 0) < TOSS_INFO_TTL_SECONDS:
+            return _copy_toss_payload(cached["payload"])
 
-    if not _should_attempt_playing_xi_fetch(match_date, match_time):
-        return {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+    if not should_attempt_toss_fetch(match_date, match_time):
+        payload = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+        TOSS_INFO_CACHE[int(match_id)] = {
+            "payload": payload,
+            "fetched_at": now_ts,
+            "announced": False,
+        }
+        return _copy_toss_payload(payload)
 
     cricbuzz_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2)
     if not cricbuzz_match_id:
-        return {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+        payload = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+        TOSS_INFO_CACHE[int(match_id)] = {
+            "payload": payload,
+            "fetched_at": now_ts,
+            "announced": False,
+        }
+        return _copy_toss_payload(payload)
 
     commentary_url = build_cricbuzz_commentary_url(cricbuzz_match_id)
     scorecard_url = f"https://www.cricbuzz.com/live-cricket-scorecard/{cricbuzz_match_id}"
@@ -1023,12 +1053,22 @@ def fetch_toss_info(
             parsed = _extract_toss_info_from_html(res.text, team1, team2)
             if parsed:
                 parsed["url"] = url
-                TOSS_INFO_CACHE[int(match_id)] = {"payload": parsed}
+                TOSS_INFO_CACHE[int(match_id)] = {
+                    "payload": parsed,
+                    "fetched_at": now_ts,
+                    "announced": True,
+                }
                 return _copy_toss_payload(parsed)
         except Exception as exc:
             print(f"[Toss] Match {match_id}: error fetching {url}: {exc}")
 
-    return {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+    payload = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+    TOSS_INFO_CACHE[int(match_id)] = {
+        "payload": payload,
+        "fetched_at": now_ts,
+        "announced": False,
+    }
+    return _copy_toss_payload(payload)
 
 
 def fetch_venues_from_cricbuzz() -> dict[int, str]:
