@@ -404,9 +404,9 @@ export default function DashboardPage() {
                 )}
                 {(match.status === 'live' || match.status === 'over') && match.current_rank != null && (
                   <div className="mb-3 text-center">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
-                      Current Rank #{match.current_rank}
-                    </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
+                       {match.status === 'over' ? 'Final Rank' : 'Current Rank'} #{match.current_rank}
+                      </span>
                   </div>
                 )}
                 <div className="flex justify-center">{matchAction(match)}</div>
