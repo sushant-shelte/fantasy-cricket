@@ -905,26 +905,40 @@ def fetch_playing_xi(
     squads_url = build_cricbuzz_playing_xi_url(cricbuzz_match_id)
 
     try:
-        commentary_html = None
-        print(f"[Playing XI] Match {match_id}: trying commentary {commentary_url}")
-        commentary_res = _session_get(commentary_url)
-        if commentary_res.status_code == 200:
-            commentary_html = commentary_res.text
-
         squads_html = None
-        if not commentary_html:
-            print(f"[Playing XI] Match {match_id}: trying {squads_url}")
-            res = _session_get(squads_url)
-            if res.status_code != 200:
-                print(f"[Playing XI] Match {match_id}: status {res.status_code} for {squads_url}")
-                payload = {"announced": False, "url": squads_url, "player_ids": [], "substitute_ids": []}
-                PLAYING_XI_CACHE[int(match_id)] = {
-                    "payload": payload,
-                    "fetched_at": now_ts,
-                    "finalized": False,
-                }
-                return _copy_playing_xi_payload(payload)
+        print(f"[Playing XI] Match {match_id}: trying {squads_url}")
+        res = _session_get(squads_url)
+        if res.status_code == 200:
             squads_html = res.text
+
+        parsed_from_squads = None
+        if squads_html:
+            parsed_from_squads = parse_playing_xi_from_sources(
+                None,
+                squads_html,
+                team1,
+                team2,
+                players_rows,
+                commentary_url=commentary_url,
+                squads_url=squads_url,
+            )
+
+        commentary_html = None
+        if not parsed_from_squads or not parsed_from_squads["announced"]:
+            print(f"[Playing XI] Match {match_id}: trying commentary {commentary_url}")
+            commentary_res = _session_get(commentary_url)
+            if commentary_res.status_code == 200:
+                commentary_html = commentary_res.text
+
+        if not squads_html and not commentary_html:
+            print(f"[Playing XI] Match {match_id}: unable to fetch squads/commentary")
+            payload = {"announced": False, "url": squads_url, "player_ids": [], "substitute_ids": []}
+            PLAYING_XI_CACHE[int(match_id)] = {
+                "payload": payload,
+                "fetched_at": now_ts,
+                "finalized": False,
+            }
+            return _copy_playing_xi_payload(payload)
 
         parsed_payload = parse_playing_xi_from_sources(
             commentary_html,
