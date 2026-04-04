@@ -368,17 +368,21 @@ class Tournament:
     def start_scheduler(self):
         def run():
             while True:
+                sleep_seconds = 60
                 try:
                     print("\n--- Scheduler tick ---")
                     matches_data = data_service.get_cached_data("matches")
                     computed_matches = data_service.get_computed_match_ids()
                     locked_match_ids_to_load = []
+                    has_lineup_window_match = False
 
                     for m in matches_data:
                         match_id = str(m["MatchID"])
                         status = self.get_match_status(m)
                         if status in ("lineups", "live"):
                             locked_match_ids_to_load.append(match_id)
+                        if status == "lineups":
+                            has_lineup_window_match = True
                         elif status == "over" and match_id not in computed_matches:
                             locked_match_ids_to_load.append(match_id)
 
@@ -421,6 +425,9 @@ class Tournament:
                             traceback.print_exc()
                             continue  # Keep processing other matches
 
+                    if has_lineup_window_match:
+                        sleep_seconds = 15
+
                     # Only persist if we processed something
                     if processed > 0:
                         try:
@@ -435,7 +442,7 @@ class Tournament:
                     print(f"Scheduler outer error: {e}")
                     traceback.print_exc()
 
-                time.sleep(60)
+                time.sleep(sleep_seconds)
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()

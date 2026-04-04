@@ -309,20 +309,8 @@ export default function SelectTeamPage() {
     return null;
   };
 
-  const availabilityRank = (player: Player) => {
-    if (player.availability_status === 'available') return 3;
-    if (player.availability_status === 'substitute') return 2;
-    if (player.availability_status === 'unavailable') return 1;
-    return 0;
-  };
-
   const sortPlayersForDisplay = (list: Player[]) =>
     [...list].sort((a, b) => {
-      const aOrder = a.availability_order ?? Number.MAX_SAFE_INTEGER;
-      const bOrder = b.availability_order ?? Number.MAX_SAFE_INTEGER;
-      if (aOrder !== bOrder) return aOrder - bOrder;
-      const availabilityDiff = availabilityRank(b) - availabilityRank(a);
-      if (availabilityDiff !== 0) return availabilityDiff;
       const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
       if (pointsDiff !== 0) return pointsDiff;
       return a.name.localeCompare(b.name);

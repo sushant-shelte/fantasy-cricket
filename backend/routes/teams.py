@@ -154,7 +154,7 @@ async def my_lineup_statuses(
 
         unavailable_selected = 0
         substitute_selected = 0
-        if announced and playing_ids_complete:
+        if announced and playing_ids:
             unavailable_selected = len([player_id for player_id in selected_ids if player_id not in playing_ids and player_id not in substitute_ids])
             substitute_selected = len([player_id for player_id in selected_ids if player_id in substitute_ids])
 
