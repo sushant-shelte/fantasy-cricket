@@ -56,10 +56,15 @@ async def list_matches(user: dict = Depends(get_current_user)):
 
 @router.get("/dashboard/matches")
 async def dashboard_matches(user: dict = Depends(get_current_user)):
+    route_started = time.perf_counter()
     payload = _get_matches_payload(cache_key="dashboard")
     if not user:
         return payload
-    return _attach_user_match_ranks(payload, user["id"])
+    result = _attach_user_match_ranks(payload, user["id"])
+    route_ms = (time.perf_counter() - route_started) * 1000
+    if route_ms >= 80:
+        print(f"[API timing] GET /api/dashboard/matches total={route_ms:.1f}ms user_id={user['id']}")
+    return result
 
 
 def invalidate_matches_response_cache():
@@ -94,12 +99,16 @@ def _build_matches_payload() -> list[dict]:
     result = []
     for match in prepared_matches:
         match["venue"] = get_today_cached_venue_stats(match["id"], match["match_date"], match["status"])
-        match["toss"] = fetch_toss_info(
-            int(match["id"]),
-            match["team1"],
-            match["team2"],
-            match["match_date"],
-            match["match_time"],
+        match["toss"] = (
+            fetch_toss_info(
+                int(match["id"]),
+                match["team1"],
+                match["team2"],
+                match["match_date"],
+                match["match_time"],
+            )
+            if match["status"] == "future" and match["match_date"] == today_key
+            else None
         )
         result.append(match)
 

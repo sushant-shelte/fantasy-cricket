@@ -173,11 +173,6 @@ def start_completed_match_recompute_if_needed():
         completed_recompute_started = True
 
     def _run_completed_recompute_scheduler():
-        try:
-            tournament.recompute_completed_matches("startup")
-        except Exception as exc:
-            print(f"Completed matches startup recompute error: {exc}")
-
         while True:
             sleep_seconds = _seconds_until_next_completed_recompute()
             time.sleep(sleep_seconds)

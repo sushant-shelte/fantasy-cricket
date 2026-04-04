@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import List
 from datetime import datetime
+import time
 
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
@@ -74,12 +75,17 @@ async def my_backups(
 @router.get("/my-matches")
 async def my_team_matches(user: dict = Depends(get_current_user)):
     """Returns list of match IDs where user has picked a team."""
+    started = time.perf_counter()
     db = get_db()
     rows = db.execute(
         "SELECT DISTINCT match_id FROM user_teams WHERE user_id = ?",
         (user["id"],),
     ).fetchall()
-    return [row["match_id"] for row in rows]
+    result = [row["match_id"] for row in rows]
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    if elapsed_ms >= 80:
+        print(f"[API timing] GET /api/teams/my-matches total={elapsed_ms:.1f}ms user_id={user['id']}")
+    return result
 
 
 @router.get("/my-lineup-statuses")
@@ -87,6 +93,7 @@ async def my_lineup_statuses(
     match_ids: str = Query(...),
     user: dict = Depends(get_current_user),
 ):
+    started = time.perf_counter()
     requested_ids = [int(match_id.strip()) for match_id in match_ids.split(",") if match_id.strip()]
     if not requested_ids:
         return {}
@@ -166,6 +173,12 @@ async def my_lineup_statuses(
             "backupCount": backup_counts.get(match_id, 0),
         }
 
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    if elapsed_ms >= 80:
+        print(
+            f"[API timing] GET /api/teams/my-lineup-statuses total={elapsed_ms:.1f}ms "
+            f"user_id={user['id']} matches={len(requested_ids)}"
+        )
     return result
 
 
@@ -174,11 +187,19 @@ async def my_backup_counts(
     match_ids: str = Query(...),
     user: dict = Depends(get_current_user),
 ):
+    started = time.perf_counter()
     requested_ids = [int(match_id.strip()) for match_id in match_ids.split(",") if match_id.strip()]
     if not requested_ids:
         return {}
     counts = data_service.get_backup_counts_for_user(user["id"], requested_ids)
-    return {str(match_id): counts.get(match_id, 0) for match_id in requested_ids}
+    result = {str(match_id): counts.get(match_id, 0) for match_id in requested_ids}
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    if elapsed_ms >= 80:
+        print(
+            f"[API timing] GET /api/teams/my-backup-counts total={elapsed_ms:.1f}ms "
+            f"user_id={user['id']} matches={len(requested_ids)}"
+        )
+    return result
 
 
 @router.post("")

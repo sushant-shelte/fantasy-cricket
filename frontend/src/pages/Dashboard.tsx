@@ -52,10 +52,13 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
+        const dashboardStart = performance.now();
+        console.time('dashboard:/api/dashboard/matches + /api/teams/my-matches');
         const [matchRes, teamsRes] = await Promise.all([
           client.get('/api/dashboard/matches'),
           client.get('/api/teams/my-matches'),
         ]);
+        console.timeEnd('dashboard:/api/dashboard/matches + /api/teams/my-matches');
 
         const loadedMatches: Match[] = matchRes.data;
         const loadedMyTeams = new Set<number>(teamsRes.data);
@@ -67,7 +70,9 @@ export default function DashboardPage() {
 
           if (matchesToCheck.length > 0) {
             const ids = matchesToCheck.map((match) => match.id).join(',');
+            console.time('dashboard:/api/teams/my-lineup-statuses');
             const lineupRes = await client.get(`/api/teams/my-lineup-statuses?match_ids=${ids}`);
+            console.timeEnd('dashboard:/api/teams/my-lineup-statuses');
             setTeamLineupInfo(lineupRes.data || {});
           } else {
             setTeamLineupInfo({});
@@ -75,7 +80,9 @@ export default function DashboardPage() {
 
         if (futureMatchesWithTeams.length > 0) {
           const ids = futureMatchesWithTeams.map((match) => match.id).join(',');
+          console.time('dashboard:/api/teams/my-backup-counts');
           const backupRes = await client.get(`/api/teams/my-backup-counts?match_ids=${ids}`);
+          console.timeEnd('dashboard:/api/teams/my-backup-counts');
           const counts: Record<number, number> = {};
           Object.entries(backupRes.data || {}).forEach(([matchId, count]) => {
             counts[Number(matchId)] = Number(count || 0);
@@ -84,6 +91,7 @@ export default function DashboardPage() {
         } else {
           setBackupCounts({});
         }
+        console.log(`dashboard:total ${(performance.now() - dashboardStart).toFixed(1)}ms`);
         } catch {
           setTeamLineupInfo({});
           setBackupCounts({});
