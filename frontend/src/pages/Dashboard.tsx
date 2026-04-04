@@ -62,9 +62,8 @@ export default function DashboardPage() {
         setMatches(loadedMatches);
         setMyTeams(loadedMyTeams);
 
-          const liveMatchesWithTeams = loadedMatches.filter((match) => match.status === 'live' && loadedMyTeams.has(match.id));
           const futureMatchesWithTeams = loadedMatches.filter((match) => match.status === 'future' && loadedMyTeams.has(match.id));
-          const matchesToCheck = liveMatchesWithTeams;
+          const matchesToCheck = futureMatchesWithTeams;
 
           if (matchesToCheck.length > 0) {
             const ids = matchesToCheck.map((match) => match.id).join(',');
@@ -380,7 +379,7 @@ export default function DashboardPage() {
                     </span>
                   </p>
                 )}
-                {match.status === 'live' && myTeams.has(match.id) && teamLineupInfo[match.id]?.announced && (
+                {match.status === 'future' && myTeams.has(match.id) && teamLineupInfo[match.id]?.announced && (
                     <div className="mb-3 space-y-1 text-center text-xs font-medium">
                     <p className={
                       teamLineupInfo[match.id].unannouncedSelected > 0
