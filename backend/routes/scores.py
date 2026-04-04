@@ -1,3 +1,4 @@
+import copy
 import time
 from datetime import datetime, timedelta
 
@@ -155,6 +156,31 @@ def _is_live_window(match_row) -> bool:
     return match_datetime - timedelta(minutes=30) <= now < match_datetime + timedelta(hours=5)
 
 
+def _is_completed_match(match_row) -> bool:
+    try:
+        match_datetime = datetime.strptime(
+            f"{match_row['match_date']} {match_row['match_time']}", "%Y-%m-%d %H:%M"
+        )
+        match_datetime = IST.localize(match_datetime)
+    except Exception:
+        return False
+
+    return datetime.now(IST) >= match_datetime + timedelta(hours=5)
+
+
+def _get_completed_match_from_tournament(match_id: int):
+    try:
+        from backend.main import tournament
+    except Exception:
+        return None
+
+    match_obj = tournament.matches.get(str(match_id))
+    if not match_obj or not getattr(match_obj, "players", None):
+        return None
+
+    return copy.deepcopy(match_obj)
+
+
 def _log_active_player_count(match_id: int, match_obj):
     active_players = [player for player in match_obj.players.values() if getattr(player, "played", False)]
     active_count = len(active_players)
@@ -216,6 +242,21 @@ def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_da
     return match_obj, html_content, playing_xi
 
 
+def _hydrate_match_for_scores(match_id: int, match_row, registry, players_data, include_playing_xi=False):
+    if _is_completed_match(match_row):
+        cached_match = _get_completed_match_from_tournament(match_id)
+        if cached_match:
+            return cached_match, "tournament-cache", {"announced": False, "url": "", "player_ids": []}
+
+    return _hydrate_match_from_live_data(
+        match_id,
+        match_row,
+        registry,
+        players_data,
+        include_playing_xi=include_playing_xi,
+    )
+
+
 @router.get("/{match_id}")
 async def match_scores(
     match_id: int,
@@ -232,7 +273,7 @@ async def match_scores(
 
     registry, players_data = _build_registry(db)
 
-    match_obj, html_content, _ = _hydrate_match_from_live_data(
+    match_obj, html_content, _ = _hydrate_match_for_scores(
         match_id,
         match_row,
         registry,
@@ -353,7 +394,7 @@ async def team_breakdown(
     match_row = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
     match_obj = None
     if match_row:
-        match_obj, html_content, _ = _hydrate_match_from_live_data(
+        match_obj, html_content, _ = _hydrate_match_for_scores(
             match_id,
             match_row,
             registry,
@@ -434,7 +475,7 @@ def _load_match_and_points(db, match_id):
         return None, None, {}, {}
 
     registry, players_data = _build_registry(db)
-    match_obj, _, _ = _hydrate_match_from_live_data(
+    match_obj, _, _ = _hydrate_match_for_scores(
         match_id,
         match_row,
         registry,
