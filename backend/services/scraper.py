@@ -64,6 +64,18 @@ def _should_attempt_playing_xi_fetch(match_date: str | None, match_time: str | N
     return datetime.now(IST) >= (match_start - timedelta(minutes=30))
 
 
+def _is_before_match_start(match_date: str | None, match_time: str | None) -> bool:
+    if not match_date or not match_time:
+        return False
+
+    try:
+        match_start = IST.localize(datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M"))
+    except Exception:
+        return False
+
+    return datetime.now(IST) < match_start
+
+
 def fetch_scorecard_html(scorecard_id):
     url = f"https://www.espn.in/cricket/series/8048/scorecard/{scorecard_id}/utils"
     try:
@@ -651,7 +663,8 @@ def fetch_playing_xi(
 ) -> dict:
     cached = PLAYING_XI_CACHE.get(int(match_id))
     now_ts = time.time()
-    if cached:
+    allow_cache_read = not _is_before_match_start(match_date, match_time)
+    if cached and allow_cache_read:
         payload = _copy_playing_xi_payload(cached["payload"])
         if cached.get("finalized"):
             return payload

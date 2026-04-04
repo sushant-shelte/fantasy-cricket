@@ -125,27 +125,69 @@ def _get_matches_payload(cache_key: str) -> list[dict]:
 
 def _attach_user_match_ranks(payload: list[dict], user_id: int) -> list[dict]:
     db = get_db()
-    rank_rows = db.execute(
+    relevant_match_ids = [
+        int(match["id"])
+        for match in payload
+        if match.get("status") in {"live", "over"}
+    ]
+    if not relevant_match_ids:
+        return payload
+
+    placeholders = ",".join("?" * len(relevant_match_ids))
+    score_rows = db.execute(
         """
-        SELECT ranked.match_id, ranked.match_rank
-        FROM (
-            SELECT
-                cp.match_id,
-                cp.user_id,
-                RANK() OVER (PARTITION BY cp.match_id ORDER BY cp.points DESC) AS match_rank
-            FROM contestant_points cp
-        ) ranked
-        WHERE ranked.user_id = ?
+        SELECT
+            ut.match_id,
+            ut.user_id,
+            u.name,
+            SUM(
+                COALESCE(pp.points, 0) *
+                CASE
+                    WHEN ut.is_captain = 1 THEN 2.0
+                    WHEN ut.is_vice_captain = 1 THEN 1.5
+                    ELSE 1.0
+                END
+            ) AS points
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.user_id
+        LEFT JOIN player_points pp
+            ON pp.match_id = ut.match_id AND pp.player_id = ut.player_id
+        WHERE u.is_active = 1
+          AND ut.match_id IN (""" + placeholders + """)
+        GROUP BY ut.match_id, ut.user_id, u.name
         """,
-        (user_id,),
+        relevant_match_ids,
     ).fetchall()
-    rank_map = {row["match_id"]: row["match_rank"] for row in rank_rows}
+
+    match_rank_map: dict[int, dict[int, int]] = {}
+    match_points: dict[int, list[dict]] = {}
+    for row in score_rows:
+        match_points.setdefault(int(row["match_id"]), []).append({
+            "user_id": int(row["user_id"]),
+            "name": row["name"],
+            "points": round(float(row["points"] or 0), 2),
+        })
+
+    for match_id, contestants in match_points.items():
+        sorted_contestants = sorted(
+            contestants,
+            key=lambda item: (-item["points"], item["name"]),
+        )
+        rank_lookup: dict[int, int] = {}
+        current_rank = 0
+        previous_points = None
+        for index, contestant in enumerate(sorted_contestants, start=1):
+            if previous_points is None or contestant["points"] != previous_points:
+                current_rank = index
+                previous_points = contestant["points"]
+            rank_lookup[contestant["user_id"]] = current_rank
+        match_rank_map[match_id] = rank_lookup
 
     result = []
     for match in payload:
         match_copy = dict(match)
         if match_copy.get("status") in {"live", "over"}:
-            match_copy["current_rank"] = rank_map.get(match_copy["id"])
+            match_copy["current_rank"] = match_rank_map.get(int(match_copy["id"]), {}).get(int(user_id))
         else:
             match_copy["current_rank"] = None
         result.append(match_copy)

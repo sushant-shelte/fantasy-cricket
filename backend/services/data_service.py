@@ -463,36 +463,92 @@ def apply_backups_for_match(match_id: int | str, playing_ids: list[int], substit
     for row in backups:
         backups_by_user.setdefault(int(row["user_id"]), []).append(dict(row))
 
+    all_player_ids = {
+        int(row["player_id"]) for rows in team_rows_by_user.values() for row in rows
+    } | {
+        int(row["backup_player_id"]) for rows in backups_by_user.values() for row in rows
+    }
+    player_roles: dict[int, str] = {}
+    if all_player_ids:
+        placeholders = ",".join("?" * len(all_player_ids))
+        role_rows = db.execute(
+            f"SELECT id, role FROM players WHERE id IN ({placeholders})",
+            list(all_player_ids),
+        ).fetchall()
+        player_roles = {int(row["id"]): row["role"] for row in role_rows}
+
+    required_roles = {"Batter", "Bowler", "Wicketkeeper", "AllRounder"}
+
+    def role_counts_for_team(team_rows_for_user: list[dict]) -> dict[str, int]:
+        counts = {role: 0 for role in required_roles}
+        for team_row in team_rows_for_user:
+            role = player_roles.get(int(team_row["player_id"]))
+            if role in counts:
+                counts[role] += 1
+        return counts
+
+    def can_swap_without_breaking_roles(
+        counts: dict[str, int],
+        old_player_id: int,
+        new_player_id: int,
+    ) -> bool:
+        next_counts = counts.copy()
+        old_role = player_roles.get(old_player_id)
+        new_role = player_roles.get(new_player_id)
+        if old_role in next_counts:
+            next_counts[old_role] -= 1
+        if new_role in next_counts:
+            next_counts[new_role] += 1
+        return all(next_counts[role] >= 1 for role in required_roles)
+
     swap_count = 0
     for user_id, user_team_rows in team_rows_by_user.items():
         selected_ids = {int(row["player_id"]) for row in user_team_rows}
-        invalid_rows = [
-            row for row in user_team_rows
-            if int(row["player_id"]) in substitute_set or int(row["player_id"]) not in playing_set
-        ]
-        if not invalid_rows:
-            continue
+        role_counts = role_counts_for_team(user_team_rows)
 
-        available_backups = [
-            row for row in backups_by_user.get(user_id, [])
-            if row["replaced_player_id"] is None
-            and int(row["backup_player_id"]) in playing_set
-            and int(row["backup_player_id"]) not in selected_ids
-        ]
+        for backup_row in backups_by_user.get(user_id, []):
+            if backup_row["replaced_player_id"] is not None:
+                continue
 
-        for invalid_row, backup_row in zip(invalid_rows, available_backups):
-            old_player_id = int(invalid_row["player_id"])
             new_player_id = int(backup_row["backup_player_id"])
+            if new_player_id not in playing_set or new_player_id in selected_ids:
+                continue
+
+            invalid_rows = [
+                row for row in user_team_rows
+                if int(row["player_id"]) in substitute_set or int(row["player_id"]) not in playing_set
+            ]
+            if not invalid_rows:
+                break
+
+            chosen_invalid_row = None
+            for invalid_row in invalid_rows:
+                old_player_id = int(invalid_row["player_id"])
+                if can_swap_without_breaking_roles(role_counts, old_player_id, new_player_id):
+                    chosen_invalid_row = invalid_row
+                    break
+
+            if not chosen_invalid_row:
+                continue
+
+            old_player_id = int(chosen_invalid_row["player_id"])
             db.execute(
                 "UPDATE user_teams SET player_id = ? WHERE id = ?",
-                (new_player_id, int(invalid_row["id"])),
+                (new_player_id, int(chosen_invalid_row["id"])),
             )
             db.execute(
                 "UPDATE team_backups SET replaced_player_id = ? WHERE id = ?",
                 (old_player_id, int(backup_row["id"])),
             )
+            chosen_invalid_row["player_id"] = new_player_id
             selected_ids.discard(old_player_id)
             selected_ids.add(new_player_id)
+            old_role = player_roles.get(old_player_id)
+            new_role = player_roles.get(new_player_id)
+            if old_role in role_counts:
+                role_counts[old_role] -= 1
+            if new_role in role_counts:
+                role_counts[new_role] += 1
             swap_count += 1
 
     if swap_count:

@@ -122,6 +122,7 @@ async def my_lineup_statuses(
         if not match or not selected_ids:
             result[str(match_id)] = {
                 "announced": False,
+                "complete": False,
                 "unannouncedSelected": 0,
                 "substituteSelected": 0,
                 "backupCount": backup_counts.get(match_id, 0),
@@ -159,6 +160,7 @@ async def my_lineup_statuses(
 
         result[str(match_id)] = {
             "announced": announced,
+            "complete": playing_ids_complete,
             "unannouncedSelected": unavailable_selected,
             "substituteSelected": substitute_selected,
             "backupCount": backup_counts.get(match_id, 0),

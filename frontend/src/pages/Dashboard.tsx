@@ -33,13 +33,13 @@ function useCountdown() {
 }
 
 type MatchTab = 'today' | 'upcoming' | 'completed';
-type TodayTeamLineupInfo = { announced: boolean; unannouncedSelected: number; substituteSelected: number };
+type LiveTeamLineupInfo = { announced: boolean; complete: boolean; unannouncedSelected: number; substituteSelected: number };
 type MatchContestant = { user_id: number; name: string; last_team_updated: string | null };
 
 export default function DashboardPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [myTeams, setMyTeams] = useState<Set<number>>(new Set());
-  const [todayTeamLineup, setTodayTeamLineup] = useState<Record<number, TodayTeamLineupInfo>>({});
+  const [teamLineupInfo, setTeamLineupInfo] = useState<Record<number, LiveTeamLineupInfo>>({});
   const [backupCounts, setBackupCounts] = useState<Record<number, number>>({});
   const [showContestantsForMatch, setShowContestantsForMatch] = useState<Match | null>(null);
   const [matchContestants, setMatchContestants] = useState<MatchContestant[]>([]);
@@ -62,18 +62,17 @@ export default function DashboardPage() {
         setMatches(loadedMatches);
         setMyTeams(loadedMyTeams);
 
-        const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-        const todayMatches = loadedMatches.filter((match) => match.match_date === todayIST || match.status === 'live');
-        const matchesToCheck = todayMatches.filter((match) => loadedMyTeams.has(match.id));
-        const futureMatchesWithTeams = loadedMatches.filter((match) => match.status === 'future' && loadedMyTeams.has(match.id));
+          const liveMatchesWithTeams = loadedMatches.filter((match) => match.status === 'live' && loadedMyTeams.has(match.id));
+          const futureMatchesWithTeams = loadedMatches.filter((match) => match.status === 'future' && loadedMyTeams.has(match.id));
+          const matchesToCheck = liveMatchesWithTeams;
 
-        if (matchesToCheck.length > 0) {
-          const ids = matchesToCheck.map((match) => match.id).join(',');
-          const lineupRes = await client.get(`/api/teams/my-lineup-statuses?match_ids=${ids}`);
-          setTodayTeamLineup(lineupRes.data || {});
-        } else {
-          setTodayTeamLineup({});
-        }
+          if (matchesToCheck.length > 0) {
+            const ids = matchesToCheck.map((match) => match.id).join(',');
+            const lineupRes = await client.get(`/api/teams/my-lineup-statuses?match_ids=${ids}`);
+            setTeamLineupInfo(lineupRes.data || {});
+          } else {
+            setTeamLineupInfo({});
+          }
 
         if (futureMatchesWithTeams.length > 0) {
           const ids = futureMatchesWithTeams.map((match) => match.id).join(',');
@@ -86,10 +85,10 @@ export default function DashboardPage() {
         } else {
           setBackupCounts({});
         }
-      } catch {
-        setTodayTeamLineup({});
-        setBackupCounts({});
-      } finally {
+        } catch {
+          setTeamLineupInfo({});
+          setBackupCounts({});
+        } finally {
         setLoading(false);
       }
     };
@@ -381,16 +380,28 @@ export default function DashboardPage() {
                     </span>
                   </p>
                 )}
-                {tab === 'today' && match.status === 'future' && myTeams.has(match.id) && todayTeamLineup[match.id]?.announced && (
-                  <div className="mb-3 space-y-1 text-center text-xs font-medium">
-                    <p className={todayTeamLineup[match.id].unannouncedSelected > 0 ? 'text-red-300' : 'text-emerald-300'}>
-                      {todayTeamLineup[match.id].unannouncedSelected > 0
-                        ? `${todayTeamLineup[match.id].unannouncedSelected} unannounced players in your team`
-                        : 'All selected players are announced'}
+                {match.status === 'live' && myTeams.has(match.id) && teamLineupInfo[match.id]?.announced && (
+                    <div className="mb-3 space-y-1 text-center text-xs font-medium">
+                    <p className={
+                      teamLineupInfo[match.id].unannouncedSelected > 0
+                        ? 'text-red-300'
+                        : teamLineupInfo[match.id].substituteSelected > 0
+                        ? 'text-sky-300'
+                        : teamLineupInfo[match.id].complete
+                        ? 'text-emerald-300'
+                        : 'text-white/55'
+                    }>
+                      {teamLineupInfo[match.id].unannouncedSelected > 0
+                        ? `${teamLineupInfo[match.id].unannouncedSelected} unavailable players in your team`
+                        : teamLineupInfo[match.id].substituteSelected > 0
+                        ? 'All other selected players are in Playing XI'
+                        : teamLineupInfo[match.id].complete
+                        ? 'All selected players are in Playing XI'
+                        : 'Playing XI announced'}
                     </p>
-                    {todayTeamLineup[match.id].substituteSelected > 0 && (
+                    {teamLineupInfo[match.id].substituteSelected > 0 && (
                       <p className="text-sky-300">
-                        {todayTeamLineup[match.id].substituteSelected} substitutes selected
+                        {teamLineupInfo[match.id].substituteSelected} substitutes selected
                       </p>
                     )}
                   </div>

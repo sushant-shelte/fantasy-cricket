@@ -380,6 +380,15 @@ export default function SelectTeamPage() {
   const getLineupSectionPlayers = (team: string, status: Player['availability_status']) =>
     sortPlayersForLineupView(lineupPlayersByTeam[team]?.[status || ''] || []);
 
+  const hasFullAvailabilityBreakdown =
+    playingXi.announced &&
+    (((playingXi.substituteCount || 0) >= 10) ||
+      players.some(
+        (player) =>
+          player.availability_status === 'substitute' ||
+          player.availability_status === 'unavailable',
+      ));
+
   const getPreAnnouncementPlayers = (team: string) =>
     [...(preAnnouncementPlayersByTeam[team] || [])].sort((a, b) => {
       const roleDiff =
@@ -685,11 +694,11 @@ export default function SelectTeamPage() {
                         <div className="text-[11px] text-white/45">{selectedByTeam[team] || 0} selected</div>
                       </div>
                     </div>
-                    {playingXi.announced
+                    {hasFullAvailabilityBreakdown
                       ? [
-                          { key: 'available', label: 'Playing XI', accent: 'text-emerald-300' },
-                          { key: 'substitute', label: 'Substitutes', accent: 'text-sky-300' },
-                          { key: 'unavailable', label: 'Unavailable', accent: 'text-red-300' },
+                           { key: 'available', label: 'Playing XI', accent: 'text-emerald-300' },
+                           { key: 'substitute', label: 'Substitutes', accent: 'text-sky-300' },
+                           { key: 'unavailable', label: 'Unavailable', accent: 'text-red-300' },
                         ].map((section) => {
                           const sectionPlayers = getLineupSectionPlayers(team, section.key as Player['availability_status']);
                           return (
@@ -899,29 +908,39 @@ export default function SelectTeamPage() {
                   return (
                     <div
                       key={player.id}
-                      onClick={() => {
-                        if (isSelected || selectionAllowed) togglePlayer(player.id);
-                      }}
-                      className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
-                        isSelected
-                          ? availabilityStatus === 'available'
-                            ? 'bg-emerald-500/10'
-                            : 'bg-white/10'
-                          : !selectionAllowed
-                          ? 'opacity-45 cursor-not-allowed'
-                          : availabilityStatus === 'available'
-                          ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
-                          : availabilityStatus === 'unavailable'
-                          ? 'bg-white/[0.03] hover:bg-white/[0.06]'
-                          : 'hover:bg-white/5'
-                      } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
-                    >
-                      {/* Selected indicator */}
-                      <div
-                        className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-                          isSelected ? 'bg-green-500 shadow-lg shadow-green-500/30' : 'bg-white/10 border border-white/20'
-                        }`}
+                        onClick={() => {
+                          if (isSelected || selectionAllowed) togglePlayer(player.id);
+                        }}
+                        className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
+                          isSelected
+                            ? availabilityStatus === 'available'
+                              ? 'bg-emerald-500/12 ring-1 ring-emerald-400/20'
+                              : availabilityStatus === 'substitute'
+                              ? 'bg-sky-500/12 ring-1 ring-sky-400/20'
+                              : 'bg-red-500/12 ring-1 ring-red-400/20'
+                            : !selectionAllowed
+                            ? 'opacity-45 cursor-not-allowed'
+                            : availabilityStatus === 'available'
+                            ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
+                            : availabilityStatus === 'substitute'
+                            ? 'bg-sky-500/[0.06] hover:bg-sky-500/[0.1]'
+                            : availabilityStatus === 'unavailable'
+                            ? 'bg-red-500/[0.06] hover:bg-red-500/[0.1]'
+                            : 'hover:bg-white/5'
+                        } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
                       >
+                        {/* Selected indicator */}
+                        <div
+                          className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                            isSelected
+                              ? availabilityStatus === 'available'
+                                ? 'bg-green-500 shadow-lg shadow-green-500/30'
+                                : availabilityStatus === 'substitute'
+                                ? 'bg-sky-500 shadow-lg shadow-sky-500/30'
+                                : 'bg-red-500 shadow-lg shadow-red-500/30'
+                              : 'bg-white/10 border border-white/20'
+                          }`}
+                        >
                         {isSelected ? (
                           <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
