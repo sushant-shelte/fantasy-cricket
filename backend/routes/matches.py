@@ -7,6 +7,7 @@ from backend.config import IST
 from backend.database import get_db
 from backend.middleware.auth import get_current_user
 from backend.services import data_service
+from backend.services.scraper import fetch_toss_info
 from backend.services.venue_stats import (
     get_today_cached_venue_stats,
     prime_today_venue_cache,
@@ -93,6 +94,13 @@ def _build_matches_payload() -> list[dict]:
     result = []
     for match in prepared_matches:
         match["venue"] = get_today_cached_venue_stats(match["id"], match["match_date"], match["status"])
+        match["toss"] = fetch_toss_info(
+            int(match["id"]),
+            match["team1"],
+            match["team2"],
+            match["match_date"],
+            match["match_time"],
+        )
         result.append(match)
 
     today_matches = [m for m in result if m["match_date"] == today_key]

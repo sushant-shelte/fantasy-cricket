@@ -6,7 +6,7 @@ from backend.database import get_db
 from backend.config import ESPN_MATCH_ID_OFFSET, ROLES
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
-from backend.services.scraper import build_cricbuzz_playing_xi_url, fetch_playing_xi
+from backend.services.scraper import build_cricbuzz_playing_xi_url, fetch_playing_xi, fetch_toss_info
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api", tags=["players"])
@@ -111,6 +111,13 @@ async def list_players(
             match["match_date"],
             match["match_time"],
         )
+        toss_info = fetch_toss_info(
+            match_id,
+            team1,
+            team2,
+            match["match_date"],
+            match["match_time"],
+        )
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))
@@ -159,6 +166,7 @@ async def list_players(
                 "url": playing_xi_data["url"],
                 "substitute_count": len(substitute_ids),
             },
+            "toss": toss_info,
         }
 
     # Return all players

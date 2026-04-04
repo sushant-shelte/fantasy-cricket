@@ -349,6 +349,13 @@ export default function DashboardPage() {
                 <p className="text-white/40 text-xs text-center mb-1">
                   {formatDate(match.match_date, match.match_time)}
                 </p>
+                {match.toss?.announced && (
+                  <p className="mb-2 text-center">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-300">
+                      {match.toss.text}
+                    </span>
+                  </p>
+                )}
                 {match.venue && (
                   <div className="mb-2 mx-auto max-w-[280px]">
                     <p className="text-white/50 text-[11px] text-center font-medium mb-1">

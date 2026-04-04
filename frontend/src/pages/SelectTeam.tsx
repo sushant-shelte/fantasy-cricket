@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import client from '../api/client';
-import type { Player, TeamSelection, TeamBackup } from '../types';
+import type { Player, TeamSelection, TeamBackup, TossInfo } from '../types';
 import { getTeamTheme } from '../utils/teamTheme';
 import { useToast } from '../components/Toast';
 import { PlayerListSkeleton } from '../components/Skeleton';
@@ -91,6 +91,7 @@ export default function SelectTeamPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [playingXi, setPlayingXi] = useState<PlayingXiState>({ announced: false, url: null });
+  const [tossInfo, setTossInfo] = useState<TossInfo | null>(null);
   const [matchTeams, setMatchTeams] = useState<string[]>([]);
   const [backups, setBackups] = useState<number[]>([]);
   const [backupDetails, setBackupDetails] = useState<TeamBackup[]>([]);
@@ -119,6 +120,7 @@ export default function SelectTeamPage() {
           url: data.playing_xi?.url || null,
           substituteCount: data.playing_xi?.substitute_count || 0,
         });
+        setTossInfo(data.toss || null);
 
         const existing: TeamSelection[] = teamRes.data || [];
         if (existing.length > 0) {
@@ -533,8 +535,14 @@ export default function SelectTeamPage() {
               </span>
             </div>
 
-          <div
-            className={`rounded-2xl border px-4 py-3 text-sm ${
+            {tossInfo?.announced && tossInfo.text && (
+              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-center text-xs font-semibold text-cyan-300">
+                {tossInfo.text}
+              </div>
+            )}
+
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm ${
               playingXi.announced
                 ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100'
                 : 'bg-amber-500/10 border-amber-400/20 text-amber-100'

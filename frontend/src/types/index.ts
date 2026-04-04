@@ -18,6 +18,14 @@ export type VenueStats = {
   pitch_type: string;
 };
 
+export type TossInfo = {
+  announced: boolean;
+  team?: string | null;
+  decision?: 'bat' | 'bowl' | string | null;
+  text?: string;
+  url?: string | null;
+};
+
 export type Match = {
   id: number;
   team1: string;
@@ -27,6 +35,7 @@ export type Match = {
   status: 'future' | 'live' | 'over';
   locked: boolean;
   venue?: VenueStats | null;
+  toss?: TossInfo | null;
   current_rank?: number | null;
 };
 

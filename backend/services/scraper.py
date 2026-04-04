@@ -21,6 +21,7 @@ from backend.models.registry import PlayerRegistry
 CRICBUZZ_MATCH_ID_MAP: dict[int, int] = {}
 PLAYING_XI_CACHE: dict[int, dict] = {}
 PLAYING_XI_TTL_SECONDS = 60
+TOSS_INFO_CACHE: dict[int, dict] = {}
 
 
 def _session_get(url):
@@ -45,6 +46,16 @@ def _copy_playing_xi_payload(payload: dict) -> dict:
         "url": payload.get("url", ""),
         "player_ids": list(payload.get("player_ids", [])),
         "substitute_ids": list(payload.get("substitute_ids", [])),
+    }
+
+
+def _copy_toss_payload(payload: dict) -> dict:
+    return {
+        "announced": bool(payload.get("announced")),
+        "team": payload.get("team"),
+        "decision": payload.get("decision"),
+        "text": payload.get("text", ""),
+        "url": payload.get("url", ""),
     }
 
 
@@ -538,6 +549,50 @@ def _extract_comma_separated_names(value: str) -> list[str]:
     return [name.strip() for name in value.split(",") if name.strip()]
 
 
+def _team_name_variants(team_name: str) -> set[str]:
+    variants = {_normalize_player_name(team_name), _normalize_player_name(_expand_team_name(team_name))}
+    return {variant for variant in variants if variant}
+
+
+def _resolve_toss_team(raw_team_text: str, team1: str, team2: str) -> str | None:
+    normalized_raw = _normalize_player_name(raw_team_text)
+    if normalized_raw in _team_name_variants(team1):
+        return team1
+    if normalized_raw in _team_name_variants(team2):
+        return team2
+    return None
+
+
+def _extract_toss_info_from_html(html: str, team1: str, team2: str) -> dict | None:
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text("\n", strip=True)
+    if not text:
+        return None
+
+    patterns = [
+        r"([A-Za-z .-]+?)\s+have won the toss and have opted to\s+(bat|bowl)",
+        r"([A-Za-z .-]+?)\s+won the toss and opted to\s+(bat|bowl)",
+        r"([A-Za-z .-]+?)\s+opt to\s+(bat|bowl)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        resolved_team = _resolve_toss_team(match.group(1).strip(), team1, team2)
+        if not resolved_team:
+            continue
+        decision = match.group(2).lower()
+        return {
+            "announced": True,
+            "team": resolved_team,
+            "decision": decision,
+            "text": f"{resolved_team} opt to {decision}",
+        }
+
+    return None
+
+
 def _extract_playing_xi_from_commentary(
     html: str,
     team1: str,
@@ -595,6 +650,74 @@ def _extract_playing_xi_from_commentary(
         announced = True
 
     return playing_ids, substitute_ids, unmatched_playing, unmatched_substitutes, announced
+
+
+def parse_playing_xi_from_sources(
+    commentary_html: str | None,
+    squads_html: str | None,
+    team1: str,
+    team2: str,
+    players_rows: list[dict],
+    commentary_url: str = "",
+    squads_url: str = "",
+) -> dict:
+    payload = {
+        "announced": False,
+        "url": "",
+        "player_ids": [],
+        "substitute_ids": [],
+        "unmatched_names": [],
+        "substitute_unmatched_names": [],
+        "source": "",
+        "substitutes_available": False,
+        "finalized": False,
+    }
+
+    if commentary_html:
+        (
+            playing_ids,
+            substitute_ids,
+            unmatched_names,
+            substitute_unmatched_names,
+            announced,
+        ) = _extract_playing_xi_from_commentary(commentary_html, team1, team2, players_rows)
+        if announced:
+            payload.update(
+                {
+                    "announced": len(playing_ids) >= 18,
+                    "url": commentary_url or "commentary",
+                    "player_ids": list(playing_ids),
+                    "substitute_ids": list(substitute_ids),
+                    "unmatched_names": list(unmatched_names),
+                    "substitute_unmatched_names": list(substitute_unmatched_names),
+                    "source": "commentary",
+                    "substitutes_available": len(substitute_ids) > 0,
+                }
+            )
+
+    if not payload["announced"] and squads_html:
+        playing_ids, unmatched_names, announced = _extract_named_players_from_cricbuzz_section(
+            squads_html, "playing xi", team1, team2, players_rows
+        )
+        substitute_ids, substitute_unmatched_names, substitutes_available = _extract_named_players_from_cricbuzz_section(
+            squads_html, "substitutes", team1, team2, players_rows
+        )
+        if announced:
+            payload.update(
+                {
+                    "announced": len(playing_ids) >= 18,
+                    "url": squads_url or "squads",
+                    "player_ids": list(playing_ids),
+                    "substitute_ids": list(substitute_ids),
+                    "unmatched_names": list(unmatched_names),
+                    "substitute_unmatched_names": list(substitute_unmatched_names),
+                    "source": "squads",
+                    "substitutes_available": bool(substitutes_available),
+                }
+            )
+
+    payload["finalized"] = len(payload["player_ids"]) == 22 and len(payload["substitute_ids"]) >= 10
+    return payload
 
 
 def _find_cricbuzz_section_heading(soup: BeautifulSoup, section_name: str):
@@ -782,28 +905,14 @@ def fetch_playing_xi(
     squads_url = build_cricbuzz_playing_xi_url(cricbuzz_match_id)
 
     try:
-        playing_ids: list[int] = []
-        substitute_ids: list[int] = []
-        unmatched_names: list[str] = []
-        substitute_unmatched_names: list[str] = []
-        announced = False
-        source_url = commentary_url
-        substitutes_available = False
-
+        commentary_html = None
         print(f"[Playing XI] Match {match_id}: trying commentary {commentary_url}")
         commentary_res = _session_get(commentary_url)
         if commentary_res.status_code == 200:
-            (
-                playing_ids,
-                substitute_ids,
-                unmatched_names,
-                substitute_unmatched_names,
-                announced,
-            ) = _extract_playing_xi_from_commentary(commentary_res.text, team1, team2, players_rows)
-            substitutes_available = len(substitute_ids) > 0
+            commentary_html = commentary_res.text
 
-        if not announced:
-            source_url = squads_url
+        squads_html = None
+        if not commentary_html:
             print(f"[Playing XI] Match {match_id}: trying {squads_url}")
             res = _session_get(squads_url)
             if res.status_code != 200:
@@ -815,17 +924,21 @@ def fetch_playing_xi(
                     "finalized": False,
                 }
                 return _copy_playing_xi_payload(payload)
+            squads_html = res.text
 
-            playing_ids, unmatched_names, announced = _extract_named_players_from_cricbuzz_section(
-                res.text, "playing xi", team1, team2, players_rows
-            )
-            substitute_ids, substitute_unmatched_names, substitutes_available = _extract_named_players_from_cricbuzz_section(
-                res.text, "substitutes", team1, team2, players_rows
-            )
+        parsed_payload = parse_playing_xi_from_sources(
+            commentary_html,
+            squads_html,
+            team1,
+            team2,
+            players_rows,
+            commentary_url=commentary_url,
+            squads_url=squads_url,
+        )
 
-        if not announced:
+        if not parsed_payload["announced"]:
             print(f"[Playing XI] Match {match_id}: Playing XI section not available yet")
-            payload = {"announced": False, "url": source_url, "player_ids": [], "substitute_ids": []}
+            payload = {"announced": False, "url": parsed_payload.get("url", commentary_url), "player_ids": [], "substitute_ids": []}
             PLAYING_XI_CACHE[int(match_id)] = {
                 "payload": payload,
                 "fetched_at": now_ts,
@@ -833,16 +946,19 @@ def fetch_playing_xi(
             }
             return _copy_playing_xi_payload(payload)
 
+        source_url = parsed_payload["url"] or commentary_url
+        playing_ids = parsed_payload["player_ids"]
+        substitute_ids = parsed_payload["substitute_ids"]
         print(f"[Playing XI] Match {match_id}: using {source_url} (total={len(playing_ids)})")
-        for name in unmatched_names:
+        for name in parsed_payload["unmatched_names"]:
             print(f"[Playing XI] Match {match_id}: player mapping not found for '{name}'")
-        if substitutes_available:
+        if parsed_payload["substitutes_available"]:
             print(f"[Playing XI] Match {match_id}: substitutes found ({len(substitute_ids)})")
-            for name in substitute_unmatched_names:
+            for name in parsed_payload["substitute_unmatched_names"]:
                 print(f"[Playing XI] Match {match_id}: substitute mapping not found for '{name}'")
 
         payload = {
-            "announced": len(playing_ids) >= 18,
+            "announced": parsed_payload["announced"],
             "url": source_url,
             "player_ids": list(playing_ids),
             "substitute_ids": list(substitute_ids),
@@ -850,7 +966,7 @@ def fetch_playing_xi(
         PLAYING_XI_CACHE[int(match_id)] = {
             "payload": payload,
             "fetched_at": now_ts,
-            "finalized": _is_finalized_playing_xi(payload),
+            "finalized": parsed_payload["finalized"],
         }
         return _copy_playing_xi_payload(payload)
     except Exception as e:
@@ -862,6 +978,43 @@ def fetch_playing_xi(
             "finalized": False,
         }
         return _copy_playing_xi_payload(payload)
+
+
+def fetch_toss_info(
+    match_id: int,
+    team1: str,
+    team2: str,
+    match_date: str | None = None,
+    match_time: str | None = None,
+) -> dict:
+    cached = TOSS_INFO_CACHE.get(int(match_id))
+    if cached and cached.get("announced"):
+        return _copy_toss_payload(cached["payload"])
+
+    if not _should_attempt_playing_xi_fetch(match_date, match_time):
+        return {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+
+    cricbuzz_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2)
+    if not cricbuzz_match_id:
+        return {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+
+    commentary_url = build_cricbuzz_commentary_url(cricbuzz_match_id)
+    scorecard_url = f"https://www.cricbuzz.com/live-cricket-scorecard/{cricbuzz_match_id}"
+
+    for url in (commentary_url, scorecard_url):
+        try:
+            res = _session_get(url)
+            if res.status_code != 200:
+                continue
+            parsed = _extract_toss_info_from_html(res.text, team1, team2)
+            if parsed:
+                parsed["url"] = url
+                TOSS_INFO_CACHE[int(match_id)] = {"payload": parsed}
+                return _copy_toss_payload(parsed)
+        except Exception as exc:
+            print(f"[Toss] Match {match_id}: error fetching {url}: {exc}")
+
+    return {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
 
 
 def fetch_venues_from_cricbuzz() -> dict[int, str]:
