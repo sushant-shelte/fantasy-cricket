@@ -98,12 +98,18 @@ export type PlayerScore = {
   runout_indirect: number;
   stumpings: number;
   points: number;
+  owners?: Array<{
+    id: number;
+    name: string;
+    tag?: string;
+  }>;
 };
 
 export type ContestantScore = {
   id: number;
   name: string;
   points: number;
+  rank?: number;
 };
 
 export type LeaderboardEntry = {

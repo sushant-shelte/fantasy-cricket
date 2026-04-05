@@ -59,6 +59,50 @@ def _compute_contestants_from_player_points(db, match_id: int, pp_lookup: dict[s
     return contestants
 
 
+def _rank_contestants(contestants: list[dict]) -> list[dict]:
+    ranked: list[dict] = []
+    previous_points = None
+    current_rank = 0
+
+    for index, contestant in enumerate(contestants, start=1):
+        points = round(float(contestant.get("points", 0)), 2)
+        if previous_points is None or points != previous_points:
+            current_rank = index
+            previous_points = points
+        ranked.append({**contestant, "rank": current_rank, "points": points})
+
+    return ranked
+
+
+def _load_player_owners(db, match_id: int) -> dict[int, list[dict]]:
+    rows = db.execute(
+        """
+        SELECT
+            ut.player_id,
+            u.id AS user_id,
+            u.name AS user_name,
+            ut.is_captain,
+            ut.is_vice_captain
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.user_id
+        WHERE ut.match_id = ?
+          AND u.is_active = 1
+        ORDER BY ut.player_id, u.name
+        """,
+        (match_id,),
+    ).fetchall()
+
+    owners_by_player: dict[int, list[dict]] = {}
+    for row in rows:
+        owners_by_player.setdefault(int(row["player_id"]), []).append({
+            "id": int(row["user_id"]),
+            "name": row["user_name"],
+            "tag": "C" if row["is_captain"] else "VC" if row["is_vice_captain"] else "",
+        })
+
+    return owners_by_player
+
+
 def _merge_contestant_points(
     db,
     match_id: int,
@@ -294,6 +338,7 @@ async def match_scores(
         pp_lookup[str(row["player_id"])] = float(row["points"])
         role_lookup[str(row["player_id"])] = row["role"]
     pp_lookup, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup, role_lookup)
+    owners_by_player = _load_player_owners(db, match_id)
 
     result = []
     for p in match_obj.players.values():
@@ -325,6 +370,7 @@ async def match_scores(
             "runout_indirect": p.runout_indirect,
             "points": calculated_points if calculated_points or p.played else pp_lookup.get(pid_str, 0),
             "breakdown": p.get_points_breakdown() if role else [],
+            "owners": owners_by_player.get(int(p.player_id), []),
         })
 
     result.sort(key=lambda x: x["points"], reverse=True)
@@ -332,7 +378,7 @@ async def match_scores(
     # Contestants for this match:
     # accuracy-first source of truth for the View Scores screen is always
     # user_teams + current player points, so rankings match the breakdown view.
-    contestants = _compute_contestants_from_player_points(db, match_id, pp_lookup)
+    contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
 
     return {"players": result, "contestants": contestants}
 
@@ -640,15 +686,17 @@ async def match_contestants(
 ):
     """List contestants who picked teams for this match (for the diff dropdown)."""
     db = get_db()
-    rows = db.execute(
-        """
-        SELECT DISTINCT u.id, u.name
-        FROM user_teams ut
-        JOIN users u ON u.id = ut.user_id
-        WHERE ut.match_id = ?
-          AND u.is_active = 1
-        ORDER BY u.name
-        """,
-        (match_id,),
-    ).fetchall()
-    return [{"id": row["id"], "name": row["name"]} for row in rows]
+    match_row, match_obj, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
+    if not match_row:
+        return []
+
+    contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
+    return [
+        {
+            "id": contestant["id"],
+            "name": contestant["name"],
+            "points": contestant["points"],
+            "rank": contestant["rank"],
+        }
+        for contestant in contestants
+    ]

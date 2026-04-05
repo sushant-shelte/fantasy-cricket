@@ -39,7 +39,7 @@ interface TeamDiffData {
   error?: string;
 }
 
-interface Contestant { id: number; name: string; }
+interface Contestant { id: number; name: string; points?: number; rank?: number; }
 
 interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; is_backup?: boolean; replaced_player_id?: number | null; }
 interface BreakdownData { user_name: string; total: number; players: BreakdownPlayer[]; error?: string; }
@@ -258,6 +258,20 @@ export default function ViewScoresPage() {
     );
   };
 
+  const renderOwnerChip = (owner: { id: number; name: string; tag?: string }, compact = false) => (
+    <span
+      key={`${owner.id}-${owner.name}`}
+      className={`inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 ${compact ? 'text-[10px]' : 'text-[11px]'} text-white/70`}
+    >
+      <span className="truncate max-w-[7rem]">{owner.name}</span>
+      {owner.tag && (
+        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${owner.tag === 'C' ? 'bg-amber-500 text-black' : 'bg-sky-500 text-black'}`}>
+          {owner.tag}
+        </span>
+      )}
+    </span>
+  );
+
   const renderTeamBadge = (team: string, compact = false) => {
     const theme = getTeamTheme(team);
     return (
@@ -438,6 +452,7 @@ export default function ViewScoresPage() {
                       const isMyPlayer = myTeam.has(p.name);
                       const isExpanded = expandedPlayer === i;
                       const bd = (p as any).breakdown || [];
+                      const owners = p.owners || [];
                       const hasBatting = p.runs > 0 || p.balls > 0;
                       const hasBowling = p.overs > 0;
                       const hasFielding = p.catches > 0 || p.stumpings > 0 || p.runout_direct > 0 || p.runout_indirect > 0;
@@ -481,7 +496,7 @@ export default function ViewScoresPage() {
                           </div>
 
                           {/* Expanded breakdown */}
-                          {isExpanded && bd.length > 0 && (
+                          {isExpanded && (
                             <div className="px-4 py-3 bg-white/5 border-t border-white/5">
                               <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Analysis</p>
 
@@ -503,19 +518,29 @@ export default function ViewScoresPage() {
                                 </>}
                               </div>
 
-                              <div className="flex flex-wrap gap-1.5">
-                                {bd.map((item: { label: string; points: number }, j: number) => (
-                                  <span key={j}
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
-                                      item.points > 0 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
-                                    }`}>
-                                    {item.label} <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                              {bd.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {bd.map((item: { label: string; points: number }, j: number) => (
+                                    <span key={j}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                                        item.points > 0 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                      }`}>
+                                      {item.label} <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                                    </span>
+                                  ))}
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-white/10 text-white border border-white/20">
+                                    Total: {p.points}
                                   </span>
-                                ))}
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-white/10 text-white border border-white/20">
-                                  Total: {p.points}
-                                </span>
-                              </div>
+                                </div>
+                              )}
+                              {owners.length > 0 && (
+                                <div className="mt-3">
+                                  <p className="mb-1.5 text-white/30 text-[10px] uppercase tracking-wider">Picked By</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {owners.map((owner) => renderOwnerChip(owner, true))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -556,6 +581,7 @@ export default function ViewScoresPage() {
                           const isMyPlayer = myTeam.has(p.name);
                           const isExpanded = expandedPlayer === i;
                           const bd = (p as any).breakdown || [];
+                          const owners = p.owners || [];
                           return (
                             <React.Fragment key={i}>
                               <tr
@@ -587,24 +613,34 @@ export default function ViewScoresPage() {
                                 <td className="px-3 py-2.5 text-right text-white/50">{p.runout_direct}</td>
                                 <td className="px-3 py-2.5 text-right text-white/50">{p.runout_indirect}</td>
                               </tr>
-                              {isExpanded && bd.length > 0 && (
+                              {isExpanded && (
                                 <tr className="bg-white/5">
                                   <td colSpan={21} className="px-4 py-3">
                                     <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Player Analysis</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {bd.map((item: { label: string; points: number }, j: number) => (
-                                        <span key={j}
-                                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${
-                                            item.points > 0 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
-                                          }`}>
-                                          {item.label}
-                                          <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                                    {bd.length > 0 && (
+                                      <div className="flex flex-wrap gap-2">
+                                        {bd.map((item: { label: string; points: number }, j: number) => (
+                                          <span key={j}
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                                              item.points > 0 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                            }`}>
+                                            {item.label}
+                                            <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                                          </span>
+                                        ))}
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/20">
+                                          Total: {p.points}
                                         </span>
-                                      ))}
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/20">
-                                        Total: {p.points}
-                                      </span>
-                                    </div>
+                                      </div>
+                                    )}
+                                    {owners.length > 0 && (
+                                      <div className={`${bd.length > 0 ? 'mt-3' : ''}`}>
+                                        <p className="mb-2 text-white/30 text-[10px] uppercase tracking-wider">Picked By</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {owners.map((owner) => renderOwnerChip(owner))}
+                                        </div>
+                                      </div>
+                                    )}
                                   </td>
                                 </tr>
                               )}
@@ -766,7 +802,7 @@ export default function ViewScoresPage() {
                           : 'bg-white/10 text-white/50 hover:bg-white/20'
                       }`}
                     >
-                      {c.name}
+                      {c.rank ? `#${c.rank} ` : ''}{c.name}
                     </button>
                   ))}
                 </div>
