@@ -64,6 +64,10 @@ def _is_finalized_playing_xi(payload: dict) -> bool:
     return len(payload.get("player_ids", [])) == 22 and len(payload.get("substitute_ids", [])) >= 10
 
 
+def _is_playing_xi_announced(payload: dict) -> bool:
+    return len(payload.get("player_ids", [])) == 22
+
+
 def _should_attempt_playing_xi_fetch(match_date: str | None, match_time: str | None) -> bool:
     if not match_date or not match_time:
         return True
@@ -698,7 +702,7 @@ def parse_playing_xi_from_sources(
         if announced:
             payload.update(
                 {
-                    "announced": len(playing_ids) >= 18,
+                    "announced": len(playing_ids) == 22,
                     "url": commentary_url or "commentary",
                     "player_ids": list(playing_ids),
                     "substitute_ids": list(substitute_ids),
@@ -719,7 +723,7 @@ def parse_playing_xi_from_sources(
         if announced:
             payload.update(
                 {
-                    "announced": len(playing_ids) >= 18,
+                    "announced": len(playing_ids) == 22,
                     "url": squads_url or "squads",
                     "player_ids": list(playing_ids),
                     "substitute_ids": list(substitute_ids),
@@ -730,7 +734,8 @@ def parse_playing_xi_from_sources(
                 }
             )
 
-    payload["finalized"] = len(payload["player_ids"]) == 22 and len(payload["substitute_ids"]) >= 10
+    payload["announced"] = _is_playing_xi_announced(payload)
+    payload["finalized"] = _is_finalized_playing_xi(payload)
     return payload
 
 

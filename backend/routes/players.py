@@ -125,7 +125,8 @@ async def list_players(
         substitute_order = {
             player_id: index for index, player_id in enumerate(playing_xi_data.get("substitute_ids", []))
         }
-        playing_ids_complete = len(playing_ids) == 22 and len(substitute_ids) >= 10
+        playing_xi_known = len(playing_ids) == 22
+        substitutes_known = len(substitute_ids) >= 10
 
         # Group by role
         grouped = {role: [] for role in ROLES}
@@ -140,12 +141,12 @@ async def list_players(
                 player["is_substitute"] = False
                 player["availability_status"] = "available"
                 player["availability_order"] = playing_order.get(player["id"])
-            elif player["id"] in substitute_ids:
+            elif substitutes_known and player["id"] in substitute_ids:
                 player["is_playing_xi"] = False
                 player["is_substitute"] = True
                 player["availability_status"] = "substitute"
                 player["availability_order"] = substitute_order.get(player["id"])
-            elif playing_ids_complete:
+            elif playing_xi_known:
                 player["is_playing_xi"] = False
                 player["is_substitute"] = False
                 player["availability_status"] = "unavailable"

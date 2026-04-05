@@ -110,7 +110,7 @@ class UpdatePlayerBody(BaseModel):
 @router.get("/players")
 async def list_players(user: dict = Depends(require_admin)):
     db = get_db()
-    rows = db.execute("SELECT * FROM players ORDER BY team, role, name").fetchall()
+    rows = db.execute("SELECT * FROM players ORDER BY id").fetchall()
     return [dict(row) for row in rows]
 
 
