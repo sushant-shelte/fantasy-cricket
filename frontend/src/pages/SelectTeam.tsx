@@ -313,7 +313,7 @@ export default function SelectTeamPage() {
 
   const sortPlayersForDisplay = (list: Player[]) =>
     [...list].sort((a, b) => {
-      const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
+      const pointsDiff = (b.avg_points || 0) - (a.avg_points || 0);
       if (pointsDiff !== 0) return pointsDiff;
       return a.name.localeCompare(b.name);
     });
