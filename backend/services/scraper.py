@@ -648,7 +648,7 @@ def _extract_playing_xi_from_commentary(
                 xi_names = _extract_comma_separated_names(xi_match.group(1).split("\n", 1)[0])
 
             subs_match = re.search(
-                rf"{escaped_variant}\s+Impact subs:\s*(.+)",
+                rf"{escaped_variant}\s+Impact\s+(?:subs|substitutes)\s*:\s*(.+)",
                 page_text,
                 flags=re.IGNORECASE,
             )
