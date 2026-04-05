@@ -81,6 +81,26 @@ def _compute_match_contestant_points(db, match_id: int) -> list[dict]:
     return result
 
 
+def _get_completed_match_ids(db) -> list[int]:
+    rows = db.execute("SELECT id, match_date, match_time FROM matches").fetchall()
+    now = datetime.now(IST)
+    completed_ids: list[int] = []
+
+    for row in rows:
+        try:
+            match_datetime = datetime.strptime(
+                f"{row['match_date']} {row['match_time']}", "%Y-%m-%d %H:%M"
+            )
+            match_datetime = IST.localize(match_datetime)
+        except Exception:
+            continue
+
+        if now >= match_datetime + timedelta(hours=5):
+            completed_ids.append(int(row["id"]))
+
+    return completed_ids
+
+
 def _load_effective_match_points(db) -> dict[int, list[dict]]:
     stored_rows = db.execute(
         """
@@ -101,10 +121,7 @@ def _load_effective_match_points(db) -> dict[int, list[dict]]:
             "last_updated": row["last_updated"],
         })
 
-    match_ids = [
-        row["id"]
-        for row in db.execute("SELECT id FROM matches").fetchall()
-    ]
+    match_ids = _get_completed_match_ids(db)
     active_users = db.execute(
         """
         SELECT id, name
@@ -205,23 +222,6 @@ def _calculate_balances(db):
 
     return balances, match_results
 
-
-def _has_live_matches(db) -> bool:
-    rows = db.execute("SELECT match_date, match_time FROM matches").fetchall()
-    now = datetime.now(IST)
-    for row in rows:
-        try:
-            match_datetime = datetime.strptime(
-                f"{row['match_date']} {row['match_time']}", "%Y-%m-%d %H:%M"
-            )
-            match_datetime = IST.localize(match_datetime)
-        except Exception:
-            continue
-        if match_datetime <= now < match_datetime + timedelta(hours=5):
-            return True
-    return False
-
-
 def _build_leaderboard(db):
     balances, _ = _calculate_balances(db)
     effective_match_points = _load_effective_match_points(db)
@@ -287,16 +287,12 @@ def _build_points_table(db):
 
 
 def _ensure_leaderboard_cache(db):
-    has_live_matches = _has_live_matches(db)
     player_points_version = data_service.get_latest_player_points_update()
     cache_ready = LEADERBOARD_CACHE["leaderboard"] is not None and LEADERBOARD_CACHE["points_table"] is not None
 
-    if has_live_matches and cache_ready:
-        return
-
     if (
         not cache_ready
-        or (not has_live_matches and LEADERBOARD_CACHE["player_points_version"] != player_points_version)
+        or LEADERBOARD_CACHE["player_points_version"] != player_points_version
     ):
         LEADERBOARD_CACHE["leaderboard"] = _build_leaderboard(db)
         LEADERBOARD_CACHE["points_table"] = _build_points_table(db)
