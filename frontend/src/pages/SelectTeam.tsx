@@ -542,16 +542,17 @@ export default function SelectTeamPage() {
       <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col lg:flex-row gap-4">
         {/* LEFT — Player selection */}
         <div className="flex-1 min-w-0 space-y-4">
-          <div className="flex flex-wrap items-center gap-3 text-xs text-white/50">
-            {teamsInMatch.map((team) => (
-              <div
-                key={team}
-                className={`inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(team).tintClass} px-3 py-1.5 font-semibold text-white/80`}
-              >
-                <span>{getTeamTheme(team).label}</span>
-                <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
-              </div>
-            ))}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-white/50">
+              {teamsInMatch.map((team) => (
+                <div
+                  key={team}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(team).tintClass} px-3 py-1.5 font-semibold text-white/80`}
+                >
+                  <span>{getTeamTheme(team).label}</span>
+                  <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
+                </div>
+              ))}
               <span className="flex items-center gap-1.5">
                 <span className="w-5 h-5 bg-amber-500/30 border border-amber-500/50 rounded-full flex items-center justify-center text-[10px] font-bold text-amber-300">
                   C
@@ -565,8 +566,128 @@ export default function SelectTeamPage() {
                 1.5x
               </span>
             </div>
+            {!playingXi.announced && (
+              <button
+                type="button"
+                onClick={() => setShowPlayerSearch(true)}
+                className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                aria-label="Search players"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                </svg>
+              </button>
+            )}
+          </div>
 
-            {tossInfo?.announced && tossInfo.text && (
+          {showPlayerSearch && !playingXi.announced && (
+            <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
+              <svg className="h-4 w-4 flex-shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+              </svg>
+              <input
+                type="text"
+                value={playerSearch}
+                onChange={(e) => setPlayerSearch(e.target.value)}
+                placeholder="Search players from both squads"
+                autoFocus
+                className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/30 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={closePlayerSearch}
+                className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                aria-label="Close player search"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {showPlayerSearch && !playingXi.announced && normalizedPlayerSearch && (
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+              <div className="max-h-72 overflow-y-auto">
+                {playerSearchResults.length > 0 ? (
+                  playerSearchResults.map((player) => {
+                    const isSelected = selected.has(player.id);
+                    const isCaptain = captainId === player.id;
+                    const isVC = vcId === player.id;
+                    const selectionAllowed = canSelectPlayer(player);
+                    const availabilityStatus = player.availability_status || 'unavailable';
+
+                    return (
+                      <button
+                        key={player.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected || selectionAllowed) {
+                            togglePlayer(player.id);
+                            setActiveTab(player.role as SelectionTab);
+                          }
+                        }}
+                        disabled={!isSelected && !selectionAllowed}
+                        className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
+                          isSelected
+                            ? 'bg-emerald-500/12'
+                            : !selectionAllowed
+                            ? 'cursor-not-allowed opacity-45'
+                            : 'hover:bg-white/[0.05]'
+                        }`}
+                      >
+                        <div
+                          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${
+                            isSelected
+                              ? availabilityStatus === 'available'
+                                ? 'bg-emerald-500'
+                                : availabilityStatus === 'substitute'
+                                ? 'bg-sky-500'
+                                : 'bg-red-500'
+                              : 'border border-white/15 bg-white/5'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <span className="text-[10px] font-bold text-white/35">{player.name.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            {renderTeamBadge(player.team, true)}
+                            <span className="truncate text-sm font-medium text-white">{player.name}</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
+                            <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
+                            <span className="font-semibold text-emerald-300">Avg {(player.avg_points || 0).toFixed(1)}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {isCaptain && (
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                              C
+                            </span>
+                          )}
+                          {isVC && (
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-white">
+                              VC
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="px-4 py-6 text-center text-sm text-white/35">No players found.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {tossInfo?.announced && tossInfo.text && (
               <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-center text-xs font-semibold text-cyan-300">
                 {tossInfo.text}
               </div>
