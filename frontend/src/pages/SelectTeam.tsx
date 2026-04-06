@@ -96,6 +96,8 @@ export default function SelectTeamPage() {
   const [backups, setBackups] = useState<number[]>([]);
   const [backupDetails, setBackupDetails] = useState<TeamBackup[]>([]);
   const [showBackupPanel, setShowBackupPanel] = useState(false);
+  const [showPlayerSearch, setShowPlayerSearch] = useState(false);
+  const [playerSearch, setPlayerSearch] = useState('');
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const backupPanelRef = useRef<HTMLDivElement | null>(null);
@@ -311,6 +313,11 @@ export default function SelectTeamPage() {
     return null;
   };
 
+  const closePlayerSearch = () => {
+    setShowPlayerSearch(false);
+    setPlayerSearch('');
+  };
+
   const sortPlayersForDisplay = (list: Player[]) =>
     [...list].sort((a, b) => {
       const pointsDiff = (b.avg_points || 0) - (a.avg_points || 0);
@@ -349,6 +356,30 @@ export default function SelectTeamPage() {
     acc[role] = sortPlayersForDisplay(playersByRole[role]);
     return acc;
   }, {});
+
+  const normalizedPlayerSearch = playerSearch.trim().toLowerCase();
+  const playerSearchResults = normalizedPlayerSearch
+    ? [...players]
+        .filter((player) => {
+          const haystack = [
+            player.name,
+            player.team,
+            player.role,
+            player.aliases || '',
+          ]
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(normalizedPlayerSearch);
+        })
+        .sort((a, b) => {
+          const aStarts = a.name.toLowerCase().startsWith(normalizedPlayerSearch) ? 1 : 0;
+          const bStarts = b.name.toLowerCase().startsWith(normalizedPlayerSearch) ? 1 : 0;
+          if (aStarts !== bStarts) return bStarts - aStarts;
+          const avgDiff = (b.avg_points || 0) - (a.avg_points || 0);
+          if (avgDiff !== 0) return avgDiff;
+          return a.name.localeCompare(b.name);
+        })
+    : [];
 
   const activeRole = activeTab === LINEUPS_TAB ? REQUIRED_ROLES[0] : activeTab;
   const selectionTabs = [
@@ -564,19 +595,166 @@ export default function SelectTeamPage() {
           </div>
 
           {playingXi.announced && (
-            <div className="flex flex-wrap items-center gap-4 text-xs text-white/50">
-              <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                Avl
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
-                Sub
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
-                Unavl
-              </span>
+            <div className="space-y-2">
+              {showPlayerSearch ? (
+                <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
+                  <svg className="h-4 w-4 flex-shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={playerSearch}
+                    onChange={(e) => setPlayerSearch(e.target.value)}
+                    placeholder="Search players from both squads"
+                    autoFocus
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/30 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={closePlayerSearch}
+                    className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                    aria-label="Close player search"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 text-xs text-white/50">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <span className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                      Avl
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+                      Sub
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+                      Unavl
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPlayerSearch(true)}
+                    className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                    aria-label="Search players"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {showPlayerSearch && normalizedPlayerSearch && (
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+                  <div className="max-h-72 overflow-y-auto">
+                    {playerSearchResults.length > 0 ? (
+                      playerSearchResults.map((player) => {
+                        const isSelected = selected.has(player.id);
+                        const isCaptain = captainId === player.id;
+                        const isVC = vcId === player.id;
+                        const selectionAllowed = canSelectPlayer(player);
+                        const availabilityStatus = player.availability_status || 'unavailable';
+
+                        return (
+                          <button
+                            key={player.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected || selectionAllowed) {
+                                togglePlayer(player.id);
+                                setActiveTab(player.role as SelectionTab);
+                              }
+                            }}
+                            disabled={!isSelected && !selectionAllowed}
+                            className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
+                              isSelected
+                                ? availabilityStatus === 'available'
+                                  ? 'bg-emerald-500/12'
+                                  : availabilityStatus === 'substitute'
+                                  ? 'bg-sky-500/12'
+                                  : 'bg-red-500/12'
+                                : !selectionAllowed
+                                ? 'cursor-not-allowed opacity-45'
+                                : 'hover:bg-white/[0.05]'
+                            }`}
+                          >
+                            <div
+                              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${
+                                isSelected
+                                  ? availabilityStatus === 'available'
+                                    ? 'bg-emerald-500'
+                                    : availabilityStatus === 'substitute'
+                                    ? 'bg-sky-500'
+                                    : 'bg-red-500'
+                                  : 'border border-white/15 bg-white/5'
+                              }`}
+                            >
+                              {isSelected ? (
+                                <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              ) : (
+                                <span className="text-[10px] font-bold text-white/35">{player.name.charAt(0)}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                {renderTeamBadge(player.team, true)}
+                                <span className="truncate text-sm font-medium text-white">{player.name}</span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
+                                <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
+                                <span className="font-semibold text-emerald-300">Avg {(player.avg_points || 0).toFixed(1)}</span>
+                                {playingXi.announced && (
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
+                                      availabilityStatus === 'available'
+                                        ? 'border border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
+                                        : availabilityStatus === 'substitute'
+                                        ? 'border border-sky-400/25 bg-sky-500/10 text-sky-200'
+                                        : 'border border-red-400/20 bg-red-500/10 text-red-200'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`h-2 w-2 rounded-full ${
+                                        availabilityStatus === 'available'
+                                          ? 'bg-emerald-400'
+                                          : availabilityStatus === 'substitute'
+                                          ? 'bg-sky-400'
+                                          : 'bg-red-400'
+                                      }`}
+                                    ></span>
+                                    {availabilityStatus === 'available' ? 'Avl' : availabilityStatus === 'substitute' ? 'Sub' : 'Unavl'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {isCaptain && (
+                                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                                  C
+                                </span>
+                              )}
+                              {isVC && (
+                                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-white">
+                                  VC
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="px-4 py-6 text-center text-sm text-white/35">No players found.</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
