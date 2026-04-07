@@ -9,9 +9,10 @@ interface MatchForm {
   team2: string;
   match_date: string;
   match_time: string;
+  status: Match['status'];
 }
 
-const emptyForm: MatchForm = { team1: 'CSK', team2: 'RCB', match_date: '', match_time: '' };
+const emptyForm: MatchForm = { team1: 'CSK', team2: 'RCB', match_date: '', match_time: '', status: 'future' };
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -79,6 +80,7 @@ export default function ManageMatches() {
       team2: match.team2,
       match_date: match.match_date,
       match_time: match.match_time,
+      status: match.status,
     });
     setModalOpen(true);
   };
@@ -238,6 +240,19 @@ export default function ManageMatches() {
                   onChange={(e) => setForm({ ...form, match_time: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value as Match['status'] })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="future">Future</option>
+                  <option value="live">Live</option>
+                  <option value="completed">Completed</option>
+                  <option value="nr">No Result</option>
+                </select>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">

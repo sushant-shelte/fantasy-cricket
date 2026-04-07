@@ -39,11 +39,14 @@ def compute_runtime_match_status(match_date: str, match_time: str, stored_status
     now = datetime.now(IST)
     normalized_status = (stored_status or "").strip().lower()
 
+    if normalized_status in {"completed", "nr"}:
+        return normalized_status, True
+
     if now < match_datetime:
         return "future", False
 
-    if normalized_status == "nr":
-        return "nr", True
+    if normalized_status == "live":
+        return "live", True
 
     if now >= match_datetime + timedelta(hours=5):
         return "completed", True

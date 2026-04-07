@@ -90,6 +90,9 @@ def _get_completed_match_ids(db) -> list[int]:
     completed_ids: list[int] = []
     for row in rows:
         status = str(row["status"] or "").strip().lower()
+        if status == "completed":
+            completed_ids.append(int(row["id"]))
+            continue
         if status == "nr":
             continue
         try:

@@ -241,14 +241,17 @@ class Tournament:
 
         now = datetime.now(IST)
 
+        stored_status = str(match_row.get("Status") or "").strip().lower()
+        if stored_status in {"completed", "nr"}:
+            return stored_status
+
         if now < match_datetime - timedelta(minutes=30):
             return "future"
         if now < match_datetime:
             return "lineups"
 
-        stored_status = str(match_row.get("Status") or "").strip().lower()
-        if stored_status == "nr":
-            return "nr"
+        if stored_status == "live":
+            return "live"
 
         if now >= match_datetime + timedelta(hours=5):
             return "completed"

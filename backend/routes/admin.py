@@ -201,6 +201,7 @@ class CreateMatchBody(BaseModel):
     team2: str
     match_date: str
     match_time: str
+    status: Optional[str] = "future"
 
 
 class UpdateMatchBody(BaseModel):
@@ -225,8 +226,8 @@ async def create_match(
 ):
     db = get_db()
     cursor = db.execute(
-        "INSERT INTO matches (team1, team2, match_date, match_time) VALUES (?, ?, ?, ?)",
-        (body.team1, body.team2, body.match_date, body.match_time),
+        "INSERT INTO matches (team1, team2, match_date, match_time, status) VALUES (?, ?, ?, ?, ?)",
+        (body.team1, body.team2, body.match_date, body.match_time, (body.status or "future").strip().lower()),
     )
     db.commit()
     data_service.invalidate_cache("matches")
@@ -274,7 +275,7 @@ async def update_match(
         schedule_changed = True
     if body.status is not None:
         updates.append("status = ?")
-        params.append(body.status)
+        params.append(body.status.strip().lower())
     elif schedule_changed or teams_changed:
         updates.append("status = ?")
         params.append("future")
@@ -284,12 +285,28 @@ async def update_match(
 
     params.append(match_id)
     db.execute(f"UPDATE matches SET {', '.join(updates)} WHERE id = ?", params)
-    if schedule_changed or teams_changed:
+    explicit_status = (body.status or "").strip().lower() if body.status is not None else None
+    if schedule_changed or teams_changed or explicit_status in {"future", "live", "nr"}:
         data_service.clear_points_for_match(match_id)
     db.commit()
     data_service.invalidate_cache("matches")
     invalidate_matches_response_cache()
+    invalidate_leaderboard_cache()
     _refresh_tournament_static_state(refresh_schedule_map=True)
+
+    if tournament_ref is not None:
+        match_id_str = str(match_id)
+        if explicit_status == "completed":
+            tournament_ref.ensure_match_teams_loaded([match_id_str], force=True)
+            tournament_ref.update_match_data(match_id_str, use_playing_xi=True)
+            tournament_ref.compute_player_points_for_match(match_id_str)
+            tournament_ref.compute_points_for_match(match_id_str)
+            tournament_ref.persist_player_points_to_local()
+            tournament_ref.persist_to_local()
+        elif explicit_status in {"future", "live", "nr"}:
+            tournament_ref.player_points.pop(match_id_str, None)
+            for contestant in tournament_ref.contestants.values():
+                contestant.points.pop(match_id_str, None)
 
     updated = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
     return dict(updated)
