@@ -8,7 +8,6 @@ from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
 from backend.services.scraper import (
-    extract_match_completion_status_from_cricbuzz_html,
     fetch_playing_xi,
     fetch_scorecard_html,
     fetch_cricbuzz_scorecard_html,
@@ -222,13 +221,6 @@ class Tournament:
 
         cricbuzz_html = fetch_cricbuzz_scorecard_html(int(match_id), match.team1, match.team2)
         if cricbuzz_html:
-            match_row = self.match_rows.get(match_id, {})
-            outcome = None
-            if self._has_match_started(match_row):
-                outcome = extract_match_completion_status_from_cricbuzz_html(cricbuzz_html, match.team1, match.team2)
-            if outcome and outcome["status"] == "completed":
-                if self._set_persistent_match_status(match_id, "completed"):
-                    print(f"[Match {match_id}] Status updated to completed: {outcome.get('text', '')}")
             match.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
 
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
@@ -255,8 +247,11 @@ class Tournament:
             return "lineups"
 
         stored_status = str(match_row.get("Status") or "").strip().lower()
-        if stored_status in {"completed", "nr"}:
-            return stored_status
+        if stored_status == "nr":
+            return "nr"
+
+        if now >= match_datetime + timedelta(hours=5):
+            return "completed"
 
         return "live"
 
