@@ -126,7 +126,7 @@ async def create_player(
     )
     db.commit()
     data_service.invalidate_cache("players")
-    _refresh_tournament_static_state()
+    _refresh_tournament_static_state(refresh_schedule_map=True)
 
     player = db.execute(
         "SELECT * FROM players WHERE id = ?", (cursor.lastrowid,)
