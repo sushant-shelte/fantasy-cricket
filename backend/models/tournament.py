@@ -165,6 +165,16 @@ class Tournament:
         invalidate_matches_response_cache()
         return True
 
+    def _has_match_started(self, match_row) -> bool:
+        try:
+            match_datetime = datetime.strptime(
+                f"{match_row['Date']} {match_row['Time']}", "%Y-%m-%d %H:%M"
+            )
+            match_datetime = IST.localize(match_datetime)
+        except Exception:
+            return True
+        return datetime.now(IST) >= match_datetime
+
     def update_match_data(self, match_id, use_playing_xi=False, include_scorecards=True):
         match = self.matches.get(match_id)
         if not match:
@@ -212,7 +222,10 @@ class Tournament:
 
         cricbuzz_html = fetch_cricbuzz_scorecard_html(int(match_id), match.team1, match.team2)
         if cricbuzz_html:
-            outcome = extract_match_completion_status_from_cricbuzz_html(cricbuzz_html, match.team1, match.team2)
+            match_row = self.match_rows.get(match_id, {})
+            outcome = None
+            if self._has_match_started(match_row):
+                outcome = extract_match_completion_status_from_cricbuzz_html(cricbuzz_html, match.team1, match.team2)
             if outcome and outcome["status"] in {"completed", "nr"}:
                 if self._set_persistent_match_status(match_id, outcome["status"]):
                     print(f"[Match {match_id}] Status updated to {outcome['status']}: {outcome.get('text', '')}")
@@ -226,10 +239,6 @@ class Tournament:
             self._log_active_player_count(match_id, match)
 
     def get_match_status(self, match_row):
-        stored_status = str(match_row.get("Status") or "").strip().lower()
-        if stored_status in {"completed", "nr"}:
-            return stored_status
-
         try:
             match_datetime = datetime.strptime(
                 f"{match_row['Date']} {match_row['Time']}", "%Y-%m-%d %H:%M"
@@ -242,8 +251,13 @@ class Tournament:
 
         if now < match_datetime - timedelta(minutes=30):
             return "future"
-        elif now < match_datetime:
+        if now < match_datetime:
             return "lineups"
+
+        stored_status = str(match_row.get("Status") or "").strip().lower()
+        if stored_status in {"completed", "nr"}:
+            return stored_status
+
         return "live"
 
     def compute_player_points_for_match(self, match_id):

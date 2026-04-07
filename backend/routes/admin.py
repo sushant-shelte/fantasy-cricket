@@ -253,28 +253,39 @@ async def update_match(
 
     updates = []
     params = []
+    schedule_changed = False
+    teams_changed = False
 
     if body.team1 is not None:
         updates.append("team1 = ?")
         params.append(body.team1)
+        teams_changed = True
     if body.team2 is not None:
         updates.append("team2 = ?")
         params.append(body.team2)
+        teams_changed = True
     if body.match_date is not None:
         updates.append("match_date = ?")
         params.append(body.match_date)
+        schedule_changed = True
     if body.match_time is not None:
         updates.append("match_time = ?")
         params.append(body.match_time)
+        schedule_changed = True
     if body.status is not None:
         updates.append("status = ?")
         params.append(body.status)
+    elif schedule_changed or teams_changed:
+        updates.append("status = ?")
+        params.append("future")
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
     params.append(match_id)
     db.execute(f"UPDATE matches SET {', '.join(updates)} WHERE id = ?", params)
+    if schedule_changed or teams_changed:
+        data_service.clear_points_for_match(match_id)
     db.commit()
     data_service.invalidate_cache("matches")
     invalidate_matches_response_cache()

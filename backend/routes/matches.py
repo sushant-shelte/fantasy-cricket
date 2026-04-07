@@ -39,16 +39,13 @@ def compute_runtime_match_status(match_date: str, match_time: str, stored_status
     now = datetime.now(IST)
     normalized_status = (stored_status or "").strip().lower()
 
+    if now < match_datetime:
+        return "future", False
+
     if normalized_status in {"completed", "nr"}:
         return normalized_status, True
 
-    locked = now >= match_datetime
-    if now < match_datetime:
-        status = "future"
-    else:
-        status = "live"
-
-    return status, locked
+    return "live", True
 
 
 def _should_fetch_toss_for_dashboard(match_date: str, match_time: str, status: str) -> bool:
