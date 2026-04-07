@@ -54,7 +54,6 @@ export default function ViewScoresPage() {
   const [myTeam, setMyTeam] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [matchStatus, setMatchStatus] = useState<'future' | 'live' | 'completed' | 'nr' | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Tab state — read from URL param if present
@@ -83,7 +82,6 @@ export default function ViewScoresPage() {
       ]);
       setPlayerScores(scoresRes.data.players || []);
       setContestants(scoresRes.data.contestants || []);
-      setMatchStatus(scoresRes.data.match_status || null);
       const team = teamRes.data || [];
       setMyTeam(new Set(team.map((t: string | { player_name: string }) => typeof t === 'string' ? t : t.player_name)));
       setLastUpdated(new Date());
@@ -134,7 +132,6 @@ export default function ViewScoresPage() {
     setContestants([]);
     setMyTeam(new Set());
     setLastUpdated(null);
-    setMatchStatus(null);
     setBreakdown(null);
     setDiffData(null);
     setDiffContestants([]);
@@ -275,19 +272,6 @@ export default function ViewScoresPage() {
     </span>
   );
 
-  const renderStatusBadge = () => {
-    if (matchStatus === 'live') {
-      return <span className="inline-flex items-center gap-1.5 rounded-full border border-green-500/20 bg-green-500/15 px-2.5 py-1 text-[11px] font-semibold text-green-400">LIVE</span>;
-    }
-    if (matchStatus === 'completed') {
-      return <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-500/20 bg-slate-500/15 px-2.5 py-1 text-[11px] font-semibold text-slate-300">COMPLETED</span>;
-    }
-    if (matchStatus === 'nr') {
-      return <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/20 bg-rose-500/15 px-2.5 py-1 text-[11px] font-semibold text-rose-300">NO RESULT</span>;
-    }
-    return null;
-  };
-
   const renderTeamBadge = (team: string, compact = false) => {
     const theme = getTeamTheme(team);
     return (
@@ -326,9 +310,6 @@ export default function ViewScoresPage() {
               {lastUpdated && <p className="text-xs text-white/40">Updated {lastUpdated.toLocaleTimeString()}</p>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {renderStatusBadge()}
-          </div>
           <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
             <button onClick={() => setTab('scores')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'scores' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>Scores</button>
             <button onClick={() => setTab('myteam')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'myteam' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>Team Analysis</button>
@@ -341,11 +322,6 @@ export default function ViewScoresPage() {
 
         {tab === 'scores' && (
           <>
-            {matchStatus === 'nr' && (
-              <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-200">
-                Match ended with no result. This match is excluded from points and leaderboard calculations.
-              </div>
-            )}
             {/* Auto-refresh */}
             <div className="flex items-center gap-2 text-xs text-white/40">
               <span className="relative flex h-2 w-2">
