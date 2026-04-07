@@ -643,6 +643,10 @@ def extract_match_completion_status_from_cricbuzz_html(
         return page_text[start:end]
 
     current_match_excerpt = _build_current_match_excerpt()
+    relevant_text = current_match_excerpt or page_text
+
+    if re.search(r"\bopt\s+to\b", relevant_text, flags=re.IGNORECASE):
+        return None
 
     candidate_team_names = [team1, team2]
     for team_name in candidate_team_names:
@@ -653,7 +657,7 @@ def extract_match_completion_status_from_cricbuzz_html(
                 continue
             match = re.search(
                 rf"({re.escape(variant)}\s+won\s+by\s+[^.\n]+)",
-                current_match_excerpt or page_text,
+                relevant_text,
                 flags=re.IGNORECASE,
             )
             if match:
@@ -664,7 +668,7 @@ def extract_match_completion_status_from_cricbuzz_html(
 
     generic_match = re.search(
         r"([A-Za-z][A-Za-z .-]+?\s+won\s+by\s+[^.\n]+)",
-        current_match_excerpt or page_text,
+        relevant_text,
         flags=re.IGNORECASE,
     )
     if generic_match:
@@ -675,7 +679,7 @@ def extract_match_completion_status_from_cricbuzz_html(
 
     nr_match = re.search(
         r"(^|[\n\r])\s*((?:No result|Match abandoned)(?:\s*\([^)]*\))?)\s*($|[\n\r])",
-        current_match_excerpt or page_text,
+        relevant_text,
         flags=re.IGNORECASE,
     )
     if nr_match:
