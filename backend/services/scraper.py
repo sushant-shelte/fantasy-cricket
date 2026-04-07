@@ -621,28 +621,7 @@ def extract_match_completion_status_from_cricbuzz_html(
     if not page_text:
         return None
 
-    def _build_current_match_excerpt() -> str:
-        if not team1 and not team2:
-            return page_text
-
-        name_variants: list[str] = []
-        for team_name in [team1, team2]:
-            if not team_name:
-                continue
-            for variant in {team_name, _expand_team_name(team_name)}:
-                if variant:
-                    name_variants.append(variant)
-
-        positions = [page_text.lower().find(variant.lower()) for variant in name_variants]
-        positions = [pos for pos in positions if pos >= 0]
-        if not positions:
-            return ""
-
-        start = min(positions)
-        end = min(start + 1600, len(page_text))
-        return page_text[start:end]
-
-    current_match_excerpt = _build_current_match_excerpt()
+    current_match_excerpt = _extract_current_match_excerpt(page_text, team1, team2)
     relevant_text = current_match_excerpt or page_text
 
     if re.search(r"\bopt\s+to\b", relevant_text, flags=re.IGNORECASE):
@@ -689,6 +668,42 @@ def extract_match_completion_status_from_cricbuzz_html(
         }
 
     return None
+
+
+def _extract_current_match_excerpt(page_text: str, team1: str | None = None, team2: str | None = None) -> str:
+    if not team1 and not team2:
+        return page_text
+
+    name_variants: list[str] = []
+    for team_name in [team1, team2]:
+        if not team_name:
+            continue
+        for variant in {team_name, _expand_team_name(team_name)}:
+            if variant:
+                name_variants.append(variant)
+
+    positions = [page_text.lower().find(variant.lower()) for variant in name_variants]
+    positions = [pos for pos in positions if pos >= 0]
+    if not positions:
+        return ""
+
+    start = min(positions)
+    end = min(start + 1600, len(page_text))
+    return page_text[start:end]
+
+
+def has_live_match_signal_in_cricbuzz_html(
+    html: str,
+    team1: str | None = None,
+    team2: str | None = None,
+) -> bool:
+    soup = BeautifulSoup(html, "html.parser")
+    page_text = soup.get_text("\n", strip=True)
+    if not page_text:
+        return False
+
+    relevant_text = _extract_current_match_excerpt(page_text, team1, team2) or page_text
+    return bool(re.search(r"\bopt\s+to\b", relevant_text, flags=re.IGNORECASE))
 
 
 def _extract_playing_xi_from_commentary(

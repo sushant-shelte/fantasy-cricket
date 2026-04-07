@@ -169,7 +169,7 @@ async def update_player(
     db.execute(f"UPDATE players SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
     data_service.invalidate_cache("players")
-    _refresh_tournament_static_state()
+    _refresh_tournament_static_state(refresh_schedule_map=True)
 
     updated = db.execute("SELECT * FROM players WHERE id = ?", (player_id,)).fetchone()
     return dict(updated)

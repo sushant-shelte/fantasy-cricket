@@ -12,6 +12,7 @@ from backend.services.scraper import (
     fetch_playing_xi,
     fetch_scorecard_html,
     fetch_cricbuzz_scorecard_html,
+    has_live_match_signal_in_cricbuzz_html,
     initialize_cricbuzz_match_map,
 )
 from backend.services import data_service
@@ -229,6 +230,9 @@ class Tournament:
             if outcome and outcome["status"] in {"completed", "nr"}:
                 if self._set_persistent_match_status(match_id, outcome["status"]):
                     print(f"[Match {match_id}] Status updated to {outcome['status']}: {outcome.get('text', '')}")
+            elif self._has_match_started(match_row) and has_live_match_signal_in_cricbuzz_html(cricbuzz_html, match.team1, match.team2):
+                if self._set_persistent_match_status(match_id, "live"):
+                    print(f"[Match {match_id}] Status updated to live based on scorecard live signal")
             match.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
 
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
