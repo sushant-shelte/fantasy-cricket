@@ -616,6 +616,17 @@ def extract_match_completion_status_from_cricbuzz_html(
     team1: str | None = None,
     team2: str | None = None,
 ) -> dict | None:
+    parsed = extract_match_status_from_cricbuzz_html(html, team1, team2)
+    if parsed and parsed.get("status") in {"completed", "nr"}:
+        return parsed
+    return None
+
+
+def extract_match_status_from_cricbuzz_html(
+    html: str,
+    team1: str | None = None,
+    team2: str | None = None,
+) -> dict | None:
     soup = BeautifulSoup(html, "html.parser")
     page_text = soup.get_text("\n", strip=True)
     if not page_text:
@@ -623,9 +634,6 @@ def extract_match_completion_status_from_cricbuzz_html(
 
     current_match_excerpt = _extract_current_match_excerpt(page_text, team1, team2)
     relevant_text = current_match_excerpt or page_text
-
-    if re.search(r"\bopt\s+to\b", relevant_text, flags=re.IGNORECASE):
-        return None
 
     candidate_team_names = [team1, team2]
     for team_name in candidate_team_names:
@@ -656,6 +664,17 @@ def extract_match_completion_status_from_cricbuzz_html(
             "text": " ".join(generic_match.group(1).split()),
         }
 
+    if re.search(r"\binnings break\b", relevant_text, flags=re.IGNORECASE):
+        return {"status": "live", "text": "Innings Break"}
+
+    need_runs_match = re.search(r"\bneed\s+\d+\s+runs?\b", relevant_text, flags=re.IGNORECASE)
+    if need_runs_match:
+        return {"status": "live", "text": " ".join(need_runs_match.group(0).split())}
+
+    opt_to_match = re.search(r"\bopt\s+to\b", relevant_text, flags=re.IGNORECASE)
+    if opt_to_match:
+        return {"status": "live", "text": "opt to"}
+
     nr_match = re.search(
         r"(^|[\n\r])\s*((?:No result|Match abandoned)(?:\s*\([^)]*\))?)\s*($|[\n\r])",
         relevant_text,
@@ -667,12 +686,25 @@ def extract_match_completion_status_from_cricbuzz_html(
             "text": " ".join(nr_match.group(2).split()),
         }
 
-    return None
+    return {"status": "live", "text": ""}
 
 
 def _extract_current_match_excerpt(page_text: str, team1: str | None = None, team2: str | None = None) -> str:
     if not team1 and not team2:
         return page_text
+
+    matchup_positions: list[int] = []
+    if team1 and team2:
+        team1_variants = {team1, _expand_team_name(team1)}
+        team2_variants = {team2, _expand_team_name(team2)}
+        for variant1 in team1_variants:
+            for variant2 in team2_variants:
+                if not variant1 or not variant2:
+                    continue
+                for matchup in (f"{variant1} vs {variant2}", f"{variant2} vs {variant1}"):
+                    pos = page_text.lower().find(matchup.lower())
+                    if pos >= 0:
+                        matchup_positions.append(pos)
 
     name_variants: list[str] = []
     for team_name in [team1, team2]:
@@ -682,13 +714,13 @@ def _extract_current_match_excerpt(page_text: str, team1: str | None = None, tea
             if variant:
                 name_variants.append(variant)
 
-    positions = [page_text.lower().find(variant.lower()) for variant in name_variants]
+    positions = matchup_positions or [page_text.lower().find(variant.lower()) for variant in name_variants]
     positions = [pos for pos in positions if pos >= 0]
     if not positions:
         return ""
 
-    start = min(positions)
-    end = min(start + 1600, len(page_text))
+    start = max(positions)
+    end = min(start + 2000, len(page_text))
     return page_text[start:end]
 
 
@@ -697,13 +729,8 @@ def has_live_match_signal_in_cricbuzz_html(
     team1: str | None = None,
     team2: str | None = None,
 ) -> bool:
-    soup = BeautifulSoup(html, "html.parser")
-    page_text = soup.get_text("\n", strip=True)
-    if not page_text:
-        return False
-
-    relevant_text = _extract_current_match_excerpt(page_text, team1, team2) or page_text
-    return bool(re.search(r"\bopt\s+to\b", relevant_text, flags=re.IGNORECASE))
+    parsed = extract_match_status_from_cricbuzz_html(html, team1, team2)
+    return bool(parsed and parsed.get("status") == "live")
 
 
 def _extract_playing_xi_from_commentary(

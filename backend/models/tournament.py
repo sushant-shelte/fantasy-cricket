@@ -8,11 +8,10 @@ from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
 from backend.services.scraper import (
-    extract_match_completion_status_from_cricbuzz_html,
+    extract_match_status_from_cricbuzz_html,
     fetch_playing_xi,
     fetch_scorecard_html,
     fetch_cricbuzz_scorecard_html,
-    has_live_match_signal_in_cricbuzz_html,
     initialize_cricbuzz_match_map,
 )
 from backend.services import data_service
@@ -224,15 +223,12 @@ class Tournament:
         cricbuzz_html = fetch_cricbuzz_scorecard_html(int(match_id), match.team1, match.team2)
         if cricbuzz_html:
             match_row = self.match_rows.get(match_id, {})
-            outcome = None
+            parsed_status = None
             if self._has_match_started(match_row):
-                outcome = extract_match_completion_status_from_cricbuzz_html(cricbuzz_html, match.team1, match.team2)
-            if outcome and outcome["status"] in {"completed", "nr"}:
-                if self._set_persistent_match_status(match_id, outcome["status"]):
-                    print(f"[Match {match_id}] Status updated to {outcome['status']}: {outcome.get('text', '')}")
-            elif self._has_match_started(match_row) and has_live_match_signal_in_cricbuzz_html(cricbuzz_html, match.team1, match.team2):
-                if self._set_persistent_match_status(match_id, "live"):
-                    print(f"[Match {match_id}] Status updated to live based on scorecard live signal")
+                parsed_status = extract_match_status_from_cricbuzz_html(cricbuzz_html, match.team1, match.team2)
+            if parsed_status and parsed_status["status"] in {"completed", "nr", "live"}:
+                if self._set_persistent_match_status(match_id, parsed_status["status"]):
+                    print(f"[Match {match_id}] Status updated to {parsed_status['status']}: {parsed_status.get('text', '')}")
             match.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
 
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
