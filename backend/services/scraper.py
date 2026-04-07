@@ -616,17 +616,6 @@ def extract_match_completion_status_from_cricbuzz_html(
     team1: str | None = None,
     team2: str | None = None,
 ) -> dict | None:
-    parsed = extract_match_status_from_cricbuzz_html(html, team1, team2)
-    if parsed and parsed.get("status") in {"completed", "nr"}:
-        return parsed
-    return None
-
-
-def extract_match_status_from_cricbuzz_html(
-    html: str,
-    team1: str | None = None,
-    team2: str | None = None,
-) -> dict | None:
     soup = BeautifulSoup(html, "html.parser")
     page_text = soup.get_text("\n", strip=True)
     if not page_text:
@@ -663,37 +652,14 @@ def extract_match_status_from_cricbuzz_html(
             "status": "completed",
             "text": " ".join(generic_match.group(1).split()),
         }
-
-    if re.search(r"\binnings break\b", relevant_text, flags=re.IGNORECASE):
-        return {"status": "live", "text": "Innings Break"}
-
-    need_runs_match = re.search(r"\bneed\s+\d+\s+runs?\b", relevant_text, flags=re.IGNORECASE)
-    if need_runs_match:
-        return {"status": "live", "text": " ".join(need_runs_match.group(0).split())}
-
-    opt_to_match = re.search(r"\bopt\s+to\b", relevant_text, flags=re.IGNORECASE)
-    if opt_to_match:
-        return {"status": "live", "text": "opt to"}
-
-    nr_match = re.search(
-        r"(^|[\n\r])\s*((?:No result|Match abandoned)(?:\s*\([^)]*\))?)\s*($|[\n\r])",
-        relevant_text,
-        flags=re.IGNORECASE,
-    )
-    if nr_match:
-        return {
-            "status": "nr",
-            "text": " ".join(nr_match.group(2).split()),
-        }
-
-    return {"status": "live", "text": ""}
+    return None
 
 
 def _extract_current_match_excerpt(page_text: str, team1: str | None = None, team2: str | None = None) -> str:
     if not team1 and not team2:
         return page_text
 
-    matchup_positions: list[int] = []
+    candidate_positions: list[int] = []
     if team1 and team2:
         team1_variants = {team1, _expand_team_name(team1)}
         team2_variants = {team2, _expand_team_name(team2)}
@@ -702,9 +668,13 @@ def _extract_current_match_excerpt(page_text: str, team1: str | None = None, tea
                 if not variant1 or not variant2:
                     continue
                 for matchup in (f"{variant1} vs {variant2}", f"{variant2} vs {variant1}"):
-                    pos = page_text.lower().find(matchup.lower())
-                    if pos >= 0:
-                        matchup_positions.append(pos)
+                    search_start = 0
+                    while True:
+                        pos = page_text.lower().find(matchup.lower(), search_start)
+                        if pos < 0:
+                            break
+                        candidate_positions.append(pos)
+                        search_start = pos + 1
 
     name_variants: list[str] = []
     for team_name in [team1, team2]:
@@ -714,23 +684,45 @@ def _extract_current_match_excerpt(page_text: str, team1: str | None = None, tea
             if variant:
                 name_variants.append(variant)
 
-    positions = matchup_positions or [page_text.lower().find(variant.lower()) for variant in name_variants]
-    positions = [pos for pos in positions if pos >= 0]
-    if not positions:
+    if not candidate_positions:
+        for variant in name_variants:
+            search_start = 0
+            while True:
+                pos = page_text.lower().find(variant.lower(), search_start)
+                if pos < 0:
+                    break
+                candidate_positions.append(pos)
+                search_start = pos + 1
+
+    if not candidate_positions:
         return ""
 
-    start = max(positions)
-    end = min(start + 2000, len(page_text))
-    return page_text[start:end]
+    best_excerpt = ""
+    best_score = float("-inf")
+    score_markers = [
+        (r"\bwon\s+by\b", 12),
+        (r"\bno result\b", 10),
+        (r"\bmatch abandoned\b", 10),
+        (r"\binnings break\b", 8),
+        (r"\bneed\s+\d+\s+runs?\b", 8),
+        (r"\bopt\s+to\b", 6),
+        (r"\bvenue\b", 4),
+        (r"\bdate\s*&\s*time\b", 4),
+        (r"\binfo\b", 3),
+        (r"\bscorecard\b", 3),
+    ]
 
+    for start in candidate_positions:
+        excerpt = page_text[start:min(start + 2200, len(page_text))]
+        score = start / 1000.0
+        for pattern, weight in score_markers:
+            if re.search(pattern, excerpt, flags=re.IGNORECASE):
+                score += weight
+        if score > best_score:
+            best_score = score
+            best_excerpt = excerpt
 
-def has_live_match_signal_in_cricbuzz_html(
-    html: str,
-    team1: str | None = None,
-    team2: str | None = None,
-) -> bool:
-    parsed = extract_match_status_from_cricbuzz_html(html, team1, team2)
-    return bool(parsed and parsed.get("status") == "live")
+    return best_excerpt
 
 
 def _extract_playing_xi_from_commentary(
