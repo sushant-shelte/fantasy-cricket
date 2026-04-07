@@ -621,6 +621,29 @@ def extract_match_completion_status_from_cricbuzz_html(
     if not page_text:
         return None
 
+    def _build_current_match_excerpt() -> str:
+        if not team1 and not team2:
+            return page_text
+
+        name_variants: list[str] = []
+        for team_name in [team1, team2]:
+            if not team_name:
+                continue
+            for variant in {team_name, _expand_team_name(team_name)}:
+                if variant:
+                    name_variants.append(variant)
+
+        positions = [page_text.lower().find(variant.lower()) for variant in name_variants]
+        positions = [pos for pos in positions if pos >= 0]
+        if not positions:
+            return ""
+
+        start = min(positions)
+        end = min(start + 1600, len(page_text))
+        return page_text[start:end]
+
+    current_match_excerpt = _build_current_match_excerpt()
+
     candidate_team_names = [team1, team2]
     for team_name in candidate_team_names:
         if not team_name:
@@ -630,7 +653,7 @@ def extract_match_completion_status_from_cricbuzz_html(
                 continue
             match = re.search(
                 rf"({re.escape(variant)}\s+won\s+by\s+[^.\n]+)",
-                page_text,
+                current_match_excerpt or page_text,
                 flags=re.IGNORECASE,
             )
             if match:
@@ -639,7 +662,11 @@ def extract_match_completion_status_from_cricbuzz_html(
                     "text": " ".join(match.group(1).split()),
                 }
 
-    generic_match = re.search(r"([A-Za-z][A-Za-z .-]+?\s+won\s+by\s+[^.\n]+)", page_text, flags=re.IGNORECASE)
+    generic_match = re.search(
+        r"([A-Za-z][A-Za-z .-]+?\s+won\s+by\s+[^.\n]+)",
+        current_match_excerpt or page_text,
+        flags=re.IGNORECASE,
+    )
     if generic_match:
         return {
             "status": "completed",
@@ -648,7 +675,7 @@ def extract_match_completion_status_from_cricbuzz_html(
 
     nr_match = re.search(
         r"(^|[\n\r])\s*((?:No result|Match abandoned)(?:\s*\([^)]*\))?)\s*($|[\n\r])",
-        page_text,
+        current_match_excerpt or page_text,
         flags=re.IGNORECASE,
     )
     if nr_match:
