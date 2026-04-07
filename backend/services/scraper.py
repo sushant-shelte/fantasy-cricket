@@ -621,22 +621,6 @@ def extract_match_completion_status_from_cricbuzz_html(
     if not page_text:
         return None
 
-    if re.search(r"\bNo result\b", page_text, flags=re.IGNORECASE) or re.search(
-        r"\bMatch abandoned\b",
-        page_text,
-        flags=re.IGNORECASE,
-    ):
-        match = re.search(
-            r"(No result(?:\s*\([^)]*\))?)|(Match abandoned(?:\s*\([^)]*\))?)",
-            page_text,
-            flags=re.IGNORECASE,
-        )
-        text = match.group(0).strip() if match else "No result"
-        return {
-            "status": "nr",
-            "text": text,
-        }
-
     candidate_team_names = [team1, team2]
     for team_name in candidate_team_names:
         if not team_name:
@@ -660,6 +644,17 @@ def extract_match_completion_status_from_cricbuzz_html(
         return {
             "status": "completed",
             "text": " ".join(generic_match.group(1).split()),
+        }
+
+    nr_match = re.search(
+        r"(^|[\n\r])\s*((?:No result|Match abandoned)(?:\s*\([^)]*\))?)\s*($|[\n\r])",
+        page_text,
+        flags=re.IGNORECASE,
+    )
+    if nr_match:
+        return {
+            "status": "nr",
+            "text": " ".join(nr_match.group(2).split()),
         }
 
     return None
