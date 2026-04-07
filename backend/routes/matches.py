@@ -122,7 +122,7 @@ def _build_matches_payload() -> list[dict]:
         )
         result.append(match)
 
-    today_matches = [m for m in result if m["match_date"] == today_key and m["status"] not in {"completed", "nr"}]
+    today_matches = [m for m in result if (m["match_date"] == today_key or m["status"] == "live") and m["status"] not in {"completed", "nr"}]
     future_matches = [m for m in result if m["status"] == "future" and m["match_date"] != today_key]
     completed_matches = [m for m in result if m["status"] in {"completed", "nr"}]
 
