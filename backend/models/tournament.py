@@ -361,7 +361,7 @@ class Tournament:
         if rows:
             data_service.save_player_points(rows)
 
-    def recompute_completed_matches(self, reason: str = "manual"):
+    def recompute_completed_matches(self, reason: str = "manual", include_nr: bool = False):
         from backend.routes.leaderboard import invalidate_leaderboard_cache
         from backend.routes.matches import invalidate_matches_response_cache
 
@@ -370,10 +370,14 @@ class Tournament:
         matches_data = data_service.get_cached_data("matches")
         self.refresh_static_data(players_data, matches_data, refresh_schedule_map=True)
 
+        statuses_to_include = {"completed"}
+        if include_nr:
+            statuses_to_include.add("nr")
+
         terminal_match_ids = [
             str(match_row["MatchID"])
             for match_row in matches_data
-            if self.get_match_status(match_row) in {"completed", "nr"}
+            if self.get_match_status(match_row) in statuses_to_include
         ]
 
         if not terminal_match_ids:
@@ -425,7 +429,7 @@ class Tournament:
                             locked_match_ids_to_load.append(match_id)
                         if status == "lineups":
                             has_lineup_window_match = True
-                        elif status in {"completed", "nr"}:
+                        elif status == "completed" and match_id not in computed_matches:
                             locked_match_ids_to_load.append(match_id)
 
                     self.ensure_match_teams_loaded(locked_match_ids_to_load)
@@ -455,26 +459,19 @@ class Tournament:
                                 processed += 1
 
                             elif status == "completed":
+                                if match_id in computed_matches:
+                                    continue
                                 print(f"  Match {match_id}: COMPLETED - revalidating terminal scorecard")
                                 self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
                                 updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
                                 if updated_status != "completed":
-                                    continue
-                                if match_id in computed_matches:
                                     continue
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
                                 processed += 1
 
                             elif status == "nr":
-                                print(f"  Match {match_id}: NR - revalidating scorecard")
-                                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
-                                updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
-                                if updated_status != "completed":
-                                    continue
-                                self.compute_player_points_for_match(match_id)
-                                self.compute_points_for_match(match_id)
-                                processed += 1
+                                continue
 
                         except Exception as e:
                             print(f"  Match {match_id}: ERROR — {e}")
