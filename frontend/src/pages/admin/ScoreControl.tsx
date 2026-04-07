@@ -24,10 +24,16 @@ const statusBadge = (status: string) => {
           Live
         </span>
       );
-    case 'over':
+    case 'completed':
       return (
         <span className="inline-block bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">
-          Over
+          Completed
+        </span>
+      );
+    case 'nr':
+      return (
+        <span className="inline-block bg-rose-100 text-rose-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+          No Result
         </span>
       );
     default:

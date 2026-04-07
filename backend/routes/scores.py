@@ -188,6 +188,9 @@ def _build_players_rows(players_data, team1=None, team2=None):
 
 
 def _is_live_window(match_row) -> bool:
+    if str(match_row.get("status") or "").strip().lower() in {"completed", "nr"}:
+        return False
+
     try:
         match_datetime = datetime.strptime(
             f"{match_row['match_date']} {match_row['match_time']}", "%Y-%m-%d %H:%M"
@@ -201,6 +204,9 @@ def _is_live_window(match_row) -> bool:
 
 
 def _is_completed_match(match_row) -> bool:
+    if str(match_row.get("status") or "").strip().lower() in {"completed", "nr"}:
+        return True
+
     try:
         match_datetime = datetime.strptime(
             f"{match_row['match_date']} {match_row['match_time']}", "%Y-%m-%d %H:%M"
@@ -316,6 +322,10 @@ async def match_scores(
         raise HTTPException(status_code=404, detail="Match not found")
 
     registry, players_data = _build_registry(db)
+    match_status = str(match_row.get("status") or "").strip().lower()
+
+    if match_status == "nr":
+        return {"players": [], "contestants": [], "match_status": "nr"}
 
     match_obj, html_content, _ = _hydrate_match_for_scores(
         match_id,
@@ -380,7 +390,7 @@ async def match_scores(
     # user_teams + current player points, so rankings match the breakdown view.
     contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
 
-    return {"players": result, "contestants": contestants}
+    return {"players": result, "contestants": contestants, "match_status": match_status or "live"}
 
 
 @router.get("/{match_id}/my-team")

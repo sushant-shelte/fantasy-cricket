@@ -24,6 +24,10 @@ MATCHES_RESPONSE_CACHE = {
 
 
 def compute_match_status(match_date: str, match_time: str):
+    return compute_runtime_match_status(match_date, match_time, "future")
+
+
+def compute_runtime_match_status(match_date: str, match_time: str, stored_status: str | None):
     try:
         match_datetime = datetime.strptime(
             f"{match_date} {match_time}", "%Y-%m-%d %H:%M"
@@ -33,18 +37,16 @@ def compute_match_status(match_date: str, match_time: str):
         return "future", False
 
     now = datetime.now(IST)
-    today = now.date()
-    locked = now >= match_datetime
+    normalized_status = (stored_status or "").strip().lower()
 
-    parsed_date = datetime.strptime(match_date, "%Y-%m-%d").date()
-    if parsed_date < today:
-        status = "over"
-    elif now < match_datetime:
+    if normalized_status in {"completed", "nr"}:
+        return normalized_status, True
+
+    locked = now >= match_datetime
+    if now < match_datetime:
         status = "future"
-    elif now < match_datetime + timedelta(hours=4):
-        status = "live"
     else:
-        status = "over"
+        status = "live"
 
     return status, locked
 
@@ -93,7 +95,11 @@ def _build_matches_payload() -> list[dict]:
     prepared_matches = []
     for row in rows:
         match = dict(row)
-        status, locked = compute_match_status(match["match_date"], match["match_time"])
+        status, locked = compute_runtime_match_status(
+            match["match_date"],
+            match["match_time"],
+            match.get("status"),
+        )
         match["status"] = status
         match["locked"] = locked
         prepared_matches.append(match)
@@ -118,13 +124,13 @@ def _build_matches_payload() -> list[dict]:
 
     today_matches = [m for m in result if m["match_date"] == today_key]
     future_matches = [m for m in result if m["status"] == "future" and m["match_date"] != today_key]
-    over_matches = [m for m in result if m["status"] == "over" and m["match_date"] != today_key]
+    completed_matches = [m for m in result if m["status"] in {"completed", "nr"} and m["match_date"] != today_key]
 
     today_matches.sort(key=lambda m: (m["match_date"], m["match_time"]))
     future_matches.sort(key=lambda m: (m["match_date"], m["match_time"]))
-    over_matches.sort(key=lambda m: (m["match_date"], m["match_time"]), reverse=True)
+    completed_matches.sort(key=lambda m: (m["match_date"], m["match_time"]), reverse=True)
 
-    payload = today_matches + future_matches + over_matches
+    payload = today_matches + future_matches + completed_matches
     route_ms = (time.perf_counter() - route_started) * 1000
     if route_ms >= 80:
         print(f"[MATCHES timing] build={route_ms:.1f}ms rows={len(payload)}")
@@ -149,7 +155,7 @@ def _attach_user_match_ranks(payload: list[dict], user_id: int) -> list[dict]:
     relevant_match_ids = [
         int(match["id"])
         for match in payload
-        if match.get("status") in {"live", "over"}
+        if match.get("status") in {"live", "completed"}
     ]
     if not relevant_match_ids:
         return payload
@@ -207,7 +213,7 @@ def _attach_user_match_ranks(payload: list[dict], user_id: int) -> list[dict]:
     result = []
     for match in payload:
         match_copy = dict(match)
-        if match_copy.get("status") in {"live", "over"}:
+        if match_copy.get("status") in {"live", "completed"}:
             match_copy["current_rank"] = match_rank_map.get(int(match_copy["id"]), {}).get(int(user_id))
         else:
             match_copy["current_rank"] = None

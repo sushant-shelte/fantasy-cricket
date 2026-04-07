@@ -611,6 +611,60 @@ def _extract_toss_info_from_html(html: str, team1: str, team2: str) -> dict | No
     return None
 
 
+def extract_match_completion_status_from_cricbuzz_html(
+    html: str,
+    team1: str | None = None,
+    team2: str | None = None,
+) -> dict | None:
+    soup = BeautifulSoup(html, "html.parser")
+    page_text = soup.get_text("\n", strip=True)
+    if not page_text:
+        return None
+
+    if re.search(r"\bNo result\b", page_text, flags=re.IGNORECASE) or re.search(
+        r"\bMatch abandoned\b",
+        page_text,
+        flags=re.IGNORECASE,
+    ):
+        match = re.search(
+            r"(No result(?:\s*\([^)]*\))?)|(Match abandoned(?:\s*\([^)]*\))?)",
+            page_text,
+            flags=re.IGNORECASE,
+        )
+        text = match.group(0).strip() if match else "No result"
+        return {
+            "status": "nr",
+            "text": text,
+        }
+
+    candidate_team_names = [team1, team2]
+    for team_name in candidate_team_names:
+        if not team_name:
+            continue
+        for variant in {team_name, _expand_team_name(team_name)}:
+            if not variant:
+                continue
+            match = re.search(
+                rf"({re.escape(variant)}\s+won\s+by\s+[^.\n]+)",
+                page_text,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                return {
+                    "status": "completed",
+                    "text": " ".join(match.group(1).split()),
+                }
+
+    generic_match = re.search(r"([A-Za-z][A-Za-z .-]+?\s+won\s+by\s+[^.\n]+)", page_text, flags=re.IGNORECASE)
+    if generic_match:
+        return {
+            "status": "completed",
+            "text": " ".join(generic_match.group(1).split()),
+        }
+
+    return None
+
+
 def _extract_playing_xi_from_commentary(
     html: str,
     team1: str,

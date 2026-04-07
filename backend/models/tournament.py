@@ -8,6 +8,7 @@ from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
 from backend.services.scraper import (
+    extract_match_completion_status_from_cricbuzz_html,
     fetch_playing_xi,
     fetch_scorecard_html,
     fetch_cricbuzz_scorecard_html,
@@ -143,6 +144,27 @@ class Tournament:
         if active_count < 22 or active_count > 24:
             print(f"[ALERT] Match {match_id}: active scoring player count is {active_count} (expected 22 to 24)")
 
+    def _set_persistent_match_status(self, match_id: str, status: str) -> bool:
+        from backend.routes.leaderboard import invalidate_leaderboard_cache
+        from backend.routes.matches import invalidate_matches_response_cache
+
+        changed = data_service.update_match_status(int(match_id), status)
+        if not changed:
+            return False
+
+        if match_id in self.match_rows:
+            self.match_rows[match_id]["Status"] = status
+
+        if status == "nr":
+            data_service.clear_points_for_match(int(match_id))
+            self.player_points.pop(match_id, None)
+            for contestant in self.contestants.values():
+                contestant.points.pop(match_id, None)
+
+        invalidate_leaderboard_cache()
+        invalidate_matches_response_cache()
+        return True
+
     def update_match_data(self, match_id, use_playing_xi=False, include_scorecards=True):
         match = self.matches.get(match_id)
         if not match:
@@ -190,6 +212,10 @@ class Tournament:
 
         cricbuzz_html = fetch_cricbuzz_scorecard_html(int(match_id), match.team1, match.team2)
         if cricbuzz_html:
+            outcome = extract_match_completion_status_from_cricbuzz_html(cricbuzz_html, match.team1, match.team2)
+            if outcome and outcome["status"] in {"completed", "nr"}:
+                if self._set_persistent_match_status(match_id, outcome["status"]):
+                    print(f"[Match {match_id}] Status updated to {outcome['status']}: {outcome.get('text', '')}")
             match.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
 
         scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
@@ -200,6 +226,10 @@ class Tournament:
             self._log_active_player_count(match_id, match)
 
     def get_match_status(self, match_row):
+        stored_status = str(match_row.get("Status") or "").strip().lower()
+        if stored_status in {"completed", "nr"}:
+            return stored_status
+
         try:
             match_datetime = datetime.strptime(
                 f"{match_row['Date']} {match_row['Time']}", "%Y-%m-%d %H:%M"
@@ -209,16 +239,12 @@ class Tournament:
             return None
 
         now = datetime.now(IST)
-        today = now.date()
-        parsed_date = datetime.strptime(match_row['Date'], "%Y-%m-%d").date()
 
         if now < match_datetime - timedelta(minutes=30):
             return "future"
         elif now < match_datetime:
             return "lineups"
-        elif now < match_datetime + timedelta(hours=5):
-            return "live"
-        return "over"
+        return "live"
 
     def compute_player_points_for_match(self, match_id):
         match = self.matches.get(match_id)
@@ -333,7 +359,7 @@ class Tournament:
         completed_match_ids = [
             str(match_row["MatchID"])
             for match_row in matches_data
-            if self.get_match_status(match_row) == "over"
+            if self.get_match_status(match_row) == "completed"
         ]
 
         if not completed_match_ids:
@@ -347,8 +373,10 @@ class Tournament:
         processed = 0
         for match_id in completed_match_ids:
             try:
-                print(f"  Match {match_id}: OVER - recomputing completed match")
+                print(f"  Match {match_id}: COMPLETED - recomputing completed match")
                 self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
+                if self.get_match_status(self.match_rows.get(match_id, {})) != "completed":
+                    continue
                 self.compute_player_points_for_match(match_id)
                 self.compute_points_for_match(match_id)
                 processed += 1
@@ -383,7 +411,7 @@ class Tournament:
                             locked_match_ids_to_load.append(match_id)
                         if status == "lineups":
                             has_lineup_window_match = True
-                        elif status == "over" and match_id not in computed_matches:
+                        elif status == "completed" and match_id not in computed_matches:
                             locked_match_ids_to_load.append(match_id)
 
                     self.ensure_match_teams_loaded(locked_match_ids_to_load)
@@ -405,20 +433,28 @@ class Tournament:
                             elif status == "live":
                                 print(f"  Match {match_id}: LIVE - fetching scores")
                                 self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
+                                updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
+                                if updated_status == "nr":
+                                    continue
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
                                 processed += 1
 
-                            elif status == "over":
+                            elif status == "completed":
                                 if match_id in computed_matches:
                                     # Already computed, skip scraping
                                     continue
 
-                                print(f"  Match {match_id}: OVER — computing for first time")
+                                print(f"  Match {match_id}: COMPLETED — computing for first time")
                                 self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
+                                if self.get_match_status(self.match_rows.get(match_id, {})) != "completed":
+                                    continue
                                 self.compute_player_points_for_match(match_id)
                                 self.compute_points_for_match(match_id)
                                 processed += 1
+
+                            elif status == "nr":
+                                print(f"  Match {match_id}: NR — skipping point computation")
 
                         except Exception as e:
                             print(f"  Match {match_id}: ERROR — {e}")

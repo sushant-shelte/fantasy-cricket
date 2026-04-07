@@ -119,6 +119,7 @@ def _cached_matches() -> list[dict]:
             "Team2": r["team2"],
             "Date": r["match_date"],
             "Time": r["match_time"],
+            "Status": r["status"],
             "Venue": r["venue"],
         }
         for r in rows
@@ -232,10 +233,39 @@ def get_matches_api_rows() -> list[dict]:
             "team2": row["Team2"],
             "match_date": row["Date"],
             "match_time": row["Time"],
+            "status": row.get("Status", "future"),
             "venue": row.get("Venue"),
         }
         for row in rows
     ]
+
+
+def update_match_status(match_id: int, status: str) -> bool:
+    db = get_db()
+    normalized_status = (status or "").strip().lower()
+    if normalized_status not in {"future", "live", "completed", "nr"}:
+        return False
+
+    existing = db.execute("SELECT status FROM matches WHERE id = ?", (int(match_id),)).fetchone()
+    if not existing:
+        return False
+
+    current_status = (existing["status"] or "").strip().lower()
+    if current_status == normalized_status:
+        return False
+
+    db.execute("UPDATE matches SET status = ? WHERE id = ?", (normalized_status, int(match_id)))
+    db.commit()
+    invalidate_cache("matches")
+    return True
+
+
+def clear_points_for_match(match_id: int) -> None:
+    db = get_db()
+    normalized_match_id = int(match_id)
+    db.execute("DELETE FROM contestant_points WHERE match_id = ?", (normalized_match_id,))
+    db.execute("DELETE FROM player_points WHERE match_id = ?", (normalized_match_id,))
+    db.commit()
 
 
 # ---------------------------------------------------------------------------

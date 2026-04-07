@@ -1,8 +1,6 @@
-from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends
 from collections import defaultdict
 
-from backend.config import IST
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.services import data_service
@@ -82,23 +80,10 @@ def _compute_match_contestant_points(db, match_id: int) -> list[dict]:
 
 
 def _get_completed_match_ids(db) -> list[int]:
-    rows = db.execute("SELECT id, match_date, match_time FROM matches").fetchall()
-    now = datetime.now(IST)
-    completed_ids: list[int] = []
-
-    for row in rows:
-        try:
-            match_datetime = datetime.strptime(
-                f"{row['match_date']} {row['match_time']}", "%Y-%m-%d %H:%M"
-            )
-            match_datetime = IST.localize(match_datetime)
-        except Exception:
-            continue
-
-        if now >= match_datetime + timedelta(hours=5):
-            completed_ids.append(int(row["id"]))
-
-    return completed_ids
+    rows = db.execute(
+        "SELECT id FROM matches WHERE LOWER(COALESCE(status, 'future')) = 'completed' ORDER BY id"
+    ).fetchall()
+    return [int(row["id"]) for row in rows]
 
 
 def _load_effective_match_points(db) -> dict[int, list[dict]]:

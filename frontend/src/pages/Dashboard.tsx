@@ -148,9 +148,9 @@ export default function DashboardPage() {
 
   // Split matches into tabs
   // Today = today's matches + any live match (even if started yesterday)
-  const todayMatches = matches.filter(m => m.match_date === todayIST || m.status === 'live');
+  const todayMatches = matches.filter(m => (m.match_date === todayIST || m.status === 'live') && !['completed', 'nr'].includes(m.status));
   const upcomingMatches = matches.filter(m => m.status === 'future' && m.match_date !== todayIST);
-  const completedMatches = matches.filter(m => m.status === 'over');
+  const completedMatches = matches.filter(m => m.status === 'completed' || m.status === 'nr');
 
   // Auto-select tab: if today has matches show today, else upcoming
   useEffect(() => {
@@ -175,8 +175,10 @@ export default function DashboardPage() {
             LIVE
           </span>
         );
-      case 'over':
+      case 'completed':
         return <span className="px-2.5 py-1 bg-slate-500/15 text-slate-400 text-xs font-semibold rounded-full border border-slate-500/20">COMPLETED</span>;
+      case 'nr':
+        return <span className="px-2.5 py-1 bg-rose-500/15 text-rose-300 text-xs font-semibold rounded-full border border-rose-500/20">NO RESULT</span>;
       default:
         return <span className="px-2.5 py-1 bg-white/10 text-white/60 text-xs font-semibold rounded-full border border-white/10">UPCOMING</span>;
     }
@@ -224,7 +226,7 @@ export default function DashboardPage() {
             )}
           </div>
         );
-      case 'over':
+      case 'completed':
         return (
           <div className="flex gap-2">
             <Link to={`/view-scores/${match.id}`}
@@ -237,6 +239,15 @@ export default function DashboardPage() {
                 Team Analysis
               </Link>
             )}
+          </div>
+        );
+      case 'nr':
+        return (
+          <div className="flex gap-2">
+            <Link to={`/view-scores/${match.id}`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium rounded-xl transition-all">
+              No Result
+            </Link>
           </div>
         );
     }
@@ -427,10 +438,10 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 )}
-                {(match.status === 'live' || match.status === 'over') && match.current_rank != null && (
+                {(match.status === 'live' || match.status === 'completed') && match.current_rank != null && (
                   <div className="mb-3 text-center">
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
-                       {match.status === 'over' ? 'Final Rank' : 'Current Rank'} #{match.current_rank}
+                       {match.status === 'completed' ? 'Final Rank' : 'Current Rank'} #{match.current_rank}
                       </span>
                   </div>
                 )}

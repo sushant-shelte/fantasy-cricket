@@ -124,7 +124,11 @@ def bootstrap_app():
         data_service.prime_static_cache()
         match_rows = data_service.get_matches_api_rows()
         for match in match_rows:
-            status, _ = matches.compute_match_status(match["match_date"], match["match_time"])
+            status, _ = matches.compute_runtime_match_status(
+                match["match_date"],
+                match["match_time"],
+                match.get("status"),
+            )
             match["status"] = status
         prime_today_venue_cache(match_rows)
 

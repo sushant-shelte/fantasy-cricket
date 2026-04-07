@@ -324,15 +324,26 @@ async def recalculate_match(
     _refresh_tournament_static_state()
     tournament_ref.ensure_match_teams_loaded([match_id_str], force=True)
 
-    # Fetch and parse scorecard, compute points
+    # Fetch scorecard first so final match status can be refreshed from Cricbuzz.
     tournament_ref.update_match_data(match_id_str, use_playing_xi=True)
-    tournament_ref.compute_player_points_for_match(match_id_str)
-    tournament_ref.compute_points_for_match(match_id_str)
-    tournament_ref.persist_player_points_to_local()
-    tournament_ref.persist_to_local()
+    updated_match_row = tournament_ref.match_rows.get(match_id_str, {})
+    refreshed_status = tournament_ref.get_match_status(updated_match_row)
+
+    if refreshed_status == "completed":
+        tournament_ref.compute_player_points_for_match(match_id_str)
+        tournament_ref.compute_points_for_match(match_id_str)
+        tournament_ref.persist_player_points_to_local()
+        tournament_ref.persist_to_local()
+
+    data_service.invalidate_cache("matches")
+    invalidate_matches_response_cache()
     invalidate_leaderboard_cache()
 
-    return {"success": True, "message": f"Recalculated scores for match {match_id}"}
+    return {
+        "success": True,
+        "message": f"Recalculated scores for match {match_id}",
+        "status": refreshed_status,
+    }
 
 
 # --- View Submitted Teams ---
