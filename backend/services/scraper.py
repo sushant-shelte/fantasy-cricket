@@ -543,7 +543,12 @@ def _resolve_team_player_ids_from_names(
     seen_unmatched: set[str] = set()
 
     for raw_name in names:
-        cleaned_name = re.sub(r"\((?:w|wk|c|sub)\)", "", raw_name, flags=re.IGNORECASE).strip()
+        cleaned_name = re.sub(
+            r"\((?:w|wk|c|sub|w\s*/\s*c|c\s*/\s*w|wk\s*/\s*c|c\s*/\s*wk)\)",
+            "",
+            raw_name,
+            flags=re.IGNORECASE,
+        ).strip()
         normalized = _normalize_player_name(cleaned_name)
         if not normalized:
             continue
@@ -754,7 +759,7 @@ def _extract_playing_xi_from_commentary(
         for variant in name_variants:
             escaped_variant = re.escape(variant)
             xi_match = re.search(
-                rf"{escaped_variant}\s*\(Playing XI\):\s*(.+)",
+                rf"{escaped_variant}\s*\(Playing XI\)\s*[:\-]\s*(.+)",
                 page_text,
                 flags=re.IGNORECASE,
             )
@@ -762,7 +767,7 @@ def _extract_playing_xi_from_commentary(
                 xi_names = _extract_comma_separated_names(xi_match.group(1).split("\n", 1)[0])
 
             subs_match = re.search(
-                rf"{escaped_variant}\s+Impact\s+(?:subs|substitutes)\s*:\s*(.+)",
+                rf"{escaped_variant}\s+Impact\s+(?:sub|subs|substitute|substitutes)\s*[:\-]\s*(.+)",
                 page_text,
                 flags=re.IGNORECASE,
             )

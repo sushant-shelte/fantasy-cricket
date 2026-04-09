@@ -8,6 +8,13 @@
   }
 }
 
+@layer components {
+  .player-selected-highlight {
+    background-color: rgba(125, 211, 252, 0.24);
+    background-image: linear-gradient(90deg, rgba(125, 211, 252, 0.3) 0%, rgba(191, 219, 254, 0.16) 100%);
+  }
+}
+
 @keyframes glow1 {
   0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.08; }
   50% { transform: translate(30px, -20px) scale(1.2); opacity: 0.15; }
@@ -24,3 +31,30 @@
 .glow-1 { animation: glow1 6s ease-in-out infinite; }
 .glow-2 { animation: glow2 8s ease-in-out infinite; }
 .glow-3 { animation: glow3 10s ease-in-out infinite; }
+
+@media (hover: none) and (pointer: coarse) {
+  .player-selected-highlight {
+    background-image: none;
+    background-color: rgba(125, 211, 252, 0.28);
+  }
+
+  .mobile-safe-blur {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .mobile-safe-shadow {
+    box-shadow: none !important;
+  }
+
+  .animate-ping {
+    animation: none !important;
+    opacity: 0.75 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ping {
+    animation: none !important;
+  }
+}

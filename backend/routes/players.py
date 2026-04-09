@@ -171,21 +171,29 @@ async def list_players(
             "player_ids": [],
             "substitute_ids": [],
         }
-        playing_xi_data = fetch_playing_xi(
-            match_id,
-            team1,
-            team2,
-            players,
-            match["match_date"],
-            match["match_time"],
-        )
-        toss_info = fetch_toss_info(
-            match_id,
-            team1,
-            team2,
-            match["match_date"],
-            match["match_time"],
-        )
+        try:
+            playing_xi_data = fetch_playing_xi(
+                match_id,
+                team1,
+                team2,
+                players,
+                match["match_date"],
+                match["match_time"],
+            )
+        except Exception as exc:
+            print(f"[players] Playing XI fetch failed for match {match_id}: {exc}")
+
+        toss_info = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+        try:
+            toss_info = fetch_toss_info(
+                match_id,
+                team1,
+                team2,
+                match["match_date"],
+                match["match_time"],
+            )
+        except Exception as exc:
+            print(f"[players] Toss fetch failed for match {match_id}: {exc}")
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))

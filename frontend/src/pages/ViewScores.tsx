@@ -215,7 +215,7 @@ export default function ViewScoresPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-black">
-        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-lg border-b border-white/10">
+        <header className="mobile-safe-blur sticky top-0 z-30 bg-black/80 border-b border-white/10 md:backdrop-blur-lg">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-white/10 animate-pulse" />
@@ -453,7 +453,7 @@ export default function ViewScoresPage() {
   return (
     <div className="min-h-screen bg-black">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-lg border-b border-white/10">
+      <header className="mobile-safe-blur sticky top-0 z-30 bg-black/80 border-b border-white/10 md:backdrop-blur-lg">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
@@ -622,7 +622,7 @@ export default function ViewScoresPage() {
                         <div key={i}>
                           <div
                             onClick={() => setExpandedPlayer(isExpanded ? null : i)}
-                            className={`px-4 py-3 cursor-pointer transition-colors bg-gradient-to-r ${getTeamTheme(p.team).tintClass} ${isMyPlayer ? 'bg-lime-500/10' : 'hover:bg-white/5'}`}
+                            className={`px-4 py-3 cursor-pointer transition-colors ${isMyPlayer ? 'player-selected-highlight' : `bg-gradient-to-r ${getTeamTheme(p.team).tintClass} hover:bg-white/5`}`}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2 min-w-0">
@@ -748,7 +748,7 @@ export default function ViewScoresPage() {
                             <React.Fragment key={i}>
                               <tr
                                 onClick={() => setExpandedPlayer(isExpanded ? null : i)}
-                                className={`cursor-pointer bg-gradient-to-r ${getTeamTheme(p.team).tintClass} transition-colors ${isMyPlayer ? 'bg-lime-500/10 hover:bg-lime-500/15' : 'hover:bg-white/5'}`}>
+                                className={`cursor-pointer transition-colors ${isMyPlayer ? 'player-selected-highlight' : `bg-gradient-to-r ${getTeamTheme(p.team).tintClass} hover:bg-white/5`}`}>
                                 <td className="sticky left-0 z-10 min-w-[220px] border-r border-white/10 px-4 py-2.5 text-white font-medium whitespace-nowrap shadow-[10px_0_18px_-12px_rgba(15,23,42,0.95)] bg-black">
                                   <span className={`inline-block w-3 text-[10px] text-white/40 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
                                   {p.name}

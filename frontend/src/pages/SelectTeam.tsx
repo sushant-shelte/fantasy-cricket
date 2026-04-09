@@ -125,7 +125,7 @@ function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHis
 
       {isOpen && (
         <div
-          className="absolute left-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#07130d]/95 shadow-2xl shadow-black/40 backdrop-blur"
+          className="mobile-safe-blur absolute left-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#07130d]/95 shadow-2xl shadow-black/40 backdrop-blur"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="border-b border-white/10 px-3 py-2">
@@ -712,7 +712,7 @@ export default function SelectTeamPage() {
                         disabled={!isSelected && !selectionAllowed}
                         className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                           isSelected
-                            ? 'border border-sky-300/60 bg-[linear-gradient(90deg,rgba(125,211,252,0.36)_0%,rgba(186,230,253,0.26)_58%,rgba(224,242,254,0.16)_100%)] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18)]'
+                            ? 'player-selected-highlight border border-sky-300/60'
                             : !selectionAllowed
                             ? 'cursor-not-allowed opacity-45'
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -876,7 +876,7 @@ export default function SelectTeamPage() {
                             disabled={!isSelected && !selectionAllowed}
                             className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                               isSelected
-                                ? 'border border-sky-300/60 bg-[linear-gradient(90deg,rgba(125,211,252,0.36)_0%,rgba(186,230,253,0.26)_58%,rgba(224,242,254,0.16)_100%)] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18)]'
+                                ? 'player-selected-highlight border border-sky-300/60'
                                 : !selectionAllowed
                                 ? 'cursor-not-allowed opacity-45'
                                 : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -1098,7 +1098,7 @@ export default function SelectTeamPage() {
                                         }}
                                         className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                           isSelected
-                                            ? 'border border-sky-300/60 bg-[linear-gradient(90deg,rgba(125,211,252,0.36)_0%,rgba(186,230,253,0.26)_58%,rgba(224,242,254,0.16)_100%)] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18)]'
+                                            ? 'player-selected-highlight border border-sky-300/60'
                                             : !selectionAllowed
                                             ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                             : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1187,7 +1187,7 @@ export default function SelectTeamPage() {
                                   }}
                                   className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                     isSelected
-                                      ? 'border border-sky-300/60 bg-[linear-gradient(90deg,rgba(125,211,252,0.36)_0%,rgba(186,230,253,0.26)_58%,rgba(224,242,254,0.16)_100%)] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18)]'
+                                      ? 'player-selected-highlight border border-sky-300/60'
                                       : !selectionAllowed
                                       ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                       : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1290,7 +1290,7 @@ export default function SelectTeamPage() {
                         }}
                         className={`flex items-start gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
                           isSelected
-                            ? 'border border-sky-300/60 bg-[linear-gradient(90deg,rgba(125,211,252,0.36)_0%,rgba(186,230,253,0.26)_58%,rgba(224,242,254,0.16)_100%)] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18)]'
+                            ? 'player-selected-highlight border border-sky-300/60'
                             : !selectionAllowed
                             ? 'opacity-45 cursor-not-allowed'
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'

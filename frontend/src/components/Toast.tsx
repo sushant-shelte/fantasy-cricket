@@ -90,7 +90,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
 
   return (
     <div
-      className={`pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border backdrop-blur-lg shadow-2xl text-sm font-medium min-w-[240px] max-w-[360px] transition-all duration-300 ${styles[toast.type]} ${
+      className={`mobile-safe-blur mobile-safe-shadow pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border md:backdrop-blur-lg shadow-2xl text-sm font-medium min-w-[240px] max-w-[360px] transition-all duration-300 ${styles[toast.type]} ${
         show ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0'
       }`}
     >
