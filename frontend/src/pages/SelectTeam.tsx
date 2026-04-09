@@ -38,6 +38,11 @@ const REQUIRED_ROLES = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'] as con
 type SelectionTab = typeof LINEUPS_TAB | (typeof REQUIRED_ROLES)[number];
 
 const formatRoleName = (role: string) => (role === 'AllRounder' ? 'All Rounder' : role);
+const formatPoints = (value: number | null | undefined) => {
+  if (value == null || Number.isNaN(value)) return '-';
+  const rounded = Math.round(value * 2) / 2;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+};
 
 /* Ground view player node */
 function GroundPlayer({
@@ -134,7 +139,7 @@ function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHis
                     Match#{entry.match_id}{entry.opponent ? ` vs ${entry.opponent}` : ''}
                   </span>
                   <span className={`text-xs font-semibold ${entry.did_not_play ? 'text-white/40' : 'text-blue-300'}`}>
-                    {entry.did_not_play ? 'DNP' : entry.points?.toFixed(1)}
+                    {entry.did_not_play ? 'DNP' : formatPoints(entry.points)}
                   </span>
                 </div>
               ))
@@ -739,7 +744,7 @@ export default function SelectTeamPage() {
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
                             <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                            <span className="font-semibold text-blue-300">Avg {(player.avg_points || 0).toFixed(1)}</span>
+                            <span className="font-semibold text-blue-300">Avg {formatPoints(player.avg_points || 0)}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
@@ -903,7 +908,7 @@ export default function SelectTeamPage() {
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
                                 <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                                <span className="font-semibold text-blue-300">Avg {(player.avg_points || 0).toFixed(1)}</span>
+                                <span className="font-semibold text-blue-300">Avg {formatPoints(player.avg_points || 0)}</span>
                                 {playingXi.announced && (
                                   <span
                                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
@@ -1106,7 +1111,7 @@ export default function SelectTeamPage() {
                                             </div>
                                             <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
                                               <div className="flex items-center gap-2">
-                                                <span>{formatRoleName(player.role)}</span>
+                                                <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
                                                 <span className="font-semibold text-blue-300">
                                                   Avg {Math.round(player.avg_points || 0)}
                                                 </span>
@@ -1195,7 +1200,7 @@ export default function SelectTeamPage() {
                                       </div>
                                       <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
                                         <div className="flex items-center gap-2">
-                                          <span>{formatRoleName(player.role)}</span>
+                                          <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
                                           <span className="font-semibold text-blue-300">
                                             Avg {Math.round(player.avg_points || 0)}
                                           </span>
@@ -1256,7 +1261,7 @@ export default function SelectTeamPage() {
                   <span
                     className={`px-2 py-0.5 text-xs font-bold rounded-lg ${ROLE_CONFIG[activeRole].bg} ${ROLE_CONFIG[activeRole].color} ${ROLE_CONFIG[activeRole].border} border`}
                   >
-                    {activeRole}
+                    {formatRoleName(activeRole)}
                   </span>
                   <span className="text-white/40 text-xs">
                     ({rolePlayers[activeRole].filter((player) => selected.has(player.id)).length} selected)
@@ -1307,15 +1312,15 @@ export default function SelectTeamPage() {
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <span className="font-semibold text-blue-400">
-                            <span className="font-bold">{(player.total_points || 0).toFixed(1)}</span> Total
+                            <span className="font-bold">{formatPoints(player.total_points || 0)}</span> Total
                           </span>
                           {(player.matches_played ?? 0) > 0 && (
                             <>
                               <span className="text-blue-300" title="Average points per match">
-                                Avg {(player.avg_points || 0).toFixed(1)}
+                                Avg {formatPoints(player.avg_points || 0)}
                               </span>
                               <span className="text-blue-300" title="Last match points">
-                                Last {player.last_match_points != null ? player.last_match_points.toFixed(1) : '-'}
+                                Last {formatPoints(player.last_match_points)}
                               </span>
                               <span className="text-white/25" title="Matches played">
                                 {player.matches_played}M
@@ -1459,7 +1464,7 @@ export default function SelectTeamPage() {
                                   {player.name}
                                 </div>
                                 <div className="mt-0.5 flex items-center gap-2 text-[10px] text-white/50">
-                                  <span>{formatRoleName(player.role)}</span>
+                                  <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
                                   <span className="font-semibold text-blue-300">
                                     Avg {Math.round(player.avg_points || 0)}
                                   </span>
