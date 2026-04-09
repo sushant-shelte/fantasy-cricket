@@ -120,7 +120,7 @@ function PlayerHistoryToggle({ player, isOpen, onToggle }: PlayerHistoryTogglePr
         >
           <div className="border-b border-white/10 px-3 py-2">
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Recent Form</div>
-            <div className="mt-1 text-[11px] text-white/45">Last 5 completed matches</div>
+            <div className="mt-1 text-[11px] text-white/45">All completed matches</div>
           </div>
           <div className="max-h-48 overflow-y-auto px-3 py-2">
             {recentHistory.length > 0 ? (

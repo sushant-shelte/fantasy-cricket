@@ -25,7 +25,7 @@ def _build_registry(players_rows: list[dict]) -> PlayerRegistry:
     return PlayerRegistry(players_data)
 
 
-def _load_recent_completed_history(db, teams: list[str], player_ids: list[int], limit: int = 5) -> dict[int, list[dict]]:
+def _load_recent_completed_history(db, teams: list[str], player_ids: list[int]) -> dict[int, list[dict]]:
     if not teams or not player_ids:
         return {}
 
@@ -33,7 +33,7 @@ def _load_recent_completed_history(db, teams: list[str], player_ids: list[int], 
         f"""
         SELECT id, team1, team2
         FROM matches
-        WHERE status IN ('completed', 'nr')
+        WHERE status = 'completed'
           AND (team1 IN ({",".join("?" * len(teams))}) OR team2 IN ({",".join("?" * len(teams))}))
         ORDER BY id DESC
         """,
@@ -76,7 +76,7 @@ def _load_recent_completed_history(db, teams: list[str], player_ids: list[int], 
     for row in player_team_rows:
         player_id = int(row["id"])
         team = row["team"]
-        recent_matches = matches_by_team.get(team, [])[:limit]
+        recent_matches = matches_by_team.get(team, [])
         history_by_player[player_id] = [
             {
                 "match_id": int(match_row["id"]),

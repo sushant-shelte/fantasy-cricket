@@ -44,6 +44,15 @@ interface Contestant { id: number; name: string; points?: number; rank?: number;
 interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; is_backup?: boolean; replaced_player_id?: number | null; }
 interface BreakdownData { user_name: string; total: number; players: BreakdownPlayer[]; error?: string; }
 
+type ViewTab = 'scores' | 'scorecard' | 'myteam' | 'diff';
+
+const VIEW_TABS: Array<{ key: ViewTab; label: string }> = [
+  { key: 'scores', label: 'Scores' },
+  { key: 'scorecard', label: 'Scorecard' },
+  { key: 'myteam', label: 'Team Analysis' },
+  { key: 'diff', label: 'Compare' },
+];
+
 
 export default function ViewScoresPage() {
   const { matchId } = useParams<{ matchId: string }>();
@@ -57,8 +66,8 @@ export default function ViewScoresPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Tab state — read from URL param if present
-  const initialTab = (searchParams.get('tab') as 'scores' | 'myteam' | 'diff') || 'scores';
-  const [tab, setTab] = useState<'scores' | 'myteam' | 'diff'>(initialTab);
+  const initialTab = (searchParams.get('tab') as ViewTab) || 'scores';
+  const [tab, setTab] = useState<ViewTab>(VIEW_TABS.some((entry) => entry.key === initialTab) ? initialTab : 'scores');
   const [expandedPlayer, setExpandedPlayer] = useState<number | null>(null);
 
   // Team breakdown state
@@ -140,7 +149,7 @@ export default function ViewScoresPage() {
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
 
-    if (tab === 'scores') {
+    if (tab === 'scores' || tab === 'scorecard') {
       setLoading(true);
       fetchScores();
       intervalRef.current = setInterval(fetchScores, 30000);
@@ -179,10 +188,11 @@ export default function ViewScoresPage() {
                 <div className="h-3 w-20 rounded bg-white/10 animate-pulse" />
               </div>
             </div>
-            <div className="flex gap-1 bg-white/5 rounded-xl p-1">
-              <div className="h-7 w-16 rounded-lg bg-white/10 animate-pulse" />
+            <div className="grid grid-cols-2 gap-1 bg-white/5 rounded-xl p-1">
               <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
-              <div className="h-7 w-20 rounded-lg bg-white/10 animate-pulse" />
+              <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
+              <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
+              <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
             </div>
           </div>
         </header>
@@ -294,6 +304,110 @@ export default function ViewScoresPage() {
     fetchContestantBreakdown(contestantId);
   };
 
+  const scorecardTeams = [...new Set(playerScores.map((player) => player.team))];
+
+  const renderScorecardSection = (team: string) => {
+    const battingRows = [...playerScores]
+      .filter((player) => player.team === team && (player.played || player.runs > 0 || player.balls > 0 || player.is_out))
+      .sort((a, b) => {
+        const runsDiff = b.runs - a.runs;
+        if (runsDiff !== 0) return runsDiff;
+        const ballsDiff = a.balls - b.balls;
+        if (ballsDiff !== 0) return ballsDiff;
+        return a.name.localeCompare(b.name);
+      });
+
+    const bowlingRows = [...playerScores]
+      .filter((player) => player.team === team && (player.overs > 0 || player.wickets > 0 || player.dot_balls > 0 || player.runs_conceded > 0))
+      .sort((a, b) => {
+        const wicketsDiff = b.wickets - a.wickets;
+        if (wicketsDiff !== 0) return wicketsDiff;
+        const economyDiff = a.economy - b.economy;
+        if (economyDiff !== 0) return economyDiff;
+        const dotsDiff = b.dot_balls - a.dot_balls;
+        if (dotsDiff !== 0) return dotsDiff;
+        return a.name.localeCompare(b.name);
+      });
+
+    const battingRuns = battingRows.reduce((sum, player) => sum + (player.runs || 0), 0);
+    const wicketsLost = battingRows.filter((player) => player.is_out).length;
+    const playedCount = battingRows.filter((player) => player.played).length;
+    const bowlingOvers = bowlingRows.reduce((sum, player) => sum + (player.overs || 0), 0);
+
+    return (
+      <div key={team} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2">
+            {renderTeamBadge(team)}
+            <h2 className="text-sm font-semibold text-white">{team}</h2>
+          </div>
+          <div className="text-right text-[11px] text-white/40">
+            <div>{battingRuns}/{wicketsLost}</div>
+            <div>{playedCount} played • {bowlingOvers.toFixed(1)} ovs</div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-black/20">
+            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Batting</h3>
+              <span className="text-[11px] text-white/35">R / B / 4s / 6s / SR</span>
+            </div>
+            <div className="max-h-[26rem] overflow-y-auto">
+              {battingRows.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-white/35">No batting data yet.</div>
+              ) : (
+                battingRows.map((player) => (
+                  <div key={`bat-${team}-${player.name}`} className="flex items-center justify-between gap-3 border-b border-white/5 px-3 py-2.5 last:border-b-0">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-white">{player.name}</div>
+                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
+                        {renderRoleSymbol(player.role)}
+                        <span>{player.played ? (player.is_out ? 'Out' : 'Not out') : 'DNP'}</span>
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-white/65">
+                      <div className="font-semibold text-emerald-300">{player.runs} ({player.balls})</div>
+                      <div>{player.fours} / {player.sixes} / {player.strike_rate?.toFixed(1)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-black/20">
+            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Bowling</h3>
+              <span className="text-[11px] text-white/35">O / M / R / W / Eco</span>
+            </div>
+            <div className="max-h-[26rem] overflow-y-auto">
+              {bowlingRows.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-white/35">No bowling data yet.</div>
+              ) : (
+                bowlingRows.map((player) => (
+                  <div key={`bowl-${team}-${player.name}`} className="flex items-center justify-between gap-3 border-b border-white/5 px-3 py-2.5 last:border-b-0">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-white">{player.name}</div>
+                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
+                        {renderRoleSymbol(player.role)}
+                        <span>{player.dot_balls} dots</span>
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-white/65">
+                      <div className="font-semibold text-sky-300">{player.overs} / {player.maidens} / {player.runs_conceded} / {player.wickets}</div>
+                      <div>Eco {player.economy?.toFixed(1)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-black">
       {/* Header */}
@@ -310,10 +424,16 @@ export default function ViewScoresPage() {
               {lastUpdated && <p className="text-xs text-white/40">Updated {lastUpdated.toLocaleTimeString()}</p>}
             </div>
           </div>
-          <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
-            <button onClick={() => setTab('scores')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'scores' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>Scores</button>
-            <button onClick={() => setTab('myteam')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'myteam' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>Team Analysis</button>
-            <button onClick={() => setTab('diff')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === 'diff' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}>Compare</button>
+          <div className="grid grid-cols-2 gap-1 bg-white/5 rounded-xl p-1">
+            {VIEW_TABS.map((entry) => (
+              <button
+                key={entry.key}
+                onClick={() => setTab(entry.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === entry.key ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}
+              >
+                {entry.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
@@ -655,6 +775,26 @@ export default function ViewScoresPage() {
             </div>
 
           </>
+        )}
+
+        {tab === 'scorecard' && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-xs text-white/40">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
+              </span>
+              Reuses live score data and refreshes every 30s
+            </div>
+
+            {scorecardTeams.length === 0 ? (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-white/40">
+                No scorecard data available yet.
+              </div>
+            ) : (
+              scorecardTeams.map((team) => renderScorecardSection(team))
+            )}
+          </div>
         )}
 
         {tab === 'myteam' && (
