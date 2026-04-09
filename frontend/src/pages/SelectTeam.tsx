@@ -108,9 +108,9 @@ function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHis
         aria-expanded={isOpen}
         className={`flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
           isOpen
-            ? 'border-blue-400/45 bg-blue-500/20 text-blue-200'
+            ? 'border-lime-400/55 bg-lime-500/25 text-lime-100'
             : isSelected
-            ? 'border-blue-400/40 bg-blue-500/15 text-blue-200 hover:border-blue-300/60 hover:bg-blue-500/20'
+            ? 'border-lime-400/50 bg-lime-500/20 text-lime-100 hover:border-lime-300/70 hover:bg-lime-500/25'
             : 'border-white/20 bg-white/10 text-white/70 hover:border-white/35 hover:bg-white/15'
         }`}
       >
@@ -712,7 +712,7 @@ export default function SelectTeamPage() {
                         disabled={!isSelected && !selectionAllowed}
                         className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                           isSelected
-                            ? 'border border-lime-300/30 bg-gradient-to-r from-lime-400/24 via-emerald-300/18 to-transparent'
+                            ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
                             : !selectionAllowed
                             ? 'cursor-not-allowed opacity-45'
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -876,7 +876,7 @@ export default function SelectTeamPage() {
                             disabled={!isSelected && !selectionAllowed}
                             className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                               isSelected
-                                ? 'border border-lime-300/30 bg-gradient-to-r from-lime-400/24 via-emerald-300/18 to-transparent'
+                                ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
                                 : !selectionAllowed
                                 ? 'cursor-not-allowed opacity-45'
                                 : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -1098,7 +1098,7 @@ export default function SelectTeamPage() {
                                         }}
                                         className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                           isSelected
-                                            ? 'border border-lime-300/30 bg-gradient-to-r from-lime-400/24 via-emerald-300/18 to-transparent'
+                                            ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
                                             : !selectionAllowed
                                             ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                             : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1187,7 +1187,7 @@ export default function SelectTeamPage() {
                                   }}
                                   className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                     isSelected
-                                      ? 'border border-lime-300/30 bg-gradient-to-r from-lime-400/24 via-emerald-300/18 to-transparent'
+                                      ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
                                       : !selectionAllowed
                                       ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                       : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1290,7 +1290,7 @@ export default function SelectTeamPage() {
                         }}
                         className={`flex items-start gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
                           isSelected
-                            ? 'border border-lime-300/30 bg-gradient-to-r from-lime-400/24 via-emerald-300/18 to-transparent'
+                            ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
                             : !selectionAllowed
                             ? 'opacity-45 cursor-not-allowed'
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'
