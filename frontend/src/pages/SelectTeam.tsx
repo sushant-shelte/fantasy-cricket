@@ -108,9 +108,9 @@ function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHis
         aria-expanded={isOpen}
         className={`flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
           isOpen
-            ? 'border-lime-400/55 bg-lime-500/25 text-lime-100'
+            ? 'border-green-300/60 bg-green-400/30 text-green-50'
             : isSelected
-            ? 'border-lime-400/50 bg-lime-500/20 text-lime-100 hover:border-lime-300/70 hover:bg-lime-500/25'
+            ? 'border-green-300/55 bg-green-400/25 text-green-50 hover:border-green-200/80 hover:bg-green-400/30'
             : 'border-white/20 bg-white/10 text-white/70 hover:border-white/35 hover:bg-white/15'
         }`}
       >
@@ -712,7 +712,7 @@ export default function SelectTeamPage() {
                         disabled={!isSelected && !selectionAllowed}
                         className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                           isSelected
-                            ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
+                            ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
                             : !selectionAllowed
                             ? 'cursor-not-allowed opacity-45'
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -722,7 +722,7 @@ export default function SelectTeamPage() {
                           className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${
                             isSelected
                               ? availabilityStatus === 'available'
-                                ? 'bg-emerald-500'
+                                ? 'bg-green-400'
                                 : availabilityStatus === 'substitute'
                                 ? 'bg-sky-500'
                                 : 'bg-red-500'
@@ -876,7 +876,7 @@ export default function SelectTeamPage() {
                             disabled={!isSelected && !selectionAllowed}
                             className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                               isSelected
-                                ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
+                                ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
                                 : !selectionAllowed
                                 ? 'cursor-not-allowed opacity-45'
                                 : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -886,7 +886,7 @@ export default function SelectTeamPage() {
                               className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${
                                 isSelected
                                   ? availabilityStatus === 'available'
-                                    ? 'bg-emerald-500'
+                                    ? 'bg-green-400'
                                     : availabilityStatus === 'substitute'
                                     ? 'bg-sky-500'
                                     : 'bg-red-500'
@@ -1098,7 +1098,7 @@ export default function SelectTeamPage() {
                                         }}
                                         className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                           isSelected
-                                            ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
+                                            ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
                                             : !selectionAllowed
                                             ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                             : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1187,7 +1187,7 @@ export default function SelectTeamPage() {
                                   }}
                                   className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                     isSelected
-                                      ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
+                                      ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
                                       : !selectionAllowed
                                       ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                       : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1290,7 +1290,7 @@ export default function SelectTeamPage() {
                         }}
                         className={`flex items-start gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
                           isSelected
-                            ? 'border border-lime-300/40 bg-lime-500/15 bg-gradient-to-r from-lime-300/40 via-emerald-300/30 to-lime-200/20'
+                            ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
                             : !selectionAllowed
                             ? 'opacity-45 cursor-not-allowed'
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'
