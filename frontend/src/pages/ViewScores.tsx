@@ -307,8 +307,9 @@ export default function ViewScoresPage() {
   const scorecardTeams = [...new Set(playerScores.map((player) => player.team))];
 
   const renderScorecardSection = (battingTeam: string, bowlingTeam?: string) => {
+    const isBattingEntry = (player: PlayerScore) => player.runs > 0 || player.balls > 0 || player.is_out;
     const battingRows = [...playerScores]
-      .filter((player) => player.team === battingTeam && (player.played || player.runs > 0 || player.balls > 0 || player.is_out))
+      .filter((player) => player.team === battingTeam && isBattingEntry(player))
       .sort((a, b) => {
         const runsDiff = b.runs - a.runs;
         if (runsDiff !== 0) return runsDiff;
@@ -331,7 +332,7 @@ export default function ViewScoresPage() {
 
     const battingRuns = battingRows.reduce((sum, player) => sum + (player.runs || 0), 0);
     const wicketsLost = battingRows.filter((player) => player.is_out).length;
-    const playedCount = battingRows.filter((player) => player.played).length;
+    const batterCount = battingRows.length;
     const bowlingOvers = bowlingRows.reduce((sum, player) => sum + (player.overs || 0), 0);
 
     return (
@@ -343,35 +344,30 @@ export default function ViewScoresPage() {
           </div>
           <div className="text-right">
             <div className="text-base font-bold text-white">{battingRuns}/{wicketsLost}</div>
-            <div className="text-[11px] text-white/40">{bowlingOvers.toFixed(1)} overs • {playedCount} played</div>
+            <div className="text-[11px] text-white/40">{bowlingOvers.toFixed(1)} overs • {batterCount} batters</div>
           </div>
         </div>
 
         <div className="grid gap-4 p-4">
           <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-            <div className="grid grid-cols-[minmax(0,1.6fr)_56px_56px_56px_56px_64px] items-center gap-2 border-b border-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-              <span>Batter</span>
-              <span className="text-right">R</span>
-              <span className="text-right">B</span>
-              <span className="text-right">4s</span>
-              <span className="text-right">6s</span>
-              <span className="text-right">SR</span>
+            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Batting</h3>
+              <span className="text-[11px] text-white/35">R(B) • 4s • 6s • SR</span>
             </div>
-            <div className="max-h-[28rem] overflow-y-auto">
+            <div>
               {battingRows.length === 0 ? (
                 <div className="px-3 py-6 text-center text-sm text-white/35">No batting data yet.</div>
               ) : (
                 battingRows.map((player) => (
-                  <div key={`bat-${battingTeam}-${player.name}`} className="grid grid-cols-[minmax(0,1.6fr)_56px_56px_56px_56px_64px] items-center gap-2 border-b border-white/5 px-3 py-2.5 last:border-b-0">
+                  <div key={`bat-${battingTeam}-${player.name}`} className="flex items-start justify-between gap-3 border-b border-white/5 px-3 py-2.5 last:border-b-0">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-white">{player.name}</div>
-                      <div className="mt-0.5 text-[11px] text-white/35">{player.played ? (player.is_out ? 'out' : 'not out') : 'DNP'}</div>
+                      <div className="text-sm font-medium leading-snug text-white break-words">{player.name}</div>
+                      <div className="mt-0.5 text-[11px] text-white/35">{player.is_out ? 'out' : 'not out'}</div>
                     </div>
-                    <span className="text-right text-sm font-semibold text-white">{player.runs}</span>
-                    <span className="text-right text-sm text-white/70">{player.balls}</span>
-                    <span className="text-right text-sm text-white/70">{player.fours}</span>
-                    <span className="text-right text-sm text-white/70">{player.sixes}</span>
-                    <span className="text-right text-sm text-white/70">{player.strike_rate?.toFixed(1)}</span>
+                    <div className="shrink-0 text-right text-[12px] leading-5 text-white/70">
+                      <div className="font-semibold text-white">{player.runs} ({player.balls})</div>
+                      <div>{player.fours} • {player.sixes} • {player.strike_rate?.toFixed(1)}</div>
+                    </div>
                   </div>
                 ))
               )}
@@ -385,29 +381,20 @@ export default function ViewScoresPage() {
               </h3>
               <span className="text-[11px] text-white/35">O / M / R / W / Eco</span>
             </div>
-            <div className="grid grid-cols-[minmax(0,1.4fr)_56px_56px_56px_56px_64px] items-center gap-2 border-b border-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-              <span>Bowler</span>
-              <span className="text-right">O</span>
-              <span className="text-right">M</span>
-              <span className="text-right">R</span>
-              <span className="text-right">W</span>
-              <span className="text-right">Eco</span>
-            </div>
-            <div className="max-h-[24rem] overflow-y-auto">
+            <div>
               {bowlingRows.length === 0 ? (
                 <div className="px-3 py-6 text-center text-sm text-white/35">No bowling data yet.</div>
               ) : (
                 bowlingRows.map((player) => (
-                  <div key={`bowl-${battingTeam}-${player.name}`} className="grid grid-cols-[minmax(0,1.4fr)_56px_56px_56px_56px_64px] items-center gap-2 border-b border-white/5 px-3 py-2.5 last:border-b-0">
+                  <div key={`bowl-${battingTeam}-${player.name}`} className="flex items-start justify-between gap-3 border-b border-white/5 px-3 py-2.5 last:border-b-0">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-white">{player.name}</div>
+                      <div className="text-sm font-medium leading-snug text-white break-words">{player.name}</div>
                       <div className="mt-0.5 text-[11px] text-white/35">{player.dot_balls} dots</div>
                     </div>
-                    <span className="text-right text-sm text-white/70">{player.overs}</span>
-                    <span className="text-right text-sm text-white/70">{player.maidens}</span>
-                    <span className="text-right text-sm text-white/70">{player.runs_conceded}</span>
-                    <span className="text-right text-sm font-semibold text-white">{player.wickets}</span>
-                    <span className="text-right text-sm text-white/70">{player.economy?.toFixed(1)}</span>
+                    <div className="shrink-0 text-right text-[12px] leading-5 text-white/70">
+                      <div className="font-semibold text-white">{player.overs} • {player.maidens} • {player.runs_conceded} • {player.wickets}</div>
+                      <div>Eco {player.economy?.toFixed(1)}</div>
+                    </div>
                   </div>
                 ))
               )}
