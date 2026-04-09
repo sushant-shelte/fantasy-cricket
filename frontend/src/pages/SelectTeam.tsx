@@ -126,7 +126,9 @@ function PlayerHistoryToggle({ player, isOpen, onToggle }: PlayerHistoryTogglePr
             {recentHistory.length > 0 ? (
               recentHistory.map((entry) => (
                 <div key={`${player.id}-${entry.match_id}`} className="flex items-center justify-between gap-3 border-b border-white/5 py-2 last:border-b-0">
-                  <span className="text-xs text-white/65">Match#{entry.match_id}</span>
+                  <span className="text-xs text-white/65">
+                    Match#{entry.match_id}{entry.opponent ? ` vs ${entry.opponent}` : ''}
+                  </span>
                   <span className={`text-xs font-semibold ${entry.did_not_play ? 'text-white/40' : 'text-emerald-300'}`}>
                     {entry.did_not_play ? 'DNP' : entry.points?.toFixed(1)}
                   </span>

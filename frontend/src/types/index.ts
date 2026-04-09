@@ -55,6 +55,7 @@ export type Player = {
   availability_order?: number | null;
   recent_history?: Array<{
     match_id: number;
+    opponent?: string | null;
     points?: number | null;
     did_not_play: boolean;
   }>;

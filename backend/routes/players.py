@@ -80,6 +80,7 @@ def _load_recent_completed_history(db, teams: list[str], player_ids: list[int]) 
         history_by_player[player_id] = [
             {
                 "match_id": int(match_row["id"]),
+                "opponent": match_row["team2"] if match_row["team1"] == team else match_row["team1"],
                 "points": points_lookup.get((player_id, int(match_row["id"]))),
                 "did_not_play": (player_id, int(match_row["id"])) not in points_lookup,
             }
