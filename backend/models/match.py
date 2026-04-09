@@ -29,6 +29,7 @@ class Match:
         self.team2 = team2
         self.registry = registry
         self.players = {}  # pid -> Player
+        self.scorecard = []
 
     def get_player_id(self, name, team):
         cleaned_name = clean_name(name)
@@ -153,6 +154,7 @@ class Match:
     def parse_cricbuzz_scorecard_html(self, html_text, reset_players=True):
         if reset_players:
             self.players = {}
+        self.scorecard = []
 
         payload = self._extract_cricbuzz_scorecard_payload(html_text)
         if not payload:
@@ -175,6 +177,13 @@ class Match:
 
             if batting_team not in valid_teams or bowling_team not in valid_teams:
                 continue
+
+            innings_snapshot = {
+                "batting_team": batting_team,
+                "bowling_team": bowling_team,
+                "batting": [],
+                "bowling": [],
+            }
 
             batsmen_data = bat_details.get("batsmenData") or {}
             for key in sorted(batsmen_data, key=self._sort_data_keys):
@@ -203,6 +212,18 @@ class Match:
                     player.dismissal = None
                     player.is_out = False
 
+                innings_snapshot["batting"].append({
+                    "player_id": int(pid),
+                    "name": player.name,
+                    "dismissal": player.dismissal or "not out",
+                    "is_out": bool(player.is_out),
+                    "runs": int(player.runs or 0),
+                    "balls": int(player.balls or 0),
+                    "fours": int(player.fours or 0),
+                    "sixes": int(player.sixes or 0),
+                    "strike_rate": float(player.strike_rate or 0),
+                })
+
                 parsed_any = True
 
             bowlers_data = bowl_details.get("bowlersData") or {}
@@ -225,7 +246,19 @@ class Match:
                 player.wickets = int(bowler_data.get("wickets") or 0)
                 player.economy = float(bowler_data.get("economy") or 0)
 
+                innings_snapshot["bowling"].append({
+                    "player_id": int(pid),
+                    "name": player.name,
+                    "overs": float(player.overs or 0),
+                    "maidens": int(player.maidens or 0),
+                    "runs_conceded": int(player.runs_conceded or 0),
+                    "wickets": int(player.wickets or 0),
+                    "economy": float(player.economy or 0),
+                })
+
                 parsed_any = True
+
+            self.scorecard.append(innings_snapshot)
 
         return parsed_any
 

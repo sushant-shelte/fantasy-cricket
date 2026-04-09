@@ -162,6 +162,10 @@ def _fill_missing_player_points(match_obj, registry, pp_lookup: dict, role_looku
     return pp_lookup, role_lookup
 
 
+def _serialize_scorecard(match_obj) -> list[dict]:
+    return copy.deepcopy(getattr(match_obj, "scorecard", []) or [])
+
+
 def _build_registry(db):
     """Build a PlayerRegistry from the players table."""
     players_data = data_service.get_cached_data("players")
@@ -390,7 +394,12 @@ async def match_scores(
     # user_teams + current player points, so rankings match the breakdown view.
     contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
 
-    return {"players": result, "contestants": contestants, "match_status": match_status or "live"}
+    return {
+        "players": result,
+        "contestants": contestants,
+        "match_status": match_status or "live",
+        "scorecard": _serialize_scorecard(match_obj),
+    }
 
 
 @router.get("/{match_id}/my-team")

@@ -43,6 +43,32 @@ interface Contestant { id: number; name: string; points?: number; rank?: number;
 
 interface BreakdownPlayer { name: string; team: string; role: string; base_points: number; multiplier: number; tag: string; adjusted_points: number; is_backup?: boolean; replaced_player_id?: number | null; }
 interface BreakdownData { user_name: string; total: number; players: BreakdownPlayer[]; error?: string; }
+interface ScorecardBattingEntry {
+  player_id: number;
+  name: string;
+  dismissal: string;
+  is_out: boolean;
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  strike_rate: number;
+}
+interface ScorecardBowlingEntry {
+  player_id: number;
+  name: string;
+  overs: number;
+  maidens: number;
+  runs_conceded: number;
+  wickets: number;
+  economy: number;
+}
+interface ScorecardInnings {
+  batting_team: string;
+  bowling_team: string;
+  batting: ScorecardBattingEntry[];
+  bowling: ScorecardBowlingEntry[];
+}
 
 type ViewTab = 'scores' | 'scorecard' | 'myteam' | 'diff';
 
@@ -60,6 +86,7 @@ export default function ViewScoresPage() {
   const { profile } = useAuth();
   const [playerScores, setPlayerScores] = useState<PlayerScore[]>([]);
   const [contestants, setContestants] = useState<ContestantScore[]>([]);
+  const [scorecard, setScorecard] = useState<ScorecardInnings[]>([]);
   const [myTeam, setMyTeam] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -76,6 +103,7 @@ export default function ViewScoresPage() {
   const [selectedContestantId, setSelectedContestantId] = useState<number | null>(null);
   const [selectedContestantBreakdown, setSelectedContestantBreakdown] = useState<BreakdownData | null>(null);
   const [selectedContestantLoading, setSelectedContestantLoading] = useState(false);
+  const [openScorecardIndex, setOpenScorecardIndex] = useState<number>(0);
 
   // Team diff state
   const [diffContestants, setDiffContestants] = useState<Contestant[]>([]);
@@ -91,6 +119,7 @@ export default function ViewScoresPage() {
       ]);
       setPlayerScores(scoresRes.data.players || []);
       setContestants(scoresRes.data.contestants || []);
+      setScorecard(scoresRes.data.scorecard || []);
       const team = teamRes.data || [];
       setMyTeam(new Set(team.map((t: string | { player_name: string }) => typeof t === 'string' ? t : t.player_name)));
       setLastUpdated(new Date());
@@ -139,11 +168,13 @@ export default function ViewScoresPage() {
     setLoading(true);
     setPlayerScores([]);
     setContestants([]);
+    setScorecard([]);
     setMyTeam(new Set());
     setLastUpdated(null);
     setBreakdown(null);
     setDiffData(null);
     setDiffContestants([]);
+    setOpenScorecardIndex(0);
   }, [matchId]);
 
   useEffect(() => {
@@ -304,69 +335,57 @@ export default function ViewScoresPage() {
     fetchContestantBreakdown(contestantId);
   };
 
-  const scorecardTeams = [...new Set(playerScores.map((player) => player.team))];
-
-  const renderScorecardSection = (battingTeam: string, bowlingTeam?: string) => {
-    const isBattingEntry = (player: PlayerScore) => player.runs > 0 || player.balls > 0 || player.is_out;
-    const battingRows = [...playerScores]
-      .filter((player) => player.team === battingTeam && isBattingEntry(player))
-      .sort((a, b) => {
-        const runsDiff = b.runs - a.runs;
-        if (runsDiff !== 0) return runsDiff;
-        const ballsDiff = a.balls - b.balls;
-        if (ballsDiff !== 0) return ballsDiff;
-        return a.name.localeCompare(b.name);
-      });
-
-    const bowlingRows = [...playerScores]
-      .filter((player) => player.team === bowlingTeam && (player.overs > 0 || player.wickets > 0 || player.dot_balls > 0 || player.runs_conceded > 0))
-      .sort((a, b) => {
-        const wicketsDiff = b.wickets - a.wickets;
-        if (wicketsDiff !== 0) return wicketsDiff;
-        const economyDiff = a.economy - b.economy;
-        if (economyDiff !== 0) return economyDiff;
-        const dotsDiff = b.dot_balls - a.dot_balls;
-        if (dotsDiff !== 0) return dotsDiff;
-        return a.name.localeCompare(b.name);
-      });
-
+  const renderScorecardSection = (innings: ScorecardInnings, index: number) => {
+    const battingRows = innings.batting || [];
+    const bowlingRows = innings.bowling || [];
     const battingRuns = battingRows.reduce((sum, player) => sum + (player.runs || 0), 0);
     const wicketsLost = battingRows.filter((player) => player.is_out).length;
-    const batterCount = battingRows.length;
     const bowlingOvers = bowlingRows.reduce((sum, player) => sum + (player.overs || 0), 0);
+    const isOpen = openScorecardIndex === index;
 
     return (
-      <div key={battingTeam} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
-          <div className="flex items-center gap-2">
-            {renderTeamBadge(battingTeam)}
-            <h2 className="text-sm font-semibold text-white">{battingTeam} Innings</h2>
+      <div key={`${innings.batting_team}-${index}`} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+        <button
+          type="button"
+          onClick={() => setOpenScorecardIndex(isOpen ? -1 : index)}
+          className="flex w-full items-center justify-between gap-3 bg-white/[0.03] px-4 py-3 text-left"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={`text-[10px] text-white/45 transition-transform ${isOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+            {renderTeamBadge(innings.batting_team)}
+            <h2 className="truncate text-sm font-semibold text-white">{innings.batting_team}</h2>
           </div>
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <div className="text-base font-bold text-white">{battingRuns}/{wicketsLost}</div>
-            <div className="text-[11px] text-white/40">{bowlingOvers.toFixed(1)} overs • {batterCount} batters</div>
+            <div className="text-[11px] text-white/40">{bowlingOvers.toFixed(1)} ov</div>
           </div>
-        </div>
+        </button>
 
-        <div className="grid gap-4 p-4">
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Batting</h3>
-              <span className="text-[11px] text-white/35">R(B) • 4s • 6s • SR</span>
+        {isOpen && (
+        <div className="space-y-4 border-t border-white/10 px-4 py-4">
+          <div>
+            <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              <h3>Batting</h3>
+              <span>R B 4s 6s SR</span>
             </div>
-            <div>
+            <div className="space-y-2">
               {battingRows.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-white/35">No batting data yet.</div>
+                <div className="py-4 text-center text-sm text-white/35">No batting data yet.</div>
               ) : (
                 battingRows.map((player) => (
-                  <div key={`bat-${battingTeam}-${player.name}`} className="flex items-start justify-between gap-3 border-b border-white/5 px-3 py-2.5 last:border-b-0">
+                  <div key={`bat-${innings.batting_team}-${player.player_id}`} className="flex items-start justify-between gap-3 border-b border-white/5 pb-2 last:border-b-0">
                     <div className="min-w-0">
                       <div className="text-sm font-medium leading-snug text-white break-words">{player.name}</div>
-                      <div className="mt-0.5 text-[11px] text-white/35">{player.is_out ? 'out' : 'not out'}</div>
+                      <div className="mt-0.5 text-[11px] text-white/35">{player.dismissal}</div>
                     </div>
-                    <div className="shrink-0 text-right text-[12px] leading-5 text-white/70">
-                      <div className="font-semibold text-white">{player.runs} ({player.balls})</div>
-                      <div>{player.fours} • {player.sixes} • {player.strike_rate?.toFixed(1)}</div>
+                    <div className="shrink-0 font-mono text-[12px] leading-5 text-white/75">
+                      <div className="flex items-center justify-end gap-3">
+                        <span className="w-7 text-right font-semibold text-white">{player.runs}</span>
+                        <span className="w-7 text-right">{player.balls}</span>
+                        <span className="w-7 text-right">{player.fours}</span>
+                        <span className="w-7 text-right">{player.sixes}</span>
+                        <span className="w-10 text-right">{player.strike_rate?.toFixed(1)}</span>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -374,26 +393,30 @@ export default function ViewScoresPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
-                Bowling {bowlingTeam ? `• ${getTeamTheme(bowlingTeam).label}` : ''}
+          <div>
+            <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              <h3>
+                Bowling {innings.bowling_team ? `• ${getTeamTheme(innings.bowling_team).label}` : ''}
               </h3>
-              <span className="text-[11px] text-white/35">O / M / R / W / Eco</span>
+              <span>O M R W ER</span>
             </div>
-            <div>
+            <div className="space-y-2">
               {bowlingRows.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-white/35">No bowling data yet.</div>
+                <div className="py-4 text-center text-sm text-white/35">No bowling data yet.</div>
               ) : (
                 bowlingRows.map((player) => (
-                  <div key={`bowl-${battingTeam}-${player.name}`} className="flex items-start justify-between gap-3 border-b border-white/5 px-3 py-2.5 last:border-b-0">
+                  <div key={`bowl-${innings.batting_team}-${player.player_id}`} className="flex items-start justify-between gap-3 border-b border-white/5 pb-2 last:border-b-0">
                     <div className="min-w-0">
                       <div className="text-sm font-medium leading-snug text-white break-words">{player.name}</div>
-                      <div className="mt-0.5 text-[11px] text-white/35">{player.dot_balls} dots</div>
                     </div>
-                    <div className="shrink-0 text-right text-[12px] leading-5 text-white/70">
-                      <div className="font-semibold text-white">{player.overs} • {player.maidens} • {player.runs_conceded} • {player.wickets}</div>
-                      <div>Eco {player.economy?.toFixed(1)}</div>
+                    <div className="shrink-0 font-mono text-[12px] leading-5 text-white/75">
+                      <div className="flex items-center justify-end gap-3">
+                        <span className="w-7 text-right">{player.overs}</span>
+                        <span className="w-7 text-right">{player.maidens}</span>
+                        <span className="w-7 text-right">{player.runs_conceded}</span>
+                        <span className="w-7 text-right font-semibold text-white">{player.wickets}</span>
+                        <span className="w-10 text-right">{player.economy?.toFixed(1)}</span>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -401,6 +424,7 @@ export default function ViewScoresPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
     );
   };
@@ -784,15 +808,12 @@ export default function ViewScoresPage() {
               Reuses live score data and refreshes every 30s
             </div>
 
-            {scorecardTeams.length === 0 ? (
+            {scorecard.length === 0 ? (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-white/40">
                 No scorecard data available yet.
               </div>
             ) : (
-              scorecardTeams.map((team) => {
-                const bowlingTeam = scorecardTeams.find((candidate) => candidate !== team);
-                return renderScorecardSection(team, bowlingTeam);
-              })
+              scorecard.map((innings, index) => renderScorecardSection(innings, index))
             )}
           </div>
         )}
