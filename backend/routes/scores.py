@@ -1,4 +1,5 @@
 import copy
+import threading
 import time
 from datetime import datetime, timedelta
 
@@ -14,8 +15,10 @@ from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html, fet
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
-MATCH_DATA_CACHE: dict[tuple[int, bool, str], dict] = {}
+MATCH_DATA_CACHE: dict[tuple[int, bool], dict] = {}
 LIVE_MATCH_CACHE_TTL_SECONDS = 30
+MATCH_DATA_CACHE_LOCK = threading.Lock()
+MATCH_DATA_REFRESH_INFLIGHT: set[tuple[int, bool]] = set()
 
 
 def _compute_contestants_from_player_points(db, match_id: int, pp_lookup: dict[str, float] | None = None) -> list[dict]:
@@ -242,13 +245,8 @@ def _log_active_player_count(match_id: int, match_obj):
         print(f"[ALERT] Match {match_id}: active scoring player count is {active_count} (expected 22 to 24)")
 
 
-def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_data, include_playing_xi=False):
-    latest_update = data_service.get_latest_player_points_update(match_id)
-    cache_key = (match_id, include_playing_xi, latest_update)
-    cached = MATCH_DATA_CACHE.get(cache_key)
-    if cached:
-        if not include_playing_xi or time.time() - cached["fetched_at"] < LIVE_MATCH_CACHE_TTL_SECONDS:
-            return cached["match_obj"], cached["html_content"], cached["playing_xi"]
+def _build_live_match_payload(match_id: int, match_row, registry, players_data, include_playing_xi=False):
+    cache_key = (match_id, include_playing_xi)
 
     team1 = clean_team_name(match_row["team1"])
     team2 = clean_team_name(match_row["team2"])
@@ -287,13 +285,66 @@ def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_da
         if include_playing_xi:
             _log_active_player_count(match_id, match_obj)
 
-    MATCH_DATA_CACHE[cache_key] = {
+    payload = {
         "match_obj": match_obj,
         "html_content": html_content,
         "playing_xi": playing_xi,
         "fetched_at": time.time(),
     }
-    return match_obj, html_content, playing_xi
+    with MATCH_DATA_CACHE_LOCK:
+        MATCH_DATA_CACHE[cache_key] = payload
+        MATCH_DATA_REFRESH_INFLIGHT.discard(cache_key)
+    return payload
+
+
+def _refresh_live_match_payload_async(match_id: int, match_row, registry, players_data, include_playing_xi=False):
+    cache_key = (match_id, include_playing_xi)
+
+    with MATCH_DATA_CACHE_LOCK:
+        if cache_key in MATCH_DATA_REFRESH_INFLIGHT:
+            return
+        MATCH_DATA_REFRESH_INFLIGHT.add(cache_key)
+
+    def _run():
+        try:
+            _build_live_match_payload(match_id, match_row, registry, players_data, include_playing_xi=include_playing_xi)
+        except Exception as exc:
+            print(f"[scores-cache] async refresh failed for match {match_id}: {exc}")
+            with MATCH_DATA_CACHE_LOCK:
+                MATCH_DATA_REFRESH_INFLIGHT.discard(cache_key)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _hydrate_match_from_live_data(match_id: int, match_row, registry, players_data, include_playing_xi=False):
+    cache_key = (match_id, include_playing_xi)
+    now_ts = time.time()
+
+    with MATCH_DATA_CACHE_LOCK:
+        cached = MATCH_DATA_CACHE.get(cache_key)
+
+    if cached:
+        if (not include_playing_xi) or (now_ts - cached["fetched_at"] < LIVE_MATCH_CACHE_TTL_SECONDS):
+            return cached["match_obj"], cached["html_content"], cached["playing_xi"]
+
+        # Stale-while-refresh: keep serving previous snapshot while refresh runs in background.
+        _refresh_live_match_payload_async(
+            match_id,
+            match_row,
+            registry,
+            players_data,
+            include_playing_xi=include_playing_xi,
+        )
+        return cached["match_obj"], cached["html_content"], cached["playing_xi"]
+
+    payload = _build_live_match_payload(
+        match_id,
+        match_row,
+        registry,
+        players_data,
+        include_playing_xi=include_playing_xi,
+    )
+    return payload["match_obj"], payload["html_content"], payload["playing_xi"]
 
 
 def _hydrate_match_for_scores(match_id: int, match_row, registry, players_data, include_playing_xi=False):
