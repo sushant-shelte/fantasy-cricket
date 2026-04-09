@@ -167,6 +167,19 @@ class Match:
         for innings in innings_list:
             bat_details = innings.get("batTeamDetails") or {}
             bowl_details = innings.get("bowlTeamDetails") or {}
+            score_details = innings.get("scoreDetails") or {}
+
+            def _as_int(value):
+                try:
+                    return int(float(value))
+                except Exception:
+                    return None
+
+            def _as_float(value):
+                try:
+                    return float(value)
+                except Exception:
+                    return None
 
             batting_team = clean_team_name(
                 bat_details.get("batTeamShortName") or bat_details.get("batTeamName") or ""
@@ -183,6 +196,21 @@ class Match:
                 "bowling_team": bowling_team,
                 "batting": [],
                 "bowling": [],
+                "total_runs": _as_int(
+                    score_details.get("runs")
+                    if "runs" in score_details
+                    else innings.get("runs")
+                ),
+                "total_wickets": _as_int(
+                    score_details.get("wickets")
+                    if "wickets" in score_details
+                    else innings.get("wickets")
+                ),
+                "total_overs": _as_float(
+                    score_details.get("overs")
+                    if "overs" in score_details
+                    else innings.get("overs")
+                ),
             }
 
             batsmen_data = bat_details.get("batsmenData") or {}
@@ -265,6 +293,21 @@ class Match:
                 })
 
                 parsed_any = True
+
+            # Fallback only when explicit innings totals are unavailable.
+            if innings_snapshot["total_runs"] is None:
+                innings_snapshot["total_runs"] = int(
+                    sum(int(item.get("runs") or 0) for item in innings_snapshot["batting"])
+                )
+            if innings_snapshot["total_wickets"] is None:
+                innings_snapshot["total_wickets"] = int(
+                    sum(1 for item in innings_snapshot["batting"] if item.get("is_out"))
+                )
+            if innings_snapshot["total_overs"] is None:
+                innings_snapshot["total_overs"] = round(
+                    sum(float(item.get("overs") or 0) for item in innings_snapshot["bowling"]),
+                    1,
+                )
 
             self.scorecard.append(innings_snapshot)
 

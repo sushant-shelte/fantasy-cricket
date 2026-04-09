@@ -68,6 +68,9 @@ interface ScorecardInnings {
   bowling_team: string;
   batting: ScorecardBattingEntry[];
   bowling: ScorecardBowlingEntry[];
+  total_runs?: number | null;
+  total_wickets?: number | null;
+  total_overs?: number | null;
 }
 
 type ViewTab = 'scores' | 'scorecard' | 'myteam' | 'diff';
@@ -340,9 +343,9 @@ export default function ViewScoresPage() {
   const renderScorecardSection = (innings: ScorecardInnings, index: number) => {
     const battingRows = innings.batting || [];
     const bowlingRows = innings.bowling || [];
-    const battingRuns = battingRows.reduce((sum, player) => sum + (player.runs || 0), 0);
-    const wicketsLost = battingRows.filter((player) => player.is_out).length;
-    const bowlingOvers = bowlingRows.reduce((sum, player) => sum + (player.overs || 0), 0);
+    const battingRuns = innings.total_runs ?? battingRows.reduce((sum, player) => sum + (player.runs || 0), 0);
+    const wicketsLost = innings.total_wickets ?? battingRows.filter((player) => player.is_out).length;
+    const bowlingOvers = innings.total_overs ?? bowlingRows.reduce((sum, player) => sum + (player.overs || 0), 0);
     const isOpen = openScorecardIndex === index;
 
     return (
