@@ -706,10 +706,10 @@ export default function SelectTeamPage() {
                         disabled={!isSelected && !selectionAllowed}
                         className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                           isSelected
-                            ? 'bg-emerald-500/12'
+                            ? 'bg-gradient-to-r from-emerald-500/18 to-emerald-300/8'
                             : !selectionAllowed
                             ? 'cursor-not-allowed opacity-45'
-                            : 'hover:bg-white/[0.05]'
+                            : 'bg-white/[0.02] hover:bg-white/[0.05]'
                         }`}
                       >
                         <div
@@ -870,14 +870,10 @@ export default function SelectTeamPage() {
                             disabled={!isSelected && !selectionAllowed}
                             className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                               isSelected
-                                ? availabilityStatus === 'available'
-                                  ? 'bg-emerald-500/12'
-                                  : availabilityStatus === 'substitute'
-                                  ? 'bg-sky-500/12'
-                                  : 'bg-red-500/12'
+                                ? 'bg-gradient-to-r from-emerald-500/18 to-emerald-300/8'
                                 : !selectionAllowed
                                 ? 'cursor-not-allowed opacity-45'
-                                : 'hover:bg-white/[0.05]'
+                                : 'bg-white/[0.02] hover:bg-white/[0.05]'
                             }`}
                           >
                             <div
