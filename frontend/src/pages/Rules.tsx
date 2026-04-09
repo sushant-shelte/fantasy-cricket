@@ -114,7 +114,7 @@ export default function RulesPage() {
                   const isNegative = rule.includes('-') && rule.includes('pts');
                   return (
                     <li key={j} className="flex items-start gap-2 text-sm">
-                      <span className={`mt-0.5 text-xs ${isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-white/40'}`}>
+                      <span className={`mt-0.5 text-xs ${isPositive ? 'text-blue-400' : isNegative ? 'text-red-400' : 'text-white/40'}`}>
                         {isPositive ? '▲' : isNegative ? '▼' : '•'}
                       </span>
                       <span className={`${isPositive ? 'text-white/80' : isNegative ? 'text-white/60' : 'text-white/70'}`}>

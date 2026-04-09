@@ -29,13 +29,15 @@ const LINEUPS_TAB = 'Lineups' as const;
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   Wicketkeeper: { label: 'WK', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
-  Batter: { label: 'BAT', color: 'text-white/70', bg: 'bg-white/10', border: 'border-white/20' },
-  AllRounder: { label: 'AR', color: 'text-green-300', bg: 'bg-green-500/20', border: 'border-green-500/30' },
-  Bowler: { label: 'BOWL', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30' },
+  Batter: { label: 'BAT', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
+  AllRounder: { label: 'AR', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
+  Bowler: { label: 'BOWL', color: 'text-blue-300', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
 };
 
 const REQUIRED_ROLES = ['Wicketkeeper', 'Batter', 'AllRounder', 'Bowler'] as const;
 type SelectionTab = typeof LINEUPS_TAB | (typeof REQUIRED_ROLES)[number];
+
+const formatRoleName = (role: string) => (role === 'AllRounder' ? 'All Rounder' : role);
 
 /* Ground view player node */
 function GroundPlayer({
@@ -59,7 +61,7 @@ function GroundPlayer({
             ? 'bg-amber-400 text-black ring-2 ring-amber-300'
             : isVC
             ? 'bg-sky-400 text-black ring-2 ring-sky-300'
-            : 'bg-white text-green-900'
+            : 'bg-white text-blue-900'
         }`}
       >
         {isCaptain ? 'C' : isVC ? 'VC' : player.name.charAt(0)}
@@ -101,9 +103,9 @@ function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHis
         aria-expanded={isOpen}
         className={`flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
           isOpen
-            ? 'border-emerald-400/45 bg-emerald-500/20 text-emerald-200'
+            ? 'border-blue-400/45 bg-blue-500/20 text-blue-200'
             : isSelected
-            ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200 hover:border-emerald-300/60 hover:bg-emerald-500/20'
+            ? 'border-blue-400/40 bg-blue-500/15 text-blue-200 hover:border-blue-300/60 hover:bg-blue-500/20'
             : 'border-white/20 bg-white/10 text-white/70 hover:border-white/35 hover:bg-white/15'
         }`}
       >
@@ -122,8 +124,7 @@ function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHis
           onClick={(e) => e.stopPropagation()}
         >
           <div className="border-b border-white/10 px-3 py-2">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Recent Form</div>
-            <div className="mt-1 text-[11px] text-white/45">All completed matches</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-300">Recent Form</div>
           </div>
           <div className="max-h-48 overflow-y-auto px-3 py-2">
             {recentHistory.length > 0 ? (
@@ -132,7 +133,7 @@ function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHis
                   <span className="text-xs text-white/65">
                     Match#{entry.match_id}{entry.opponent ? ` vs ${entry.opponent}` : ''}
                   </span>
-                  <span className={`text-xs font-semibold ${entry.did_not_play ? 'text-white/40' : 'text-emerald-300'}`}>
+                  <span className={`text-xs font-semibold ${entry.did_not_play ? 'text-white/40' : 'text-blue-300'}`}>
                     {entry.did_not_play ? 'DNP' : entry.points?.toFixed(1)}
                   </span>
                 </div>
@@ -605,7 +606,7 @@ export default function SelectTeamPage() {
           <div
             className={`px-3 py-1.5 rounded-xl font-bold text-sm ${
               selectedCount === 11
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                 : 'bg-white/10 text-white/70 border border-white/20'
             }`}
           >
@@ -626,7 +627,7 @@ export default function SelectTeamPage() {
                   className={`inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(team).tintClass} px-3 py-1.5 font-semibold text-white/80`}
                 >
                   <span>{getTeamTheme(team).label}</span>
-                  <span className="text-emerald-300">{selectedByTeam[team] || 0}</span>
+                  <span className="text-blue-300">{selectedByTeam[team] || 0}</span>
                 </div>
               ))}
               <span className="flex items-center gap-1.5">
@@ -738,7 +739,7 @@ export default function SelectTeamPage() {
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
                             <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                            <span className="font-semibold text-emerald-300">Avg {(player.avg_points || 0).toFixed(1)}</span>
+                            <span className="font-semibold text-blue-300">Avg {(player.avg_points || 0).toFixed(1)}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
@@ -772,7 +773,7 @@ export default function SelectTeamPage() {
             <div
               className={`rounded-2xl border px-4 py-3 text-sm ${
               playingXi.announced
-                ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100'
+                ? 'bg-blue-500/10 border-blue-400/20 text-blue-100'
                 : 'bg-amber-500/10 border-amber-400/20 text-amber-100'
             }`}
           >
@@ -821,7 +822,7 @@ export default function SelectTeamPage() {
                 <div className="flex items-center justify-between gap-3 text-xs text-white/50">
                   <div className="flex flex-wrap items-center gap-4">
                     <span className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
                       Avl
                     </span>
                     <span className="flex items-center gap-2">
@@ -902,12 +903,12 @@ export default function SelectTeamPage() {
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
                                 <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                                <span className="font-semibold text-emerald-300">Avg {(player.avg_points || 0).toFixed(1)}</span>
+                                <span className="font-semibold text-blue-300">Avg {(player.avg_points || 0).toFixed(1)}</span>
                                 {playingXi.announced && (
                                   <span
                                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
                                       availabilityStatus === 'available'
-                                        ? 'border border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
+                                        ? 'border border-blue-400/25 bg-blue-500/10 text-blue-200'
                                         : availabilityStatus === 'substitute'
                                         ? 'border border-sky-400/25 bg-sky-500/10 text-sky-200'
                                         : 'border border-red-400/20 bg-red-500/10 text-red-200'
@@ -916,7 +917,7 @@ export default function SelectTeamPage() {
                                     <span
                                       className={`h-2 w-2 rounded-full ${
                                         availabilityStatus === 'available'
-                                          ? 'bg-emerald-400'
+                                          ? 'bg-blue-400'
                                           : availabilityStatus === 'substitute'
                                           ? 'bg-sky-400'
                                           : 'bg-red-400'
@@ -1066,7 +1067,7 @@ export default function SelectTeamPage() {
                     </div>
                     {hasFullAvailabilityBreakdown
                       ? [
-                           { key: 'available', label: 'Playing XI', accent: 'text-emerald-300' },
+                           { key: 'available', label: 'Playing XI', accent: 'text-blue-300' },
                            { key: 'substitute', label: 'Substitutes', accent: 'text-sky-300' },
                            { key: 'unavailable', label: 'Unavailable', accent: 'text-red-300' },
                         ].map((section) => {
@@ -1105,8 +1106,8 @@ export default function SelectTeamPage() {
                                             </div>
                                             <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
                                               <div className="flex items-center gap-2">
-                                                <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                                                <span className="font-semibold text-emerald-300">
+                                                <span>{formatRoleName(player.role)}</span>
+                                                <span className="font-semibold text-blue-300">
                                                   Avg {Math.round(player.avg_points || 0)}
                                                 </span>
                                               </div>
@@ -1194,8 +1195,8 @@ export default function SelectTeamPage() {
                                       </div>
                                       <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
                                         <div className="flex items-center gap-2">
-                                          <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                                          <span className="font-semibold text-emerald-300">
+                                          <span>{formatRoleName(player.role)}</span>
+                                          <span className="font-semibold text-blue-300">
                                             Avg {Math.round(player.avg_points || 0)}
                                           </span>
                                         </div>
@@ -1305,15 +1306,15 @@ export default function SelectTeamPage() {
                           <p className="min-w-0 truncate text-sm font-medium text-white">{player.name}</p>
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                          <span className="text-emerald-300 font-semibold">
-                            {(player.total_points || 0).toFixed(1)} pts
+                          <span className="font-semibold text-blue-400">
+                            <span className="font-bold">{(player.total_points || 0).toFixed(1)}</span> Total
                           </span>
                           {(player.matches_played ?? 0) > 0 && (
                             <>
-                              <span className="text-white/35" title="Average points per match">
+                              <span className="text-blue-300" title="Average points per match">
                                 Avg {(player.avg_points || 0).toFixed(1)}
                               </span>
-                              <span className="text-white/35" title="Last match points">
+                              <span className="text-blue-300" title="Last match points">
                                 Last {player.last_match_points != null ? player.last_match_points.toFixed(1) : '-'}
                               </span>
                               <span className="text-white/25" title="Matches played">
@@ -1322,8 +1323,8 @@ export default function SelectTeamPage() {
                             </>
                           )}
                           {playingXi.announced && availabilityStatus === 'available' && (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-200">
-                              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-blue-400/30 bg-blue-500/15 px-2 py-0.5 font-semibold text-blue-200">
+                              <span className="h-2 w-2 rounded-full bg-blue-400"></span>
                               Avl
                             </span>
                           )}
@@ -1458,8 +1459,8 @@ export default function SelectTeamPage() {
                                   {player.name}
                                 </div>
                                 <div className="mt-0.5 flex items-center gap-2 text-[10px] text-white/50">
-                                  <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                                  <span className="font-semibold text-emerald-300">
+                                  <span>{formatRoleName(player.role)}</span>
+                                  <span className="font-semibold text-blue-300">
                                     Avg {Math.round(player.avg_points || 0)}
                                   </span>
                                 </div>
@@ -1493,7 +1494,7 @@ export default function SelectTeamPage() {
             >
               <div className="text-center pt-3 pb-1">
                 <p className="text-white/50 text-[10px] font-medium uppercase tracking-wider">Your XI</p>
-                <p className={`text-sm font-bold ${selectedCount === 11 ? 'text-green-300' : 'text-white/70'}`}>
+                <p className={`text-sm font-bold ${selectedCount === 11 ? 'text-blue-300' : 'text-white/70'}`}>
                   {selectedCount}/11 Selected
                 </p>
               </div>
@@ -1594,7 +1595,7 @@ export default function SelectTeamPage() {
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-black/95 border-t border-white/10 md:bg-black/90 md:backdrop-blur-lg">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="text-sm min-w-0">
-            <span className={`font-bold ${selectedCount === 11 ? 'text-green-400' : 'text-white/70'}`}>
+            <span className={`font-bold ${selectedCount === 11 ? 'text-blue-400' : 'text-white/70'}`}>
               {selectedCount}/11
             </span>
             <span className="text-white/50 ml-2">
@@ -1612,7 +1613,7 @@ export default function SelectTeamPage() {
               form?.requestSubmit();
             }}
             disabled={submitting}
-            className="px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl shadow-lg shadow-green-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <span className="inline-flex items-center gap-2">
@@ -1661,7 +1662,7 @@ export default function SelectTeamPage() {
                                 ? 'bg-amber-400 text-black ring-2 ring-amber-300'
                                 : vcId === p.id
                                 ? 'bg-sky-400 text-black ring-2 ring-sky-300'
-                                : 'bg-white text-green-900'
+                                : 'bg-white text-blue-900'
                             }`}
                           >
                             {captainId === p.id ? 'C' : vcId === p.id ? 'VC' : p.name.charAt(0)}

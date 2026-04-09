@@ -167,10 +167,10 @@ export default function DashboardPage() {
     switch (status) {
       case 'live':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-500/15 text-green-400 text-xs font-semibold rounded-full border border-green-500/20">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/15 text-blue-400 text-xs font-semibold rounded-full border border-blue-500/20">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
             </span>
             LIVE
           </span>
@@ -178,7 +178,7 @@ export default function DashboardPage() {
       case 'completed':
         return <span className="px-2.5 py-1 bg-slate-500/15 text-slate-400 text-xs font-semibold rounded-full border border-slate-500/20">COMPLETED</span>;
       case 'nr':
-        return <span className="px-2.5 py-1 bg-rose-500/15 text-rose-300 text-xs font-semibold rounded-full border border-rose-500/20">NO RESULT</span>;
+        return <span className="px-2.5 py-1 bg-slate-500/15 text-slate-400 text-xs font-semibold rounded-full border border-slate-500/20">NO RESULT</span>;
       default:
         return <span className="px-2.5 py-1 bg-white/10 text-white/60 text-xs font-semibold rounded-full border border-white/10">UPCOMING</span>;
     }
@@ -192,14 +192,14 @@ export default function DashboardPage() {
           <div className="flex flex-wrap justify-center gap-2">
             <Link to={`/select-team/${match.id}`}
               className={`inline-flex min-w-[8.5rem] items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all ${
-                hasTeam ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20' : 'bg-green-500 hover:bg-green-400 text-black shadow-lg shadow-green-500/20'
+                hasTeam ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20' : 'bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-500/20'
               }`}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 {hasTeam
                   ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />}
               </svg>
-              {hasTeam ? 'Edit Team' : 'Pick Team'}
+              {hasTeam ? 'Edit Team' : 'Pick a Team'}
             </Link>
             <button
               type="button"
@@ -215,7 +215,7 @@ export default function DashboardPage() {
         return (
           <div className="flex gap-2">
             <Link to={`/view-scores/${match.id}`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-green-500/20 transition-all">
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all">
               Live Scores
             </Link>
             {myTeams.has(match.id) && (
@@ -245,7 +245,7 @@ export default function DashboardPage() {
         return (
           <div className="flex gap-2">
             <Link to={`/view-scores/${match.id}`}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium rounded-xl transition-all">
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-xl transition-all">
               No Result
             </Link>
           </div>
@@ -269,7 +269,7 @@ export default function DashboardPage() {
         </div>
         <div className="relative z-10 px-4 pt-10 pb-8">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-            Welcome, <span className="inline-block max-w-[14rem] truncate align-bottom text-green-400 sm:max-w-[20rem]">{profile?.name || 'Player'}</span>
+            Welcome, <span className="inline-block max-w-[14rem] truncate align-bottom text-blue-400 sm:max-w-[20rem]">{profile?.name || 'Player'}</span>
           </h2>
           <p className="text-white/40 text-sm mt-1">Hippies Mahasangram</p>
 
@@ -294,13 +294,13 @@ export default function DashboardPage() {
             <span className="text-white/50 text-xs font-medium">Points Table</span>
           </Link>
           <Link to="/rules"
-            className="flex flex-col items-center gap-2 p-3 bg-green-500/10 hover:bg-green-500/15 border border-green-500/20 rounded-2xl transition-all group">
-            <div className="w-9 h-9 bg-green-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            className="flex flex-col items-center gap-2 p-3 bg-blue-500/10 hover:bg-blue-500/15 border border-blue-500/20 rounded-2xl transition-all group">
+            <div className="w-9 h-9 bg-blue-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <span className="text-green-300 text-xs font-medium">Rules</span>
+            <span className="text-blue-300 text-xs font-medium">Rules</span>
           </Link>
           </div>
         </div>
@@ -397,7 +397,7 @@ export default function DashboardPage() {
                 )}
                 {tab === 'today' && match.status === 'future' && getCountdown(match) && (
                   <p className="text-center mb-2">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[11px] font-semibold">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-semibold">
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
@@ -413,7 +413,7 @@ export default function DashboardPage() {
                         : teamLineupInfo[match.id].substituteSelected > 0
                         ? 'text-sky-300'
                         : teamLineupInfo[match.id].complete
-                        ? 'text-emerald-300'
+                        ? 'text-blue-300'
                         : 'text-white/55'
                     }>
                       {teamLineupInfo[match.id].unannouncedSelected > 0

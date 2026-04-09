@@ -34,7 +34,7 @@ export default function Navbar() {
         </Link>
         {profile && (
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <span className="hidden max-w-[11rem] truncate text-sm text-white/50 sm:block">
+            <span className="hidden max-w-[11rem] truncate text-sm text-blue-400 sm:block">
               {profile.name}
             </span>
             {profile.role === 'admin' && (

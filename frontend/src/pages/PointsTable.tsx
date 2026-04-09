@@ -151,7 +151,7 @@ export default function PointsTablePage() {
                           {isMe && <span className="px-1 py-0.5 text-[8px] font-bold bg-white/20 text-white rounded">YOU</span>}
                         </div>
                       </td>
-                      <td className={`sticky left-[7rem] z-10 px-2 py-3 text-center font-bold text-white whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-black' : 'bg-black'}`}>
+                      <td className={`sticky left-[7rem] z-10 px-2 py-3 text-center font-bold text-blue-400 whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-black' : 'bg-black'}`}>
                         {totalPoints[c]}
                       </td>
                       <td className={`sticky left-[11.5rem] z-10 px-2 py-3 text-center font-bold whitespace-nowrap border-r border-white/5 min-w-[4.5rem] ${isMe ? 'bg-black' : 'bg-black'} ${
@@ -170,7 +170,7 @@ export default function PointsTablePage() {
                               <div>
                                 <div className="flex items-center justify-center gap-1">
                                   {rankBadge(rank || 99)}
-                                  <span className={`font-medium ${isAdjusted ? 'text-amber-300' : 'text-white'}`}>{pts}</span>
+                                  <span className={`font-medium ${isAdjusted ? 'text-amber-300' : 'text-blue-400'}`}>{pts}</span>
                                 </div>
                                 {isAdjusted ? (
                                   <div className="text-[10px] text-amber-400">Adj.</div>

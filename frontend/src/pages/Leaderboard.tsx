@@ -83,21 +83,21 @@ export default function LeaderboardPage() {
                   {rankBadge(ranked[1].rank)}
                 </div>
                 <p className="text-white text-sm font-medium text-center truncate max-w-[5rem]">{ranked[1].name}</p>
-                <p className="text-slate-400 text-xs font-bold">{ranked[1].points} pts</p>
+                <p className="text-blue-400 text-xs font-bold">{ranked[1].points} pts</p>
               </div>
               <div className="flex flex-col items-center -mt-4">
                 <div className="w-20 h-20 sm:w-24 sm:h-24 bg-amber-500/15 border-2 border-amber-400/30 rounded-2xl flex items-center justify-center mb-2 shadow-lg shadow-amber-500/10">
                   {rankBadge(ranked[0].rank, 'lg')}
                 </div>
                 <p className="text-white text-sm font-bold text-center truncate max-w-[5rem]">{ranked[0].name}</p>
-                <p className="text-amber-400 text-xs font-bold">{ranked[0].points} pts</p>
+                <p className="text-blue-400 text-xs font-bold">{ranked[0].points} pts</p>
               </div>
               <div className="flex flex-col items-center mt-2">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-500/10 border-2 border-orange-500/20 rounded-2xl flex items-center justify-center mb-2">
                   {rankBadge(ranked[2].rank)}
                 </div>
                 <p className="text-white text-sm font-medium text-center truncate max-w-[5rem]">{ranked[2].name}</p>
-                <p className="text-orange-400 text-xs font-bold">{ranked[2].points} pts</p>
+                <p className="text-blue-400 text-xs font-bold">{ranked[2].points} pts</p>
               </div>
             </div>
           )}
@@ -136,7 +136,7 @@ export default function LeaderboardPage() {
                       </div>
                     </div>
                     <div className="w-20 text-right">
-                      <span className="text-white/60 text-sm">{entry.points}</span>
+                      <span className="text-blue-400 text-sm font-semibold">{entry.points}</span>
                     </div>
                     <div className="w-24 text-right">
                       <span className={`font-bold text-sm ${bal > 0 ? 'text-green-400' : bal < 0 ? 'text-red-400' : 'text-white/40'}`}>
