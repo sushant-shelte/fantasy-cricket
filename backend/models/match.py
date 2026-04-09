@@ -224,6 +224,14 @@ class Match:
                     "strike_rate": float(player.strike_rate or 0),
                 })
 
+                if (
+                    innings_snapshot["batting"][-1]["balls"] == 0
+                    and innings_snapshot["batting"][-1]["runs"] == 0
+                    and not innings_snapshot["batting"][-1]["is_out"]
+                ):
+                    innings_snapshot["batting"].pop()
+                    continue
+
                 parsed_any = True
 
             bowlers_data = bowl_details.get("bowlersData") or {}

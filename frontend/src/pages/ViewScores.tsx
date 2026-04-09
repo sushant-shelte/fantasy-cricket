@@ -364,9 +364,17 @@ export default function ViewScoresPage() {
         {isOpen && (
         <div className="space-y-4 border-t border-white/10 px-4 py-4">
           <div>
-            <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+            <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               <h3>Batting</h3>
-              <span>R B 4s 6s SR</span>
+              <div className="shrink-0 font-mono">
+                <div className="flex items-center justify-end gap-3">
+                  <span className="w-7 text-right">R</span>
+                  <span className="w-7 text-right">B</span>
+                  <span className="w-7 text-right">4s</span>
+                  <span className="w-7 text-right">6s</span>
+                  <span className="w-10 text-right">SR</span>
+                </div>
+              </div>
             </div>
             <div className="space-y-2">
               {battingRows.length === 0 ? (
@@ -394,11 +402,19 @@ export default function ViewScoresPage() {
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+            <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               <h3>
                 Bowling {innings.bowling_team ? `• ${getTeamTheme(innings.bowling_team).label}` : ''}
               </h3>
-              <span>O M R W ER</span>
+              <div className="shrink-0 font-mono">
+                <div className="flex items-center justify-end gap-3">
+                  <span className="w-7 text-right">O</span>
+                  <span className="w-7 text-right">M</span>
+                  <span className="w-7 text-right">R</span>
+                  <span className="w-7 text-right">W</span>
+                  <span className="w-10 text-right">ER</span>
+                </div>
+              </div>
             </div>
             <div className="space-y-2">
               {bowlingRows.length === 0 ? (
