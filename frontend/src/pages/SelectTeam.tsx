@@ -1096,7 +1096,7 @@ export default function SelectTeamPage() {
                                         }}
                                         className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                           isSelected
-                                            ? 'bg-emerald-500/12 ring-1 ring-emerald-300/25'
+                                            ? 'bg-gradient-to-r from-emerald-500/18 to-emerald-300/8 ring-1 ring-emerald-300/25'
                                             : !selectionAllowed
                                             ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                             : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1185,7 +1185,7 @@ export default function SelectTeamPage() {
                                   }}
                                   className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                     isSelected
-                                      ? 'bg-emerald-500/12 ring-1 ring-emerald-300/25'
+                                      ? 'bg-gradient-to-r from-emerald-500/18 to-emerald-300/8 ring-1 ring-emerald-300/25'
                                       : !selectionAllowed
                                       ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                       : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1288,20 +1288,10 @@ export default function SelectTeamPage() {
                         }}
                         className={`flex items-start gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
                           isSelected
-                            ? availabilityStatus === 'available'
-                              ? 'bg-emerald-500/12 ring-1 ring-emerald-400/20'
-                              : availabilityStatus === 'substitute'
-                              ? 'bg-sky-500/12 ring-1 ring-sky-400/20'
-                              : 'bg-red-500/12 ring-1 ring-red-400/20'
+                            ? 'bg-gradient-to-r from-emerald-500/18 to-emerald-300/8 ring-1 ring-emerald-400/20'
                             : !selectionAllowed
                             ? 'opacity-45 cursor-not-allowed'
-                            : availabilityStatus === 'available'
-                            ? 'bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]'
-                            : availabilityStatus === 'substitute'
-                            ? 'bg-sky-500/[0.06] hover:bg-sky-500/[0.1]'
-                            : availabilityStatus === 'unavailable'
-                            ? 'bg-red-500/[0.06] hover:bg-red-500/[0.1]'
-                            : 'hover:bg-white/5'
+                            : 'bg-white/[0.02] hover:bg-white/[0.05]'
                         }`}
                       >
                         <PlayerHistoryToggle
