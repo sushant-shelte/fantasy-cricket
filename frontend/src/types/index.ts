@@ -53,6 +53,11 @@ export type Player = {
   is_substitute?: boolean | null;
   availability_status?: 'available' | 'substitute' | 'unavailable' | null;
   availability_order?: number | null;
+  recent_history?: Array<{
+    match_id: number;
+    points?: number | null;
+    did_not_play: boolean;
+  }>;
 };
 
 export type TeamSelection = {

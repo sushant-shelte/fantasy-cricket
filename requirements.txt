@@ -4,4 +4,7 @@ beautifulsoup4
 requests
 pytz
 python-multipart
-jinja2
+firebase-admin
+python-dotenv
+psycopg2-binary
+openpyxl

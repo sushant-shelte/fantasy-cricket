@@ -18,6 +18,12 @@ interface PlayingXiState {
   substituteCount?: number;
 }
 
+interface PlayerHistoryToggleProps {
+  player: Player;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
 const LINEUPS_TAB = 'Lineups' as const;
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -79,6 +85,63 @@ function EmptySlot({ label }: { label?: string }) {
   );
 }
 
+function PlayerHistoryToggle({ player, isOpen, onToggle }: PlayerHistoryToggleProps) {
+  const recentHistory = player.recent_history || [];
+
+  return (
+    <div className="relative flex-shrink-0 self-start">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        aria-label={`Toggle recent history for ${player.name}`}
+        aria-expanded={isOpen}
+        className={`flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
+          isOpen
+            ? 'border-emerald-400/45 bg-emerald-500/20 text-emerald-200'
+            : 'border-white/20 bg-white/10 text-white/70 hover:border-white/35 hover:bg-white/15'
+        }`}
+      >
+        <svg className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div
+          className="absolute left-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#07130d]/95 shadow-2xl shadow-black/40 backdrop-blur"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="border-b border-white/10 px-3 py-2">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Recent Form</div>
+            <div className="mt-1 text-[11px] text-white/45">Last 5 completed matches</div>
+          </div>
+          <div className="max-h-48 overflow-y-auto px-3 py-2">
+            {recentHistory.length > 0 ? (
+              recentHistory.map((entry) => (
+                <div key={`${player.id}-${entry.match_id}`} className="flex items-center justify-between gap-3 border-b border-white/5 py-2 last:border-b-0">
+                  <span className="text-xs text-white/65">Match#{entry.match_id}</span>
+                  <span className={`text-xs font-semibold ${entry.did_not_play ? 'text-white/40' : 'text-emerald-300'}`}>
+                    {entry.did_not_play ? 'DNP' : entry.points?.toFixed(1)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="py-3 text-xs text-white/40">No completed matches yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SelectTeamPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
@@ -98,6 +161,7 @@ export default function SelectTeamPage() {
   const [showBackupPanel, setShowBackupPanel] = useState(false);
   const [showPlayerSearch, setShowPlayerSearch] = useState(false);
   const [playerSearch, setPlayerSearch] = useState('');
+  const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<number | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const backupPanelRef = useRef<HTMLDivElement | null>(null);
@@ -157,7 +221,12 @@ export default function SelectTeamPage() {
     return () => window.clearTimeout(timer);
   }, [showBackupPanel]);
 
+  useEffect(() => {
+    setOpenHistoryPlayerId(null);
+  }, [activeTab, showPlayerSearch]);
+
   const togglePlayer = (playerId: number) => {
+    setOpenHistoryPlayerId((current) => (current === playerId ? null : current));
     setSelected((prev) => {
       const next = new Map(prev);
       if (next.has(playerId)) {
@@ -479,8 +548,10 @@ export default function SelectTeamPage() {
     if (currentIndex === -1) return;
 
     if (deltaX < 0 && currentIndex < tabKeys.length - 1) {
+      setOpenHistoryPlayerId(null);
       setActiveTab(tabKeys[currentIndex + 1]);
     } else if (deltaX > 0 && currentIndex > 0) {
+      setOpenHistoryPlayerId(null);
       setActiveTab(tabKeys[currentIndex - 1]);
     }
   };
@@ -939,7 +1010,10 @@ export default function SelectTeamPage() {
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setActiveTab(key)}
+                    onClick={() => {
+                      setOpenHistoryPlayerId(null);
+                      setActiveTab(key);
+                    }}
                     className={`min-w-0 flex-1 rounded-lg px-2 py-2 text-xs sm:px-3 sm:text-sm font-medium transition-all ${
                       activeTab === key
                         ? hasUnavailableSelected
@@ -1204,9 +1278,10 @@ export default function SelectTeamPage() {
                     <div
                       key={player.id}
                         onClick={() => {
+                          setOpenHistoryPlayerId(null);
                           if (isSelected || selectionAllowed) togglePlayer(player.id);
                         }}
-                        className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
+                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
                           isSelected
                             ? availabilityStatus === 'available'
                               ? 'bg-emerald-500/12 ring-1 ring-emerald-400/20'
@@ -1224,28 +1299,15 @@ export default function SelectTeamPage() {
                             : 'hover:bg-white/5'
                         } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
                       >
-                        {/* Selected indicator */}
-                        <div
-                          className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-                            isSelected
-                              ? availabilityStatus === 'available'
-                                ? 'bg-green-500 shadow-lg shadow-green-500/30'
-                                : availabilityStatus === 'substitute'
-                                ? 'bg-sky-500 shadow-lg shadow-sky-500/30'
-                                : 'bg-red-500 shadow-lg shadow-red-500/30'
-                              : 'bg-white/10 border border-white/20'
-                          }`}
-                        >
-                        {isSelected ? (
-                          <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <span className="text-white/30 text-[10px] font-bold">{player.name.charAt(0)}</span>
-                        )}
-                      </div>
+                        <PlayerHistoryToggle
+                          player={player}
+                          isOpen={openHistoryPlayerId === player.id}
+                          onToggle={() => {
+                            setOpenHistoryPlayerId((current) => (current === player.id ? null : player.id));
+                          }}
+                        />
 
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           {renderTeamBadge(player.team)}
                           <p className="min-w-0 truncate text-sm font-medium text-white">{player.name}</p>

@@ -24,6 +24,70 @@ def _build_registry(players_rows: list[dict]) -> PlayerRegistry:
         })
     return PlayerRegistry(players_data)
 
+
+def _load_recent_completed_history(db, teams: list[str], player_ids: list[int], limit: int = 5) -> dict[int, list[dict]]:
+    if not teams or not player_ids:
+        return {}
+
+    matches_rows = db.execute(
+        f"""
+        SELECT id, team1, team2
+        FROM matches
+        WHERE status IN ('completed', 'nr')
+          AND (team1 IN ({",".join("?" * len(teams))}) OR team2 IN ({",".join("?" * len(teams))}))
+        ORDER BY id DESC
+        """,
+        [*teams, *teams],
+    ).fetchall()
+
+    matches_by_team: dict[str, list[dict]] = {team: [] for team in teams}
+    match_ids: list[int] = []
+    for row in matches_rows:
+        match_dict = dict(row)
+        match_id = int(match_dict["id"])
+        match_ids.append(match_id)
+        for team in teams:
+            if match_dict["team1"] == team or match_dict["team2"] == team:
+                matches_by_team.setdefault(team, []).append(match_dict)
+
+    points_lookup: dict[tuple[int, int], float] = {}
+    if match_ids:
+        point_rows = db.execute(
+            f"""
+            SELECT match_id, player_id, points
+            FROM player_points
+            WHERE player_id IN ({",".join("?" * len(player_ids))})
+              AND match_id IN ({",".join("?" * len(match_ids))})
+            """,
+            [*player_ids, *match_ids],
+        ).fetchall()
+        for row in point_rows:
+            points_lookup[(int(row["player_id"]), int(row["match_id"]))] = round(float(row["points"] or 0), 2)
+
+    history_by_player: dict[int, list[dict]] = {}
+    player_team_rows = db.execute(
+        f"""
+        SELECT id, team
+        FROM players
+        WHERE id IN ({",".join("?" * len(player_ids))})
+        """,
+        player_ids,
+    ).fetchall()
+    for row in player_team_rows:
+        player_id = int(row["id"])
+        team = row["team"]
+        recent_matches = matches_by_team.get(team, [])[:limit]
+        history_by_player[player_id] = [
+            {
+                "match_id": int(match_row["id"]),
+                "points": points_lookup.get((player_id, int(match_row["id"]))),
+                "did_not_play": (player_id, int(match_row["id"])) not in points_lookup,
+            }
+            for match_row in recent_matches
+        ]
+
+    return history_by_player
+
 @router.get("/players")
 async def list_players(
     match_id: Optional[int] = Query(None),
@@ -87,6 +151,8 @@ async def list_players(
             """
         ).fetchall()
         last_match_map = {r["player_id"]: round(float(r["points"]), 2) for r in last_match_rows}
+        player_ids = [int(row["id"]) for row in rows]
+        history_by_player = _load_recent_completed_history(db, [team1, team2], player_ids)
 
         players = []
         for row in rows:
@@ -95,6 +161,7 @@ async def list_players(
             player["matches_played"] = int(player.get("matches_played") or 0)
             player["avg_points"] = round(float(player.get("avg_points") or 0), 2)
             player["last_match_points"] = last_match_map.get(player["id"])
+            player["recent_history"] = history_by_player.get(player["id"], [])
             players.append(player)
 
         playing_xi_data = {
