@@ -306,9 +306,9 @@ export default function ViewScoresPage() {
 
   const scorecardTeams = [...new Set(playerScores.map((player) => player.team))];
 
-  const renderScorecardSection = (team: string) => {
+  const renderScorecardSection = (battingTeam: string, bowlingTeam?: string) => {
     const battingRows = [...playerScores]
-      .filter((player) => player.team === team && (player.played || player.runs > 0 || player.balls > 0 || player.is_out))
+      .filter((player) => player.team === battingTeam && (player.played || player.runs > 0 || player.balls > 0 || player.is_out))
       .sort((a, b) => {
         const runsDiff = b.runs - a.runs;
         if (runsDiff !== 0) return runsDiff;
@@ -318,7 +318,7 @@ export default function ViewScoresPage() {
       });
 
     const bowlingRows = [...playerScores]
-      .filter((player) => player.team === team && (player.overs > 0 || player.wickets > 0 || player.dot_balls > 0 || player.runs_conceded > 0))
+      .filter((player) => player.team === bowlingTeam && (player.overs > 0 || player.wickets > 0 || player.dot_balls > 0 || player.runs_conceded > 0))
       .sort((a, b) => {
         const wicketsDiff = b.wickets - a.wickets;
         if (wicketsDiff !== 0) return wicketsDiff;
@@ -335,69 +335,79 @@ export default function ViewScoresPage() {
     const bowlingOvers = bowlingRows.reduce((sum, player) => sum + (player.overs || 0), 0);
 
     return (
-      <div key={team} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+      <div key={battingTeam} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
           <div className="flex items-center gap-2">
-            {renderTeamBadge(team)}
-            <h2 className="text-sm font-semibold text-white">{team}</h2>
+            {renderTeamBadge(battingTeam)}
+            <h2 className="text-sm font-semibold text-white">{battingTeam} Innings</h2>
           </div>
-          <div className="text-right text-[11px] text-white/40">
-            <div>{battingRuns}/{wicketsLost}</div>
-            <div>{playedCount} played • {bowlingOvers.toFixed(1)} ovs</div>
+          <div className="text-right">
+            <div className="text-base font-bold text-white">{battingRuns}/{wicketsLost}</div>
+            <div className="text-[11px] text-white/40">{bowlingOvers.toFixed(1)} overs • {playedCount} played</div>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-white/10 bg-black/20">
-            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Batting</h3>
-              <span className="text-[11px] text-white/35">R / B / 4s / 6s / SR</span>
+        <div className="grid gap-4 p-4">
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+            <div className="grid grid-cols-[minmax(0,1.6fr)_56px_56px_56px_56px_64px] items-center gap-2 border-b border-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+              <span>Batter</span>
+              <span className="text-right">R</span>
+              <span className="text-right">B</span>
+              <span className="text-right">4s</span>
+              <span className="text-right">6s</span>
+              <span className="text-right">SR</span>
             </div>
-            <div className="max-h-[26rem] overflow-y-auto">
+            <div className="max-h-[28rem] overflow-y-auto">
               {battingRows.length === 0 ? (
                 <div className="px-3 py-6 text-center text-sm text-white/35">No batting data yet.</div>
               ) : (
                 battingRows.map((player) => (
-                  <div key={`bat-${team}-${player.name}`} className="flex items-center justify-between gap-3 border-b border-white/5 px-3 py-2.5 last:border-b-0">
+                  <div key={`bat-${battingTeam}-${player.name}`} className="grid grid-cols-[minmax(0,1.6fr)_56px_56px_56px_56px_64px] items-center gap-2 border-b border-white/5 px-3 py-2.5 last:border-b-0">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-white">{player.name}</div>
-                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
-                        {renderRoleSymbol(player.role)}
-                        <span>{player.played ? (player.is_out ? 'Out' : 'Not out') : 'DNP'}</span>
-                      </div>
+                      <div className="mt-0.5 text-[11px] text-white/35">{player.played ? (player.is_out ? 'out' : 'not out') : 'DNP'}</div>
                     </div>
-                    <div className="text-right text-xs text-white/65">
-                      <div className="font-semibold text-emerald-300">{player.runs} ({player.balls})</div>
-                      <div>{player.fours} / {player.sixes} / {player.strike_rate?.toFixed(1)}</div>
-                    </div>
+                    <span className="text-right text-sm font-semibold text-white">{player.runs}</span>
+                    <span className="text-right text-sm text-white/70">{player.balls}</span>
+                    <span className="text-right text-sm text-white/70">{player.fours}</span>
+                    <span className="text-right text-sm text-white/70">{player.sixes}</span>
+                    <span className="text-right text-sm text-white/70">{player.strike_rate?.toFixed(1)}</span>
                   </div>
                 ))
               )}
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/20">
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
             <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Bowling</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+                Bowling {bowlingTeam ? `• ${getTeamTheme(bowlingTeam).label}` : ''}
+              </h3>
               <span className="text-[11px] text-white/35">O / M / R / W / Eco</span>
             </div>
-            <div className="max-h-[26rem] overflow-y-auto">
+            <div className="grid grid-cols-[minmax(0,1.4fr)_56px_56px_56px_56px_64px] items-center gap-2 border-b border-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+              <span>Bowler</span>
+              <span className="text-right">O</span>
+              <span className="text-right">M</span>
+              <span className="text-right">R</span>
+              <span className="text-right">W</span>
+              <span className="text-right">Eco</span>
+            </div>
+            <div className="max-h-[24rem] overflow-y-auto">
               {bowlingRows.length === 0 ? (
                 <div className="px-3 py-6 text-center text-sm text-white/35">No bowling data yet.</div>
               ) : (
                 bowlingRows.map((player) => (
-                  <div key={`bowl-${team}-${player.name}`} className="flex items-center justify-between gap-3 border-b border-white/5 px-3 py-2.5 last:border-b-0">
+                  <div key={`bowl-${battingTeam}-${player.name}`} className="grid grid-cols-[minmax(0,1.4fr)_56px_56px_56px_56px_64px] items-center gap-2 border-b border-white/5 px-3 py-2.5 last:border-b-0">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-white">{player.name}</div>
-                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
-                        {renderRoleSymbol(player.role)}
-                        <span>{player.dot_balls} dots</span>
-                      </div>
+                      <div className="mt-0.5 text-[11px] text-white/35">{player.dot_balls} dots</div>
                     </div>
-                    <div className="text-right text-xs text-white/65">
-                      <div className="font-semibold text-sky-300">{player.overs} / {player.maidens} / {player.runs_conceded} / {player.wickets}</div>
-                      <div>Eco {player.economy?.toFixed(1)}</div>
-                    </div>
+                    <span className="text-right text-sm text-white/70">{player.overs}</span>
+                    <span className="text-right text-sm text-white/70">{player.maidens}</span>
+                    <span className="text-right text-sm text-white/70">{player.runs_conceded}</span>
+                    <span className="text-right text-sm font-semibold text-white">{player.wickets}</span>
+                    <span className="text-right text-sm text-white/70">{player.economy?.toFixed(1)}</span>
                   </div>
                 ))
               )}
@@ -792,7 +802,10 @@ export default function ViewScoresPage() {
                 No scorecard data available yet.
               </div>
             ) : (
-              scorecardTeams.map((team) => renderScorecardSection(team))
+              scorecardTeams.map((team) => {
+                const bowlingTeam = scorecardTeams.find((candidate) => candidate !== team);
+                return renderScorecardSection(team, bowlingTeam);
+              })
             )}
           </div>
         )}
