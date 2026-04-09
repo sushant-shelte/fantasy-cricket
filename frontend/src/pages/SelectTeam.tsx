@@ -21,6 +21,7 @@ interface PlayingXiState {
 interface PlayerHistoryToggleProps {
   player: Player;
   isOpen: boolean;
+  isSelected: boolean;
   onToggle: () => void;
 }
 
@@ -85,7 +86,7 @@ function EmptySlot({ label }: { label?: string }) {
   );
 }
 
-function PlayerHistoryToggle({ player, isOpen, onToggle }: PlayerHistoryToggleProps) {
+function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHistoryToggleProps) {
   const recentHistory = player.recent_history || [];
 
   return (
@@ -101,6 +102,8 @@ function PlayerHistoryToggle({ player, isOpen, onToggle }: PlayerHistoryTogglePr
         className={`flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
           isOpen
             ? 'border-emerald-400/45 bg-emerald-500/20 text-emerald-200'
+            : isSelected
+            ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200 hover:border-emerald-300/60 hover:bg-emerald-500/20'
             : 'border-white/20 bg-white/10 text-white/70 hover:border-white/35 hover:bg-white/15'
         }`}
       >
@@ -1299,11 +1302,12 @@ export default function SelectTeamPage() {
                             : availabilityStatus === 'unavailable'
                             ? 'bg-red-500/[0.06] hover:bg-red-500/[0.1]'
                             : 'hover:bg-white/5'
-                        } bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}
+                        }`}
                       >
                         <PlayerHistoryToggle
                           player={player}
                           isOpen={openHistoryPlayerId === player.id}
+                          isSelected={isSelected}
                           onToggle={() => {
                             setOpenHistoryPlayerId((current) => (current === player.id ? null : player.id));
                           }}
