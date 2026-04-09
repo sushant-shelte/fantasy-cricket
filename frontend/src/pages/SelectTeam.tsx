@@ -108,9 +108,9 @@ function PlayerHistoryToggle({ player, isOpen, isSelected, onToggle }: PlayerHis
         aria-expanded={isOpen}
         className={`flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
           isOpen
-            ? 'border-green-300/60 bg-green-400/30 text-green-50'
+            ? 'border-sky-300/60 bg-sky-400/30 text-sky-50'
             : isSelected
-            ? 'border-green-300/55 bg-green-400/25 text-green-50 hover:border-green-200/80 hover:bg-green-400/30'
+            ? 'border-sky-300/55 bg-sky-400/25 text-sky-50 hover:border-sky-200/80 hover:bg-sky-400/30'
             : 'border-white/20 bg-white/10 text-white/70 hover:border-white/35 hover:bg-white/15'
         }`}
       >
@@ -712,7 +712,7 @@ export default function SelectTeamPage() {
                         disabled={!isSelected && !selectionAllowed}
                         className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                           isSelected
-                            ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
+                            ? 'border border-sky-300/45 bg-sky-400/16 bg-gradient-to-r from-sky-300/38 via-blue-300/30 to-sky-200/20'
                             : !selectionAllowed
                             ? 'cursor-not-allowed opacity-45'
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -722,7 +722,7 @@ export default function SelectTeamPage() {
                           className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${
                             isSelected
                               ? availabilityStatus === 'available'
-                                ? 'bg-green-400'
+                                ? 'bg-sky-400'
                                 : availabilityStatus === 'substitute'
                                 ? 'bg-sky-500'
                                 : 'bg-red-500'
@@ -876,7 +876,7 @@ export default function SelectTeamPage() {
                             disabled={!isSelected && !selectionAllowed}
                             className={`flex w-full items-center gap-3 border-b border-white/5 px-4 py-3 text-left transition last:border-b-0 ${
                               isSelected
-                                ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
+                                ? 'border border-sky-300/45 bg-sky-400/16 bg-gradient-to-r from-sky-300/38 via-blue-300/30 to-sky-200/20'
                                 : !selectionAllowed
                                 ? 'cursor-not-allowed opacity-45'
                                 : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -886,7 +886,7 @@ export default function SelectTeamPage() {
                               className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${
                                 isSelected
                                   ? availabilityStatus === 'available'
-                                    ? 'bg-green-400'
+                                    ? 'bg-sky-400'
                                     : availabilityStatus === 'substitute'
                                     ? 'bg-sky-500'
                                     : 'bg-red-500'
@@ -1098,7 +1098,7 @@ export default function SelectTeamPage() {
                                         }}
                                         className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                           isSelected
-                                            ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
+                                            ? 'border border-sky-300/45 bg-sky-400/16 bg-gradient-to-r from-sky-300/38 via-blue-300/30 to-sky-200/20'
                                             : !selectionAllowed
                                             ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                             : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1187,7 +1187,7 @@ export default function SelectTeamPage() {
                                   }}
                                   className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
                                     isSelected
-                                      ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
+                                      ? 'border border-sky-300/45 bg-sky-400/16 bg-gradient-to-r from-sky-300/38 via-blue-300/30 to-sky-200/20'
                                       : !selectionAllowed
                                       ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
                                       : 'bg-white/[0.04] hover:bg-white/[0.08]'
@@ -1290,7 +1290,7 @@ export default function SelectTeamPage() {
                         }}
                         className={`flex items-start gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-all cursor-pointer select-none ${
                           isSelected
-                            ? 'border border-green-300/45 bg-green-400/18 bg-gradient-to-r from-green-300/45 via-emerald-300/35 to-green-200/28'
+                            ? 'border border-sky-300/45 bg-sky-400/16 bg-gradient-to-r from-sky-300/38 via-blue-300/30 to-sky-200/20'
                             : !selectionAllowed
                             ? 'opacity-45 cursor-not-allowed'
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'
@@ -1312,7 +1312,7 @@ export default function SelectTeamPage() {
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <span className="font-semibold text-blue-400">
-                            <span className="font-bold">{formatPoints(player.total_points || 0)}</span> Total
+                            Tot <span className="font-bold">{formatPoints(player.total_points || 0)}</span>
                           </span>
                           {(player.matches_played ?? 0) > 0 && (
                             <>
