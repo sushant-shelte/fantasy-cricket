@@ -10,10 +10,8 @@ route modules continue to work without changes.
 from __future__ import annotations
 
 import copy
-import time
 import threading
 from datetime import datetime
-from queue import Queue
 
 from backend.database import get_db
 
@@ -30,136 +28,6 @@ CACHE: dict = {
 }
 
 PLAYER_MATCH_PAYLOAD_CACHE: dict[int, dict] = {}
-
-# ---------------------------------------------------------------------------
-# Background fetcher for Cricbuzz scraping (toss, playing XI)
-# Prevents UI from blocking on external HTTP calls
-# ---------------------------------------------------------------------------
-
-# Cache for toss info results from background fetcher
-# Key: (match_id, match_date, match_time) tuple; Value: toss_info dict
-TOSS_FETCH_CACHE: dict[tuple, dict] = {}
-# Cache for playing XI results from background fetcher
-# Key: (match_id, team1, team2, match_date, match_time) tuple; Value: playing_xi dict
-PLAYING_XI_FETCH_CACHE: dict[tuple, dict] = {}
-
-# Queue for background fetcher tasks
-_FETCHER_QUEUE: Queue = Queue()
-_FETCHER_STOP_EVENT = threading.Event()
-_FETCHER_THREAD: threading.Thread | None = None
-
-
-def _background_fetcher_worker():
-    """Background thread that processes URL fetch tasks without blocking API endpoints."""
-    from backend.services.scraper import fetch_toss_info, fetch_playing_xi
-    
-    while not _FETCHER_STOP_EVENT.is_set():
-        try:
-            task = _FETCHER_QUEUE.get(timeout=1)
-            if task is None:  # Poison pill to stop
-                break
-            
-            task_type = task.get("type")
-            
-            if task_type == "toss":
-                match_id = task["match_id"]
-                team1 = task["team1"]
-                team2 = task["team2"]
-                match_date = task["match_date"]
-                match_time = task["match_time"]
-                
-                # Only fetch if criteria are met
-                if task.get("should_fetch"):
-                    result = fetch_toss_info(match_id, team1, team2, match_date, match_time)
-                    cache_key = (int(match_id), match_date, match_time)
-                    with _lock:
-                        TOSS_FETCH_CACHE[cache_key] = result
-            
-            elif task_type == "playing_xi":
-                match_id = task["match_id"]
-                team1 = task["team1"]
-                team2 = task["team2"]
-                players_rows = task["players_rows"]
-                match_date = task["match_date"]
-                match_time = task["match_time"]
-                
-                # Only fetch if criteria are met
-                if task.get("should_fetch"):
-                    result = fetch_playing_xi(match_id, team1, team2, players_rows, match_date, match_time)
-                    cache_key = (int(match_id), team1, team2, match_date, match_time)
-                    with _lock:
-                        PLAYING_XI_FETCH_CACHE[cache_key] = result
-        
-        except Exception as e:
-            print(f"[Background Fetcher] Error processing task: {e}")
-
-
-def start_background_fetcher():
-    """Start the background fetcher thread (called at app startup)."""
-    global _FETCHER_THREAD
-    _FETCHER_STOP_EVENT.clear()
-    _FETCHER_THREAD = threading.Thread(target=_background_fetcher_worker, daemon=True)
-    _FETCHER_THREAD.start()
-    print("[Background Fetcher] Started")
-
-
-def stop_background_fetcher():
-    """Stop the background fetcher thread gracefully."""
-    global _FETCHER_THREAD
-    _FETCHER_STOP_EVENT.set()
-    _FETCHER_QUEUE.put(None)  # Poison pill
-    if _FETCHER_THREAD:
-        _FETCHER_THREAD.join(timeout=2)
-        _FETCHER_THREAD = None
-    print("[Background Fetcher] Stopped")
-
-
-def queue_toss_fetch(match_id: int, team1: str, team2: str, match_date: str | None, match_time: str | None, should_fetch: bool = True) -> None:
-    """Queue a toss fetch task. Does not block."""
-    _FETCHER_QUEUE.put({
-        "type": "toss",
-        "match_id": match_id,
-        "team1": team1,
-        "team2": team2,
-        "match_date": match_date,
-        "match_time": match_time,
-        "should_fetch": should_fetch,
-    })
-
-
-def queue_playing_xi_fetch(match_id: int, team1: str, team2: str, players_rows: list, match_date: str | None, match_time: str | None, should_fetch: bool = True) -> None:
-    """Queue a playing XI fetch task. Does not block."""
-    _FETCHER_QUEUE.put({
-        "type": "playing_xi",
-        "match_id": match_id,
-        "team1": team1,
-        "team2": team2,
-        "players_rows": copy.deepcopy(players_rows),  # Deep copy to avoid race conditions
-        "match_date": match_date,
-        "match_time": match_time,
-        "should_fetch": should_fetch,
-    })
-
-
-def get_cached_toss_info(match_id: int, match_date: str | None, match_time: str | None) -> dict | None:
-    """Get cached toss info if available (returns None if background fetch is still running)."""
-    cache_key = (int(match_id), match_date, match_time)
-    with _lock:
-        return TOSS_FETCH_CACHE.get(cache_key)
-
-
-def get_cached_playing_xi(match_id: int, team1: str, team2: str, match_date: str | None, match_time: str | None) -> dict | None:
-    """Get cached playing XI if available (returns None if background fetch is still running)."""
-    cache_key = (int(match_id), team1, team2, match_date, match_time)
-    with _lock:
-        return PLAYING_XI_FETCH_CACHE.get(cache_key)
-
-
-def clear_background_caches():
-    """Clear all background fetcher caches."""
-    with _lock:
-        TOSS_FETCH_CACHE.clear()
-        PLAYING_XI_FETCH_CACHE.clear()
 
 
 def _row_to_dict(row) -> dict:
