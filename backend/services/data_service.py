@@ -10,8 +10,10 @@ route modules continue to work without changes.
 from __future__ import annotations
 
 import copy
+import time
 import threading
 from datetime import datetime
+from queue import Queue
 
 from backend.database import get_db
 
@@ -28,6 +30,280 @@ CACHE: dict = {
 }
 
 PLAYER_MATCH_PAYLOAD_CACHE: dict[int, dict] = {}
+
+# ---------------------------------------------------------------------------
+# Background fetcher for Cricbuzz scraping (toss, playing XI)
+# Prevents UI from blocking on external HTTP calls
+# ---------------------------------------------------------------------------
+
+# Cache for toss info results from background fetcher
+# Key: (match_id, match_date, match_time) tuple; Value: toss_info dict
+TOSS_FETCH_CACHE: dict[tuple, dict] = {}
+# Cache for playing XI results from background fetcher
+# Key: (match_id, team1, team2, match_date, match_time) tuple; Value: playing_xi dict
+PLAYING_XI_FETCH_CACHE: dict[tuple, dict] = {}
+TOSS_FETCHED_AT: dict[tuple, float] = {}
+PLAYING_XI_FETCHED_AT: dict[tuple, float] = {}
+TOSS_RETRY_SECONDS = 45
+PLAYING_XI_RETRY_SECONDS = 45
+
+# Queue for background fetcher tasks
+_FETCHER_QUEUE: Queue = Queue()
+_FETCHER_STOP_EVENT = threading.Event()
+_FETCHER_THREADS: list[threading.Thread] = []
+_FETCHER_WORKER_COUNT = 3
+_FETCHER_INFLIGHT_TASKS: set[tuple] = set()
+
+
+def _task_identity(task: dict) -> tuple:
+    task_type = task.get("type")
+    if task_type == "toss":
+        return (
+            "toss",
+            int(task["match_id"]),
+            task.get("match_date"),
+            task.get("match_time"),
+        )
+    if task_type == "playing_xi":
+        return (
+            "playing_xi",
+            int(task["match_id"]),
+            task.get("team1"),
+            task.get("team2"),
+            task.get("match_date"),
+            task.get("match_time"),
+        )
+    return ("unknown", id(task))
+
+
+def _background_fetcher_worker():
+    """Background thread that processes URL fetch tasks without blocking API endpoints."""
+    from backend.services.scraper import fetch_toss_info, fetch_playing_xi
+    import traceback
+    
+    while not _FETCHER_STOP_EVENT.is_set():
+        task = None
+        task_identity = None
+        try:
+            task = _FETCHER_QUEUE.get(timeout=1)
+            if task is None:  # Poison pill to stop
+                break
+            task_identity = _task_identity(task)
+            task_type = task.get("type")
+
+            if task_type == "toss":
+                match_id = task["match_id"]
+                team1 = task["team1"]
+                team2 = task["team2"]
+                match_date = task["match_date"]
+                match_time = task["match_time"]
+
+                if task.get("should_fetch"):
+                    try:
+                        print(f"[Background Fetcher] Fetching toss for match {match_id} ({team1} vs {team2})")
+                        result = fetch_toss_info(match_id, team1, team2, match_date, match_time)
+                        cache_key = (int(match_id), match_date, match_time)
+                        with _lock:
+                            TOSS_FETCH_CACHE[cache_key] = result
+                            TOSS_FETCHED_AT[cache_key] = time.time()
+                        print(f"[Background Fetcher] Toss fetch complete for match {match_id}: announced={result.get('announced')}")
+                    except Exception as fetch_err:
+                        print(f"[Background Fetcher] Error fetching toss for match {match_id}:")
+                        print(f"  Exception: {type(fetch_err).__name__}: {fetch_err}")
+                        traceback.print_exc()
+
+            elif task_type == "playing_xi":
+                match_id = task["match_id"]
+                team1 = task["team1"]
+                team2 = task["team2"]
+                players_rows = task["players_rows"]
+                match_date = task["match_date"]
+                match_time = task["match_time"]
+
+                if task.get("should_fetch"):
+                    try:
+                        print(f"[Background Fetcher] Fetching playing XI for match {match_id} ({team1} vs {team2})")
+                        result = fetch_playing_xi(match_id, team1, team2, players_rows, match_date, match_time)
+                        cache_key = (int(match_id), team1, team2, match_date, match_time)
+                        with _lock:
+                            PLAYING_XI_FETCH_CACHE[cache_key] = result
+                            PLAYING_XI_FETCHED_AT[cache_key] = time.time()
+                        print(f"[Background Fetcher] Playing XI fetch complete for match {match_id}: announced={result.get('announced')}, players={len(result.get('player_ids', []))}")
+                    except Exception as fetch_err:
+                        print(f"[Background Fetcher] Error fetching playing XI for match {match_id}:")
+                        print(f"  Exception: {type(fetch_err).__name__}: {fetch_err}")
+                        traceback.print_exc()
+        except Exception as e:
+            print(f"[Background Fetcher] Unexpected error processing task:")
+            print(f"  Exception: {type(e).__name__}: {e}")
+            traceback.print_exc()
+        finally:
+            if task_identity is not None:
+                with _lock:
+                    _FETCHER_INFLIGHT_TASKS.discard(task_identity)
+            if task is not None:
+                _FETCHER_QUEUE.task_done()
+
+
+def start_background_fetcher():
+    """Start the background fetcher thread (called at app startup)."""
+    global _FETCHER_THREADS
+    if any(thread.is_alive() for thread in _FETCHER_THREADS):
+        return
+    _FETCHER_STOP_EVENT.clear()
+    _FETCHER_THREADS = []
+    for _ in range(_FETCHER_WORKER_COUNT):
+        thread = threading.Thread(target=_background_fetcher_worker, daemon=True)
+        thread.start()
+        _FETCHER_THREADS.append(thread)
+    print(f"[Background Fetcher] Started workers={len(_FETCHER_THREADS)}")
+
+
+def stop_background_fetcher():
+    """Stop the background fetcher thread gracefully."""
+    global _FETCHER_THREADS
+    _FETCHER_STOP_EVENT.set()
+    for _ in _FETCHER_THREADS:
+        _FETCHER_QUEUE.put(None)  # Poison pill
+    for thread in _FETCHER_THREADS:
+        thread.join(timeout=2)
+    _FETCHER_THREADS = []
+    with _lock:
+        _FETCHER_INFLIGHT_TASKS.clear()
+    print("[Background Fetcher] Stopped")
+
+
+def queue_toss_fetch(match_id: int, team1: str, team2: str, match_date: str | None, match_time: str | None, should_fetch: bool = True) -> None:
+    """Queue a toss fetch task. Does not block."""
+    if not should_fetch:
+        return
+    task = {
+        "type": "toss",
+        "match_id": match_id,
+        "team1": team1,
+        "team2": team2,
+        "match_date": match_date,
+        "match_time": match_time,
+        "should_fetch": should_fetch,
+    }
+    cache_key = (int(match_id), match_date, match_time)
+    task_id = _task_identity(task)
+    with _lock:
+        cached = TOSS_FETCH_CACHE.get(cache_key)
+        fetched_at = TOSS_FETCHED_AT.get(cache_key, 0.0)
+        is_fresh = (time.time() - fetched_at) < TOSS_RETRY_SECONDS
+        # Re-fetch only when cache is stale, regardless of announced state.
+        if (cached is not None and is_fresh) or task_id in _FETCHER_INFLIGHT_TASKS:
+            return
+        _FETCHER_INFLIGHT_TASKS.add(task_id)
+    _FETCHER_QUEUE.put(task)
+
+
+def queue_playing_xi_fetch(match_id: int, team1: str, team2: str, players_rows: list, match_date: str | None, match_time: str | None, should_fetch: bool = True) -> None:
+    """Queue a playing XI fetch task. Does not block."""
+    if not should_fetch:
+        return
+    task = {
+        "type": "playing_xi",
+        "match_id": match_id,
+        "team1": team1,
+        "team2": team2,
+        "players_rows": copy.deepcopy(players_rows),  # Deep copy to avoid race conditions
+        "match_date": match_date,
+        "match_time": match_time,
+        "should_fetch": should_fetch,
+    }
+    cache_key = (int(match_id), team1, team2, match_date, match_time)
+    task_id = _task_identity(task)
+    with _lock:
+        cached = PLAYING_XI_FETCH_CACHE.get(cache_key)
+        fetched_at = PLAYING_XI_FETCHED_AT.get(cache_key, 0.0)
+        is_fresh = (time.time() - fetched_at) < PLAYING_XI_RETRY_SECONDS
+        # Re-fetch only when cache is stale, regardless of announced state.
+        if (cached is not None and is_fresh) or task_id in _FETCHER_INFLIGHT_TASKS:
+            return
+        _FETCHER_INFLIGHT_TASKS.add(task_id)
+    _FETCHER_QUEUE.put(task)
+
+
+def get_cached_toss_info(match_id: int, match_date: str | None, match_time: str | None) -> dict | None:
+    """Get cached toss info if available (returns None if background fetch is still running)."""
+    cache_key = (int(match_id), match_date, match_time)
+    with _lock:
+        return TOSS_FETCH_CACHE.get(cache_key)
+
+
+def get_cached_playing_xi(match_id: int, team1: str, team2: str, match_date: str | None, match_time: str | None) -> dict | None:
+    """Get cached playing XI if available (returns None if background fetch is still running)."""
+    cache_key = (int(match_id), team1, team2, match_date, match_time)
+    with _lock:
+        return PLAYING_XI_FETCH_CACHE.get(cache_key)
+
+
+def clear_background_caches():
+    """Clear all background fetcher caches."""
+    with _lock:
+        TOSS_FETCH_CACHE.clear()
+        PLAYING_XI_FETCH_CACHE.clear()
+        TOSS_FETCHED_AT.clear()
+        PLAYING_XI_FETCHED_AT.clear()
+        _FETCHER_INFLIGHT_TASKS.clear()
+
+
+def invalidate_runtime_caches_for_match(
+    match_id: int,
+    team1: str | None = None,
+    team2: str | None = None,
+    match_date: str | None = None,
+    match_time: str | None = None,
+) -> None:
+    """Clear toss/playing-XI/player payload caches for a specific match."""
+    match_id_int = int(match_id)
+    with _lock:
+        # Player payload cache
+        PLAYER_MATCH_PAYLOAD_CACHE.pop(match_id_int, None)
+
+        # Toss cache entries keyed by match/date/time
+        toss_keys_to_remove = []
+        for key in list(TOSS_FETCH_CACHE.keys()):
+            key_match_id, key_date, key_time = key
+            if int(key_match_id) != match_id_int:
+                continue
+            if match_date is not None and key_date != match_date:
+                continue
+            if match_time is not None and key_time != match_time:
+                continue
+            toss_keys_to_remove.append(key)
+        for key in toss_keys_to_remove:
+            TOSS_FETCH_CACHE.pop(key, None)
+            TOSS_FETCHED_AT.pop(key, None)
+
+        # Playing XI cache entries keyed by match/team/date/time
+        xi_keys_to_remove = []
+        for key in list(PLAYING_XI_FETCH_CACHE.keys()):
+            key_match_id, key_team1, key_team2, key_date, key_time = key
+            if int(key_match_id) != match_id_int:
+                continue
+            if team1 is not None and key_team1 != team1:
+                continue
+            if team2 is not None and key_team2 != team2:
+                continue
+            if match_date is not None and key_date != match_date:
+                continue
+            if match_time is not None and key_time != match_time:
+                continue
+            xi_keys_to_remove.append(key)
+        for key in xi_keys_to_remove:
+            PLAYING_XI_FETCH_CACHE.pop(key, None)
+            PLAYING_XI_FETCHED_AT.pop(key, None)
+
+        # In-flight dedupe guards for the same match
+        inflight_to_remove = []
+        for task_key in list(_FETCHER_INFLIGHT_TASKS):
+            if len(task_key) >= 2 and int(task_key[1]) == match_id_int:
+                inflight_to_remove.append(task_key)
+        for task_key in inflight_to_remove:
+            _FETCHER_INFLIGHT_TASKS.discard(task_key)
 
 
 def _row_to_dict(row) -> dict:

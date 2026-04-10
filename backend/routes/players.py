@@ -5,12 +5,9 @@ from typing import Optional
 
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
-from backend.config import ESPN_MATCH_ID_OFFSET, ROLES
-from backend.models.match import Match, clean_team_name
+from backend.config import ROLES
 from backend.models.registry import PlayerRegistry
 from backend.services import data_service
-from backend.services.scraper import build_cricbuzz_playing_xi_url, fetch_playing_xi, fetch_toss_info
-from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api", tags=["players"])
 
@@ -193,28 +190,46 @@ async def list_players(
             "substitute_ids": [],
         }
         try:
-            playing_xi_data = fetch_playing_xi(
+            data_service.queue_playing_xi_fetch(
                 match_id,
                 team1,
                 team2,
                 players,
-                match["match_date"],
-                match["match_time"],
+                match_date,
+                match_time,
+                should_fetch=True,
             )
-        except Exception as exc:
-            print(f"[players] Playing XI fetch failed for match {match_id}: {exc}")
-
-        toss_info = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
-        try:
-            toss_info = fetch_toss_info(
+            cached_playing_xi = data_service.get_cached_playing_xi(
                 match_id,
                 team1,
                 team2,
-                match["match_date"],
-                match["match_time"],
+                match_date,
+                match_time,
             )
+            if cached_playing_xi:
+                playing_xi_data = cached_playing_xi
         except Exception as exc:
-            print(f"[players] Toss fetch failed for match {match_id}: {exc}")
+            print(f"[players] Playing XI cache/queue failed for match {match_id}: {exc}")
+
+        toss_info = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+        try:
+            data_service.queue_toss_fetch(
+                match_id,
+                team1,
+                team2,
+                match_date,
+                match_time,
+                should_fetch=True,
+            )
+            cached_toss = data_service.get_cached_toss_info(
+                match_id,
+                match_date,
+                match_time,
+            )
+            if cached_toss:
+                toss_info = cached_toss
+        except Exception as exc:
+            print(f"[players] Toss cache/queue failed for match {match_id}: {exc}")
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))
