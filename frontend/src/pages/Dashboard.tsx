@@ -44,7 +44,6 @@ export default function DashboardPage() {
   const [showContestantsForMatch, setShowContestantsForMatch] = useState<Match | null>(null);
   const [matchContestants, setMatchContestants] = useState<MatchContestant[]>([]);
   const [contestantsLoading, setContestantsLoading] = useState(false);
-  const [displayNameFallback, setDisplayNameFallback] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MatchTab>('today');
   const { profile } = useAuth();
@@ -53,13 +52,6 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        try {
-          const meRes = await client.get('/api/auth/me');
-          setDisplayNameFallback(meRes.data?.name || '');
-        } catch {
-          setDisplayNameFallback('');
-        }
-
         const dashboardStart = performance.now();
         console.time('dashboard:/api/dashboard/matches + /api/teams/my-matches');
         const [matchRes, teamsRes] = await Promise.all([
@@ -170,7 +162,7 @@ export default function DashboardPage() {
   }, [loading]);
 
   const currentMatches = tab === 'today' ? todayMatches : tab === 'upcoming' ? upcomingMatches : completedMatches;
-  const displayName = profile?.name || displayNameFallback || 'Player';
+  const displayName = profile?.name || 'Player';
 
   const statusBadge = (status: Match['status']) => {
     switch (status) {

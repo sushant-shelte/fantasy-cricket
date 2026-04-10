@@ -49,6 +49,24 @@ def _log_scores_cache(message: str):
     print(f"[{timestamp}] [SCORES] {message}")
 
 
+def _row_value(row, *keys, default=None):
+    if not row:
+        return default
+    for key in keys:
+        if isinstance(row, dict) and key in row:
+            value = row.get(key)
+            if value not in (None, ""):
+                return value
+        else:
+            try:
+                value = row[key]
+                if value not in (None, ""):
+                    return value
+            except Exception:
+                continue
+    return default
+
+
 def invalidate_scores_response_cache():
     with SCORES_RESPONSE_CACHE_LOCK:
         SCORES_RESPONSE_CACHE["matches"] = {}
@@ -426,22 +444,22 @@ def _build_players_rows(players_data, team1=None, team2=None):
 
 
 def _is_live_window(match_row) -> bool:
-    if str(match_row.get("status") or "").strip().lower() in {"completed", "nr"}:
+    if str(_row_value(match_row, "status", "Status", default="") or "").strip().lower() in {"completed", "nr"}:
         return False
 
     try:
         match_datetime = datetime.strptime(
-            f"{match_row['match_date']} {match_row['match_time']}", "%Y-%m-%d %H:%M"
+            f"{_row_value(match_row, 'match_date', 'Date')} {_row_value(match_row, 'match_time', 'Time')}", "%Y-%m-%d %H:%M"
         )
         match_datetime = IST.localize(match_datetime)
     except Exception:
         return False
 
     now = datetime.now(IST)
-    toss_time = str(match_row.get("toss_time") or "").strip()
+    toss_time = str(_row_value(match_row, "toss_time", "TossTime", default="") or "").strip()
     if toss_time:
         try:
-            window_start = IST.localize(datetime.strptime(f"{match_row['match_date']} {toss_time}", "%Y-%m-%d %H:%M"))
+            window_start = IST.localize(datetime.strptime(f"{_row_value(match_row, 'match_date', 'Date')} {toss_time}", "%Y-%m-%d %H:%M"))
         except Exception:
             try:
                 window_start = IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
@@ -453,12 +471,12 @@ def _is_live_window(match_row) -> bool:
 
 
 def _is_completed_match(match_row) -> bool:
-    if str(match_row.get("status") or "").strip().lower() in {"completed", "nr"}:
+    if str(_row_value(match_row, "status", "Status", default="") or "").strip().lower() in {"completed", "nr"}:
         return True
 
     try:
         match_datetime = datetime.strptime(
-            f"{match_row['match_date']} {match_row['match_time']}", "%Y-%m-%d %H:%M"
+            f"{_row_value(match_row, 'match_date', 'Date')} {_row_value(match_row, 'match_time', 'Time')}", "%Y-%m-%d %H:%M"
         )
         match_datetime = IST.localize(match_datetime)
     except Exception:
@@ -490,8 +508,11 @@ def _log_active_player_count(match_id: int, match_obj):
 def _build_live_match_payload(match_id: int, match_row, registry, players_data, include_playing_xi=False):
     cache_key = (match_id, include_playing_xi)
 
-    team1 = clean_team_name(match_row["team1"])
-    team2 = clean_team_name(match_row["team2"])
+    team1 = clean_team_name(_row_value(match_row, "team1", "Team1", default=""))
+    team2 = clean_team_name(_row_value(match_row, "team2", "Team2", default=""))
+    match_date = _row_value(match_row, "match_date", "Date", default="")
+    match_time = _row_value(match_row, "match_time", "Time", default="")
+    toss_time = _row_value(match_row, "toss_time", "TossTime", default=None)
 
     match_obj = Match(
         str(match_id),
@@ -508,9 +529,9 @@ def _build_live_match_payload(match_id: int, match_row, registry, players_data, 
             team1,
             team2,
             players_rows,
-            match_row["match_date"],
-            match_row["match_time"],
-            match_row.get("toss_time"),
+            match_date,
+            match_time,
+            toss_time,
             force_refresh=True,
         )
         playing_ids = playing_xi.get("player_ids", [])

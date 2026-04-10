@@ -29,9 +29,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // Fetch profile from backend
-  const fetchProfile = async () => {
+  const fetchProfile = async (devLogin = false) => {
     try {
-      const res = await client.get('/api/auth/me');
+      const res = await client.get('/api/auth/me', devLogin ? { headers: { 'X-Dev-Login': '1' } } : undefined);
       setProfile(res.data);
     } catch {
       setProfile(null);
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Dev mode login - works without Firebase
   const devLogin = async () => {
-    await fetchProfile();
+    await fetchProfile(true);
     setLoading(false);
   };
 

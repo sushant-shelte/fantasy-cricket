@@ -14,13 +14,16 @@ def _log_auth_timing(path: str, verify_ms: float, lookup_ms: float, total_ms: fl
     )
 
 
-async def get_current_user(request: Request, authorization: str = Header(default=None)):
+async def get_current_user(
+    request: Request,
+    authorization: str = Header(default=None),
+    x_dev_login: str = Header(default="0"),
+):
     started_at = time.perf_counter()
     db = get_db()
     verify_ms = 0.0
     lookup_ms = 0.0
 
-    # If Bearer token provided, try Firebase verification
     if authorization and authorization.startswith("Bearer "):
         token = authorization.replace("Bearer ", "")
         verify_started = time.perf_counter()
@@ -45,14 +48,14 @@ async def get_current_user(request: Request, authorization: str = Header(default
             _log_auth_timing(request.url.path, verify_ms, lookup_ms, total_ms)
             return dict(user)
 
-    # Fallback: dev mode — return first available user
-    lookup_started = time.perf_counter()
-    user = db.execute("SELECT * FROM users ORDER BY id LIMIT 1").fetchone()
-    lookup_ms = (time.perf_counter() - lookup_started) * 1000
-    if user:
-        total_ms = (time.perf_counter() - started_at) * 1000
-        _log_auth_timing(request.url.path, verify_ms, lookup_ms, total_ms)
-        return dict(user)
+    if str(x_dev_login).strip().lower() in {"1", "true", "yes"}:
+        lookup_started = time.perf_counter()
+        user = db.execute("SELECT * FROM users ORDER BY id LIMIT 1").fetchone()
+        lookup_ms = (time.perf_counter() - lookup_started) * 1000
+        if user:
+            total_ms = (time.perf_counter() - started_at) * 1000
+            _log_auth_timing(request.url.path, verify_ms, lookup_ms, total_ms)
+            return dict(user)
 
     raise HTTPException(status_code=401, detail="Not authenticated")
 
