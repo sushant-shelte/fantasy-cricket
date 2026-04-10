@@ -1,6 +1,7 @@
 import copy
 import threading
 import time
+import traceback
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,10 +16,219 @@ from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html, fet
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
-MATCH_DATA_CACHE: dict[tuple[int, bool], dict] = {}
 LIVE_MATCH_CACHE_TTL_SECONDS = 30
+MATCH_DATA_CACHE: dict[tuple[int, bool], dict] = {}
 MATCH_DATA_CACHE_LOCK = threading.Lock()
 MATCH_DATA_REFRESH_INFLIGHT: set[tuple[int, bool]] = set()
+
+SCORES_RESPONSE_CACHE_LOCK = threading.Lock()
+SCORES_RESPONSE_CACHE = {
+    "matches": {},
+    "generated_at": 0.0,
+    "ready": False,
+}
+SCORES_CACHE_SCHEDULER_LOCK = threading.Lock()
+SCORES_CACHE_SCHEDULER_STARTED = False
+
+
+def _empty_match_scores_payload(match_status: str = "live") -> dict:
+    return {
+        "players": [],
+        "contestants": [],
+        "match_status": match_status,
+        "scorecard": [],
+    }
+
+
+def _copy_score_payload(payload: dict | None) -> dict | None:
+    return copy.deepcopy(payload) if payload is not None else None
+
+
+def _log_scores_cache(message: str):
+    timestamp = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] [SCORES] {message}")
+
+
+def invalidate_scores_response_cache():
+    with SCORES_RESPONSE_CACHE_LOCK:
+        SCORES_RESPONSE_CACHE["matches"] = {}
+        SCORES_RESPONSE_CACHE["generated_at"] = 0.0
+        SCORES_RESPONSE_CACHE["ready"] = False
+    _log_scores_cache("response cache invalidated")
+
+
+def _get_cached_score_payload(match_id: int) -> dict | None:
+    with SCORES_RESPONSE_CACHE_LOCK:
+        payload = SCORES_RESPONSE_CACHE["matches"].get(int(match_id))
+        return _copy_score_payload(payload)
+
+
+def _store_scores_response_cache(snapshot: dict[int, dict]) -> None:
+    with SCORES_RESPONSE_CACHE_LOCK:
+        SCORES_RESPONSE_CACHE["matches"] = copy.deepcopy(snapshot)
+        SCORES_RESPONSE_CACHE["generated_at"] = time.time()
+        SCORES_RESPONSE_CACHE["ready"] = True
+    _log_scores_cache(f"response cache swapped matches={len(snapshot)}")
+
+
+def _build_match_scores_payload(match_id: int, match_row, registry, players_data, db) -> dict | None:
+    match_status = str(match_row.get("status") or "").strip().lower()
+    if match_status == "nr":
+        return _empty_match_scores_payload("nr")
+
+    match_obj = None
+    html_content = None
+    try:
+        from backend.main import tournament
+
+        cached_match = tournament.matches.get(str(match_id))
+        if cached_match and getattr(cached_match, "players", None):
+            match_obj = copy.deepcopy(cached_match)
+            html_content = "tournament-cache"
+    except Exception:
+        match_obj = None
+        html_content = None
+
+    if not match_obj:
+        match_obj, html_content, _ = _hydrate_match_for_scores(
+            match_id,
+            match_row,
+            registry,
+            players_data,
+            include_playing_xi=_is_live_window(match_row),
+        )
+
+    if not match_obj or not getattr(match_obj, "players", None):
+        return None
+
+    if not html_content:
+        return None
+
+    pp_rows = db.execute(
+        "SELECT * FROM player_points WHERE match_id = ?",
+        (match_id,),
+    ).fetchall()
+    pp_lookup: dict[str, float] = {}
+    role_lookup: dict[str, str] = {}
+    for row in pp_rows:
+        pp_lookup[str(row["player_id"])] = float(row["points"])
+        role_lookup[str(row["player_id"])] = row["role"]
+
+    pp_lookup, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup, role_lookup)
+    owners_by_player = _load_player_owners(db, match_id)
+
+    players = []
+    for p in match_obj.players.values():
+        pid_str = str(p.player_id)
+        role = role_lookup.get(pid_str) or registry.players.get(p.player_id, {}).get("Role")
+        calculated_points = p.calculate_player_points(role) if role else 0
+        players.append({
+            "player_id": int(p.player_id),
+            "name": p.name,
+            "team": p.team,
+            "role": role,
+            "played": p.played,
+            "is_out": p.is_out,
+            "runs": p.runs,
+            "balls": p.balls,
+            "fours": p.fours,
+            "sixes": p.sixes,
+            "strike_rate": p.strike_rate,
+            "overs": p.overs,
+            "maidens": p.maidens,
+            "runs_conceded": p.runs_conceded,
+            "wickets": p.wickets,
+            "bowled": p.bowled,
+            "lbw": p.lbw,
+            "economy": p.economy,
+            "dot_balls": p.dot_balls,
+            "catches": p.catches,
+            "runout_direct": p.runout_direct,
+            "stumpings": p.stumpings,
+            "runout_indirect": p.runout_indirect,
+            "points": calculated_points if calculated_points or p.played else pp_lookup.get(pid_str, 0),
+            "breakdown": p.get_points_breakdown() if role else [],
+            "owners": owners_by_player.get(int(p.player_id), []),
+        })
+
+    players.sort(key=lambda x: x["points"], reverse=True)
+    contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
+
+    return {
+        "players": players,
+        "contestants": contestants,
+        "match_status": match_status or "live",
+        "scorecard": _serialize_scorecard(match_obj),
+    }
+
+
+def refresh_scores_response_cache_once() -> dict:
+    db = get_db()
+    registry, players_data = _build_registry(db)
+    matches_data = data_service.get_cached_data("matches")
+    snapshot: dict[int, dict] = {}
+    eligible = 0
+    refreshed = 0
+    errors = 0
+
+    _log_scores_cache(f"refresh tick start matches={len(matches_data)}")
+
+    for match_row in matches_data:
+        match_id = int(match_row["MatchID"])
+        status = str(match_row.get("Status") or "").strip().lower()
+        if status in {"live", "completed", "nr"} or _is_live_window(match_row):
+            eligible += 1
+        try:
+            payload = _build_match_scores_payload(match_id, match_row, registry, players_data, db)
+            if payload is not None:
+                snapshot[match_id] = payload
+                refreshed += 1
+            else:
+                _log_scores_cache(f"match {match_id} skipped no hydrated payload")
+        except Exception as exc:
+            errors += 1
+            _log_scores_cache(f"match {match_id} refresh error: {exc}")
+            traceback.print_exc()
+
+    _store_scores_response_cache(snapshot)
+    _log_scores_cache(
+        f"refresh tick complete eligible={eligible} refreshed={refreshed} errors={errors} cached={len(snapshot)}"
+    )
+    return {
+        "eligible": eligible,
+        "refreshed": refreshed,
+        "errors": errors,
+        "matches": len(matches_data),
+    }
+
+
+def start_scores_cache_scheduler():
+    global SCORES_CACHE_SCHEDULER_STARTED
+    with SCORES_CACHE_SCHEDULER_LOCK:
+        if SCORES_CACHE_SCHEDULER_STARTED:
+            _log_scores_cache("scheduler already started, skipping")
+            return
+        SCORES_CACHE_SCHEDULER_STARTED = True
+        _log_scores_cache("scheduler starting")
+
+    def run():
+        while True:
+            try:
+                summary = refresh_scores_response_cache_once()
+                sleep_seconds = 15 if summary["eligible"] else 60
+                _log_scores_cache(
+                    f"scheduler tick done eligible={summary['eligible']} refreshed={summary['refreshed']} errors={summary['errors']} sleep={sleep_seconds}s"
+                )
+            except Exception as exc:
+                _log_scores_cache(f"scheduler error: {exc}")
+                traceback.print_exc()
+                sleep_seconds = 30
+                _log_scores_cache(f"scheduler retry sleep={sleep_seconds}s")
+            time.sleep(sleep_seconds)
+
+    thread = threading.Thread(target=run, daemon=True, name="scores-cache-scheduler")
+    thread.start()
+    _log_scores_cache("scheduler thread started")
 
 
 def _compute_contestants_from_player_points(db, match_id: int, pp_lookup: dict[str, float] | None = None) -> list[dict]:
@@ -389,81 +599,19 @@ async def match_scores(
     if not match_row:
         raise HTTPException(status_code=404, detail="Match not found")
 
-    registry, players_data = _build_registry(db)
     match_status = str(match_row.get("status") or "").strip().lower()
 
     if match_status == "nr":
-        return {"players": [], "contestants": [], "match_status": "nr"}
+        return _empty_match_scores_payload("nr")
 
-    match_obj, html_content, _ = _hydrate_match_for_scores(
-        match_id,
-        match_row,
-        registry,
-        players_data,
-        include_playing_xi=_is_live_window(match_row),
-    )
+    cached_payload = _get_cached_score_payload(match_id)
+    if cached_payload is None:
+        _log_scores_cache(
+            f"cache miss match={match_id} status={match_status or 'unknown'} ready={SCORES_RESPONSE_CACHE['ready']}"
+        )
+        raise HTTPException(status_code=503, detail="Score cache not ready")
 
-    if not html_content:
-        raise HTTPException(status_code=404, detail="No scorecard data available")
-
-    # Get stored player points for this match
-    pp_rows = db.execute(
-        "SELECT * FROM player_points WHERE match_id = ?", (match_id,)
-    ).fetchall()
-    pp_lookup = {}
-    role_lookup = {}
-    for row in pp_rows:
-        pp_lookup[str(row["player_id"])] = float(row["points"])
-        role_lookup[str(row["player_id"])] = row["role"]
-    pp_lookup, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup, role_lookup)
-    owners_by_player = _load_player_owners(db, match_id)
-
-    result = []
-    for p in match_obj.players.values():
-        pid_str = str(p.player_id)
-        role = role_lookup.get(pid_str) or registry.players.get(p.player_id, {}).get("Role")
-        calculated_points = p.calculate_player_points(role) if role else 0
-        result.append({
-            "name": p.name,
-            "team": p.team,
-            "role": role,
-            "played": p.played,
-            "is_out": p.is_out,
-            "runs": p.runs,
-            "balls": p.balls,
-            "fours": p.fours,
-            "sixes": p.sixes,
-            "strike_rate": p.strike_rate,
-            "overs": p.overs,
-            "maidens": p.maidens,
-            "runs_conceded": p.runs_conceded,
-            "wickets": p.wickets,
-            "bowled": p.bowled,
-            "lbw": p.lbw,
-            "economy": p.economy,
-            "dot_balls": p.dot_balls,
-            "catches": p.catches,
-            "runout_direct": p.runout_direct,
-            "stumpings": p.stumpings,
-            "runout_indirect": p.runout_indirect,
-            "points": calculated_points if calculated_points or p.played else pp_lookup.get(pid_str, 0),
-            "breakdown": p.get_points_breakdown() if role else [],
-            "owners": owners_by_player.get(int(p.player_id), []),
-        })
-
-    result.sort(key=lambda x: x["points"], reverse=True)
-
-    # Contestants for this match:
-    # accuracy-first source of truth for the View Scores screen is always
-    # user_teams + current player points, so rankings match the breakdown view.
-    contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
-
-    return {
-        "players": result,
-        "contestants": contestants,
-        "match_status": match_status or "live",
-        "scorecard": _serialize_scorecard(match_obj),
-    }
+    return cached_payload
 
 
 @router.get("/{match_id}/my-team")
@@ -511,39 +659,18 @@ async def team_breakdown(
     if not team_rows:
         return {"error": "No team found for this match"}
 
-    # Get player points from DB
-    pp_rows = db.execute(
-        "SELECT player_id, points FROM player_points WHERE match_id = ?",
-        (match_id,),
-    ).fetchall()
-    pp_lookup = {row["player_id"]: float(row["points"]) for row in pp_rows}
+    match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
+    if not match_row:
+        return {"error": "Match not found"}
+    if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
+        _log_scores_cache(f"team-breakdown cache miss match={match_id}")
+        raise HTTPException(status_code=503, detail="Score cache not ready")
 
-    # Fetch scorecard for detailed breakdown
-    registry, players_data = _build_registry(db)
-    match_row = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
-    match_obj = None
-    if match_row:
-        match_obj, html_content, _ = _hydrate_match_for_scores(
-            match_id,
-            match_row,
-            registry,
-            players_data,
-            include_playing_xi=_is_live_window(match_row),
-        )
-        if html_content:
-            # Calculate points so breakdown is available
-            for pid_key, player in match_obj.players.items():
-                role = registry.players.get(pid_key, {}).get("Role")
-                if role:
-                    player.calculate_player_points(role)
-
-    pp_lookup_str = {str(pid): points for pid, points in pp_lookup.items()}
-    role_lookup = {
-        str(row["player_id"]): row["role"]
-        for row in team_rows
-        if row.get("role")
+    player_lookup = {
+        int(player["player_id"]): player
+        for player in (cached_payload.get("players", []) if cached_payload else [])
+        if player.get("player_id") is not None
     }
-    pp_lookup_str, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup_str, role_lookup)
 
     target_user = db.execute("SELECT name FROM users WHERE id = ?", (target_user_id,)).fetchone()
 
@@ -553,7 +680,8 @@ async def team_breakdown(
 
     for row in team_rows:
         pid = row["player_id"]
-        base_pts = pp_lookup_str.get(str(pid), 0)
+        player_payload = player_lookup.get(int(pid), {})
+        base_pts = pp_lookup.get(str(pid), 0)
         is_captain = bool(row["is_captain"])
         is_vc = bool(row["is_vice_captain"])
 
@@ -571,9 +699,7 @@ async def team_breakdown(
         total += adjusted
 
         # Get per-category breakdown
-        player_breakdown = []
-        if match_obj and pid in match_obj.players:
-            player_breakdown = match_obj.players[pid].get_points_breakdown()
+        player_breakdown = list(player_payload.get("breakdown", []))
 
         breakdown.append({
             "name": row["name"],
@@ -598,26 +724,26 @@ async def team_breakdown(
 
 
 def _load_match_and_points(db, match_id):
-    """Shared helper: fetch scorecard, parse, get player points."""
+    """Shared helper: read the cached score snapshot and derive point lookups."""
     match_row = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
     if not match_row:
         return None, None, {}, {}
 
-    registry, players_data = _build_registry(db)
-    match_obj, _, _ = _hydrate_match_for_scores(
-        match_id,
-        match_row,
-        registry,
-        players_data,
-        include_playing_xi=_is_live_window(match_row),
-    )
+    cached_payload = _get_cached_score_payload(match_id)
+    if not cached_payload:
+        return match_row, None, {}, {}
 
-    pp_rows = db.execute("SELECT * FROM player_points WHERE match_id = ?", (match_id,)).fetchall()
-    pp_lookup = {str(row["player_id"]): float(row["points"]) for row in pp_rows}
-    role_lookup = {str(row["player_id"]): row["role"] for row in pp_rows}
-    pp_lookup, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup, role_lookup)
-
-    return match_row, match_obj, pp_lookup, role_lookup
+    pp_lookup = {
+        str(player["player_id"]): float(player.get("points", 0))
+        for player in cached_payload.get("players", [])
+        if player.get("player_id") is not None
+    }
+    role_lookup = {
+        str(player["player_id"]): player.get("role")
+        for player in cached_payload.get("players", [])
+        if player.get("player_id") is not None and player.get("role")
+    }
+    return match_row, cached_payload, pp_lookup, role_lookup
 
 
 def _build_team_snapshot(db, user_id, match_id, match_obj, pp_lookup, role_lookup):
@@ -684,9 +810,12 @@ async def team_diff(
     if user["id"] == other_user_id:
         return {"error": "Select another contestant to compare"}
 
-    match_row, match_obj, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
+    match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return {"error": "Match not found"}
+    if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
+        _log_scores_cache(f"team-diff cache miss match={match_id}")
+        raise HTTPException(status_code=503, detail="Score cache not ready")
 
     # Get other user's name
     other_user = db.execute("SELECT * FROM users WHERE id = ?", (other_user_id,)).fetchone()
@@ -695,8 +824,8 @@ async def team_diff(
     if not other_user["is_active"]:
         return {"error": "Contestant is inactive"}
 
-    my_entries, my_total = _build_team_snapshot(db, user["id"], match_id, match_obj, pp_lookup, role_lookup)
-    other_entries, other_total = _build_team_snapshot(db, other_user_id, match_id, match_obj, pp_lookup, role_lookup)
+    my_entries, my_total = _build_team_snapshot(db, user["id"], match_id, cached_payload, pp_lookup, role_lookup)
+    other_entries, other_total = _build_team_snapshot(db, other_user_id, match_id, cached_payload, pp_lookup, role_lookup)
 
     if not my_entries:
         return {"error": "You haven't picked a team for this match"}
@@ -769,9 +898,12 @@ async def match_contestants(
 ):
     """List contestants who picked teams for this match (for the diff dropdown)."""
     db = get_db()
-    match_row, match_obj, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
+    match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return []
+    if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
+        _log_scores_cache(f"contestants cache miss match={match_id}")
+        raise HTTPException(status_code=503, detail="Score cache not ready")
 
     contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
     return [

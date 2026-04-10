@@ -156,6 +156,8 @@ def bootstrap_app():
         tournament.start_lineup_cache_scheduler()
         tournament.start_toss_cache_scheduler()
         tournament.start_scheduler()
+        print("[BOOT] Starting scores cache scheduler")
+        scores.start_scores_cache_scheduler()
         start_completed_match_recompute_if_needed()
 
         bootstrap_ready = True
