@@ -126,6 +126,7 @@ async def create_player(
     )
     db.commit()
     data_service.invalidate_cache("players")
+    data_service.invalidate_match_player_payloads()
     _refresh_tournament_static_state(refresh_schedule_map=True)
 
     player = db.execute(
@@ -169,6 +170,7 @@ async def update_player(
     db.execute(f"UPDATE players SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
     data_service.invalidate_cache("players")
+    data_service.invalidate_match_player_payloads()
     _refresh_tournament_static_state(refresh_schedule_map=True)
 
     updated = db.execute("SELECT * FROM players WHERE id = ?", (player_id,)).fetchone()
@@ -189,6 +191,7 @@ async def delete_player(
     db.execute("DELETE FROM players WHERE id = ?", (player_id,))
     db.commit()
     data_service.invalidate_cache("players")
+    data_service.invalidate_match_player_payloads()
     _refresh_tournament_static_state()
 
     return {"success": True}
@@ -290,6 +293,7 @@ async def update_match(
         data_service.clear_points_for_match(match_id)
     db.commit()
     data_service.invalidate_cache("matches")
+    data_service.invalidate_match_player_payloads()
     invalidate_matches_response_cache()
     invalidate_leaderboard_cache()
     _refresh_tournament_static_state(refresh_schedule_map=True)
@@ -326,6 +330,7 @@ async def delete_match(
     db.execute("DELETE FROM matches WHERE id = ?", (match_id,))
     db.commit()
     data_service.invalidate_cache("matches")
+    data_service.invalidate_match_player_payloads()
     invalidate_matches_response_cache()
     _refresh_tournament_static_state(refresh_schedule_map=True)
 
@@ -362,6 +367,7 @@ async def recalculate_match(
         tournament_ref.compute_points_for_match(match_id_str)
         tournament_ref.persist_player_points_to_local()
         tournament_ref.persist_to_local()
+        data_service.invalidate_match_player_payloads()
 
     data_service.invalidate_cache("matches")
     invalidate_matches_response_cache()

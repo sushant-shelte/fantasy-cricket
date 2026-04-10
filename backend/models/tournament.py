@@ -358,6 +358,7 @@ class Tournament:
                 })
         if rows:
             data_service.save_player_points(rows)
+            data_service.invalidate_match_player_payloads()
 
     def recompute_completed_matches(self, reason: str = "manual", include_nr: bool = False):
         from backend.routes.leaderboard import invalidate_leaderboard_cache

@@ -9,6 +9,7 @@ route modules continue to work without changes.
 
 from __future__ import annotations
 
+import copy
 import threading
 from datetime import datetime
 
@@ -26,6 +27,8 @@ CACHE: dict = {
     "matches": None,
 }
 
+PLAYER_MATCH_PAYLOAD_CACHE: dict[int, dict] = {}
+
 
 def _row_to_dict(row) -> dict:
     """Convert a sqlite3.Row to a plain dict."""
@@ -42,6 +45,25 @@ def invalidate_cache(*sheet_names: str):
         for key in keys:
             if key in CACHE:
                 CACHE[key] = None
+
+
+def invalidate_match_player_payloads(match_id: int | None = None) -> None:
+    with _lock:
+        if match_id is None:
+            PLAYER_MATCH_PAYLOAD_CACHE.clear()
+        else:
+            PLAYER_MATCH_PAYLOAD_CACHE.pop(int(match_id), None)
+
+
+def get_cached_match_player_payload(match_id: int) -> dict | None:
+    with _lock:
+        payload = PLAYER_MATCH_PAYLOAD_CACHE.get(int(match_id))
+        return copy.deepcopy(payload) if payload is not None else None
+
+
+def set_cached_match_player_payload(match_id: int, payload: dict) -> None:
+    with _lock:
+        PLAYER_MATCH_PAYLOAD_CACHE[int(match_id)] = copy.deepcopy(payload)
 
 
 def prime_static_cache():

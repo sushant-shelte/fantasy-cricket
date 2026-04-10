@@ -1,3 +1,5 @@
+import copy
+
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
 
@@ -6,6 +8,7 @@ from backend.database import get_db
 from backend.config import ESPN_MATCH_ID_OFFSET, ROLES
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
+from backend.services import data_service
 from backend.services.scraper import build_cricbuzz_playing_xi_url, fetch_playing_xi, fetch_toss_info
 from bs4 import BeautifulSoup
 
@@ -97,73 +100,91 @@ async def list_players(
     db = get_db()
 
     if match_id:
-        # Get the match to find teams
-        match = db.execute(
-            "SELECT * FROM matches WHERE id = ?", (match_id,)
-        ).fetchone()
+        cached_payload = data_service.get_cached_match_player_payload(match_id)
+        if cached_payload is not None:
+            players = [copy.deepcopy(player) for player in cached_payload["players"]]
+            team1, team2 = cached_payload["match_teams"]
+            match_date = cached_payload["match_date"]
+            match_time = cached_payload["match_time"]
+        else:
+            # Get the match to find teams
+            match = db.execute(
+                "SELECT * FROM matches WHERE id = ?", (match_id,)
+            ).fetchone()
 
-        if not match:
-            return {"error": "Match not found"}
+            if not match:
+                return {"error": "Match not found"}
 
-        team1 = match["team1"]
-        team2 = match["team2"]
+            team1 = match["team1"]
+            team2 = match["team2"]
+            match_date = match["match_date"]
+            match_time = match["match_time"]
 
-        rows = db.execute(
-            """
-            SELECT
-                p.id,
-                p.name,
-                p.team,
-                p.role,
-                p.aliases,
-                COALESCE(SUM(pp.points), 0) AS total_points,
-                COUNT(pp.match_id) AS matches_played,
-                CASE WHEN COUNT(pp.match_id) > 0
-                     THEN ROUND(CAST(COALESCE(SUM(pp.points), 0) * 1.0 / COUNT(pp.match_id) AS numeric), 2)
-                     ELSE 0 END AS avg_points
-            FROM players p
-            LEFT JOIN player_points pp ON pp.player_id = p.id
-            WHERE p.team IN (?, ?)
-            GROUP BY p.id, p.name, p.team, p.role, p.aliases
-            ORDER BY
-                CASE p.role
-                    WHEN 'Wicketkeeper' THEN 1
-                    WHEN 'Batter' THEN 2
-                    WHEN 'AllRounder' THEN 3
-                    WHEN 'Bowler' THEN 4
-                    ELSE 5
-                END,
-                total_points DESC,
-                p.name ASC
-            """,
-            (team1, team2),
-        ).fetchall()
+            rows = db.execute(
+                """
+                SELECT
+                    p.id,
+                    p.name,
+                    p.team,
+                    p.role,
+                    p.aliases,
+                    COALESCE(SUM(pp.points), 0) AS total_points,
+                    COUNT(pp.match_id) AS matches_played,
+                    CASE WHEN COUNT(pp.match_id) > 0
+                         THEN ROUND(CAST(COALESCE(SUM(pp.points), 0) * 1.0 / COUNT(pp.match_id) AS numeric), 2)
+                         ELSE 0 END AS avg_points
+                FROM players p
+                LEFT JOIN player_points pp ON pp.player_id = p.id
+                WHERE p.team IN (?, ?)
+                GROUP BY p.id, p.name, p.team, p.role, p.aliases
+                ORDER BY
+                    CASE p.role
+                        WHEN 'Wicketkeeper' THEN 1
+                        WHEN 'Batter' THEN 2
+                        WHEN 'AllRounder' THEN 3
+                        WHEN 'Bowler' THEN 4
+                        ELSE 5
+                    END,
+                    total_points DESC,
+                    p.name ASC
+                """,
+                (team1, team2),
+            ).fetchall()
 
-        # Fetch last match points per player in one query
-        last_match_rows = db.execute(
-            """
-            SELECT pp.player_id, pp.points
-            FROM player_points pp
-            INNER JOIN (
-                SELECT player_id, MAX(match_id) AS max_mid
-                FROM player_points
-                GROUP BY player_id
-            ) latest ON pp.player_id = latest.player_id AND pp.match_id = latest.max_mid
-            """
-        ).fetchall()
-        last_match_map = {r["player_id"]: round(float(r["points"]), 2) for r in last_match_rows}
-        player_ids = [int(row["id"]) for row in rows]
-        history_by_player = _load_recent_completed_history(db, [team1, team2], player_ids)
+            # Fetch last match points per player in one query
+            last_match_rows = db.execute(
+                """
+                SELECT pp.player_id, pp.points
+                FROM player_points pp
+                INNER JOIN (
+                    SELECT player_id, MAX(match_id) AS max_mid
+                    FROM player_points
+                    GROUP BY player_id
+                ) latest ON pp.player_id = latest.player_id AND pp.match_id = latest.max_mid
+                """
+            ).fetchall()
+            last_match_map = {r["player_id"]: round(float(r["points"]), 2) for r in last_match_rows}
+            player_ids = [int(row["id"]) for row in rows]
+            history_by_player = _load_recent_completed_history(db, [team1, team2], player_ids)
 
-        players = []
-        for row in rows:
-            player = dict(row)
-            player["total_points"] = round(float(player.get("total_points") or 0), 2)
-            player["matches_played"] = int(player.get("matches_played") or 0)
-            player["avg_points"] = round(float(player.get("avg_points") or 0), 2)
-            player["last_match_points"] = last_match_map.get(player["id"])
-            player["recent_history"] = history_by_player.get(player["id"], [])
-            players.append(player)
+            players = []
+            for row in rows:
+                player = dict(row)
+                player["total_points"] = round(float(player.get("total_points") or 0), 2)
+                player["matches_played"] = int(player.get("matches_played") or 0)
+                player["avg_points"] = round(float(player.get("avg_points") or 0), 2)
+                player["last_match_points"] = last_match_map.get(player["id"])
+                player["recent_history"] = history_by_player.get(player["id"], [])
+                players.append(player)
+
+            data_service.set_cached_match_player_payload(match_id, {
+                "players": players,
+                "match_teams": [team1, team2],
+                "match_date": match_date,
+                "match_time": match_time,
+            })
+
+            players = [copy.deepcopy(player) for player in players]
 
         playing_xi_data = {
             "announced": False,
