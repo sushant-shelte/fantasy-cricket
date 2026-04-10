@@ -63,6 +63,27 @@ def _get_cached_score_payload(match_id: int) -> dict | None:
         return _copy_score_payload(payload)
 
 
+def _wait_for_cached_score_payload(match_id: int, timeout_seconds: float = 8.0, poll_seconds: float = 0.25) -> dict | None:
+    deadline = time.time() + timeout_seconds
+    first_wait_log = True
+
+    while time.time() < deadline:
+        cached_payload = _get_cached_score_payload(match_id)
+        if cached_payload is not None:
+            return cached_payload
+
+        with SCORES_RESPONSE_CACHE_LOCK:
+            ready = SCORES_RESPONSE_CACHE["ready"]
+
+        if first_wait_log:
+            _log_scores_cache(f"waiting for cache match={match_id} ready={ready} timeout={timeout_seconds:.1f}s")
+            first_wait_log = False
+
+        time.sleep(poll_seconds)
+
+    return _get_cached_score_payload(match_id)
+
+
 def _store_scores_response_cache(snapshot: dict[int, dict]) -> None:
     with SCORES_RESPONSE_CACHE_LOCK:
         SCORES_RESPONSE_CACHE["matches"] = copy.deepcopy(snapshot)
@@ -604,7 +625,7 @@ async def match_scores(
     if match_status == "nr":
         return _empty_match_scores_payload("nr")
 
-    cached_payload = _get_cached_score_payload(match_id)
+    cached_payload = _wait_for_cached_score_payload(match_id)
     if cached_payload is None:
         _log_scores_cache(
             f"cache miss match={match_id} status={match_status or 'unknown'} ready={SCORES_RESPONSE_CACHE['ready']}"
@@ -729,7 +750,7 @@ def _load_match_and_points(db, match_id):
     if not match_row:
         return None, None, {}, {}
 
-    cached_payload = _get_cached_score_payload(match_id)
+    cached_payload = _wait_for_cached_score_payload(match_id)
     if not cached_payload:
         return match_row, None, {}, {}
 

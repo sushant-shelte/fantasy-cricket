@@ -158,6 +158,18 @@ def bootstrap_app():
         tournament.start_scheduler()
         print("[BOOT] Starting scores cache scheduler")
         scores.start_scores_cache_scheduler()
+        print("[BOOT] Priming scores cache")
+        try:
+            prime_summary = scores.refresh_scores_response_cache_once()
+            print(
+                "[BOOT] Scores cache primed "
+                f"matches={prime_summary['matches']} "
+                f"eligible={prime_summary['eligible']} "
+                f"refreshed={prime_summary['refreshed']} "
+                f"errors={prime_summary['errors']}"
+            )
+        except Exception as exc:
+            print(f"[BOOT] Scores cache prime failed: {exc}")
         start_completed_match_recompute_if_needed()
 
         bootstrap_ready = True
