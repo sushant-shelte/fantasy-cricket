@@ -193,14 +193,38 @@ async def list_players(
             "substitute_ids": [],
         }
         try:
-            playing_xi_data = fetch_playing_xi(
+            cached_playing_xi = data_service.get_cached_match_playing_xi(
                 match_id,
                 team1,
                 team2,
-                players,
-                match["match_date"],
-                match["match_time"],
+                match_date,
+                match_time,
             )
+            if cached_playing_xi and data_service.is_cached_playing_xi_final(
+                match_id,
+                team1,
+                team2,
+                match_date,
+                match_time,
+            ):
+                playing_xi_data = cached_playing_xi
+            else:
+                playing_xi_data = fetch_playing_xi(
+                    match_id,
+                    team1,
+                    team2,
+                    players,
+                    match_date,
+                    match_time,
+                )
+                playing_xi_data = data_service.set_cached_match_playing_xi(
+                    match_id,
+                    team1,
+                    team2,
+                    match_date,
+                    match_time,
+                    playing_xi_data,
+                )
         except Exception as exc:
             print(f"[players] Playing XI fetch failed for match {match_id}: {exc}")
 

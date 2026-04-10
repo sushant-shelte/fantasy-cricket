@@ -28,6 +28,7 @@ CACHE: dict = {
 }
 
 PLAYER_MATCH_PAYLOAD_CACHE: dict[int, dict] = {}
+PLAYING_XI_STATUS_CACHE: dict[tuple, dict] = {}
 
 
 def _row_to_dict(row) -> dict:
@@ -64,6 +65,58 @@ def get_cached_match_player_payload(match_id: int) -> dict | None:
 def set_cached_match_player_payload(match_id: int, payload: dict) -> None:
     with _lock:
         PLAYER_MATCH_PAYLOAD_CACHE[int(match_id)] = copy.deepcopy(payload)
+
+
+def _is_playing_xi_final(payload: dict | None) -> bool:
+    if not payload:
+        return False
+    if not bool(payload.get("announced")):
+        return False
+    player_ids = payload.get("player_ids") or []
+    substitute_ids = payload.get("substitute_ids") or []
+    return len(player_ids) == 22 and len(substitute_ids) >= 10
+
+
+def get_cached_match_playing_xi(
+    match_id: int,
+    team1: str,
+    team2: str,
+    match_date: str,
+    match_time: str,
+) -> dict | None:
+    cache_key = (int(match_id), team1, team2, match_date, match_time)
+    with _lock:
+        payload = PLAYING_XI_STATUS_CACHE.get(cache_key)
+        return copy.deepcopy(payload) if payload is not None else None
+
+
+def set_cached_match_playing_xi(
+    match_id: int,
+    team1: str,
+    team2: str,
+    match_date: str,
+    match_time: str,
+    payload: dict,
+) -> dict:
+    cache_key = (int(match_id), team1, team2, match_date, match_time)
+    with _lock:
+        existing = PLAYING_XI_STATUS_CACHE.get(cache_key)
+        if _is_playing_xi_final(existing) and not _is_playing_xi_final(payload):
+            return copy.deepcopy(existing)
+        PLAYING_XI_STATUS_CACHE[cache_key] = copy.deepcopy(payload)
+        return copy.deepcopy(PLAYING_XI_STATUS_CACHE[cache_key])
+
+
+def is_cached_playing_xi_final(
+    match_id: int,
+    team1: str,
+    team2: str,
+    match_date: str,
+    match_time: str,
+) -> bool:
+    cache_key = (int(match_id), team1, team2, match_date, match_time)
+    with _lock:
+        return _is_playing_xi_final(PLAYING_XI_STATUS_CACHE.get(cache_key))
 
 
 def prime_static_cache():
