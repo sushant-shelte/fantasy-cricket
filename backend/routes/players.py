@@ -9,7 +9,7 @@ from backend.config import ESPN_MATCH_ID_OFFSET, ROLES
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services import data_service
-from backend.services.scraper import build_cricbuzz_playing_xi_url, fetch_playing_xi, fetch_toss_info
+from backend.services.scraper import get_cached_toss_info
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api", tags=["players"])
@@ -192,53 +192,23 @@ async def list_players(
             "player_ids": [],
             "substitute_ids": [],
         }
-        try:
-            cached_playing_xi = data_service.get_cached_match_playing_xi(
-                match_id,
-                team1,
-                team2,
-                match_date,
-                match_time,
-            )
-            if cached_playing_xi and data_service.is_cached_playing_xi_final(
-                match_id,
-                team1,
-                team2,
-                match_date,
-                match_time,
-            ):
-                playing_xi_data = cached_playing_xi
-            else:
-                playing_xi_data = fetch_playing_xi(
-                    match_id,
-                    team1,
-                    team2,
-                    players,
-                    match_date,
-                    match_time,
-                )
-                playing_xi_data = data_service.set_cached_match_playing_xi(
-                    match_id,
-                    team1,
-                    team2,
-                    match_date,
-                    match_time,
-                    playing_xi_data,
-                )
-        except Exception as exc:
-            print(f"[players] Playing XI fetch failed for match {match_id}: {exc}")
+        cached_playing_xi = data_service.get_cached_match_playing_xi(
+            match_id,
+            team1,
+            team2,
+            match_date,
+            match_time,
+        )
+        if cached_playing_xi and data_service.is_cached_playing_xi_final(
+            match_id,
+            team1,
+            team2,
+            match_date,
+            match_time,
+        ):
+            playing_xi_data = cached_playing_xi
 
-        toss_info = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
-        try:
-            toss_info = fetch_toss_info(
-                match_id,
-                team1,
-                team2,
-                match["match_date"],
-                match["match_time"],
-            )
-        except Exception as exc:
-            print(f"[players] Toss fetch failed for match {match_id}: {exc}")
+        toss_info = get_cached_toss_info(match_id) or {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))

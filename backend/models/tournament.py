@@ -9,9 +9,11 @@ from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
 from backend.services.scraper import (
     fetch_playing_xi,
+    fetch_toss_info,
     fetch_scorecard_html,
     fetch_cricbuzz_scorecard_html,
     initialize_cricbuzz_match_map,
+    is_cached_toss_announced,
 )
 from backend.services import data_service
 from bs4 import BeautifulSoup
@@ -188,7 +190,7 @@ class Tournament:
             return True
         return datetime.now(IST) >= match_datetime
 
-    def update_match_data(self, match_id, use_playing_xi=False, include_scorecards=True):
+    def update_match_data(self, match_id, use_playing_xi=False, include_scorecards=True, force_refresh_playing_xi=False):
         match = self.matches.get(match_id)
         if not match:
             return
@@ -206,6 +208,8 @@ class Tournament:
                 players_rows,
                 match_row.get("Date"),
                 match_row.get("Time"),
+                match_row.get("TossTime") or match_row.get("toss_time"),
+                force_refresh=force_refresh_playing_xi,
             )
             playing_ids = playing_xi.get("player_ids", [])
             substitute_ids = playing_xi.get("substitute_ids", [])
@@ -259,9 +263,12 @@ class Tournament:
         toss_time = str(match_row.get("TossTime") or match_row.get("toss_time") or "").strip()
         if toss_time:
             try:
-                window_start = IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
+                window_start = IST.localize(datetime.strptime(f"{match_row['Date']} {toss_time}", "%Y-%m-%d %H:%M"))
             except Exception:
-                window_start = match_datetime - timedelta(minutes=30)
+                try:
+                    window_start = IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
+                except Exception:
+                    window_start = match_datetime - timedelta(minutes=30)
         else:
             window_start = match_datetime - timedelta(minutes=30)
 
@@ -414,7 +421,12 @@ class Tournament:
         for match_id in terminal_match_ids:
             try:
                 print(f"  Match {match_id}: terminal status - revalidating scorecard")
-                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
+                self.update_match_data(
+                    match_id,
+                    use_playing_xi=True,
+                    include_scorecards=True,
+                    force_refresh_playing_xi=True,
+                )
                 if self.get_match_status(self.match_rows.get(match_id, {})) != "completed":
                     continue
                 self.compute_player_points_for_match(match_id)
@@ -433,92 +445,227 @@ class Tournament:
         print(f"  Recomputed {processed} completed matches")
         return processed
 
+    def _scheduler_log(self, channel: str, message: str):
+        timestamp = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] [{channel}] {message}")
+
+    def refresh_scores_once(self):
+        matches_data = data_service.get_cached_data("matches")
+        computed_matches = data_service.get_computed_match_ids()
+        locked_match_ids_to_load = []
+
+        for m in matches_data:
+            match_id = str(m["MatchID"])
+            status = self.get_match_status(m)
+            if status == "live":
+                locked_match_ids_to_load.append(match_id)
+            elif status == "completed" and match_id not in computed_matches:
+                locked_match_ids_to_load.append(match_id)
+
+        self._scheduler_log(
+            "SCORE",
+            f"tick matches={len(matches_data)} load={len(locked_match_ids_to_load)} computed={len(computed_matches)}",
+        )
+
+        self.ensure_match_teams_loaded(locked_match_ids_to_load)
+        self.sync_persistent_match_statuses(matches_data)
+
+        processed = 0
+        for m in matches_data:
+            match_id = str(m["MatchID"])
+            status = self.get_match_status(m)
+
+            if status == "future":
+                continue
+
+            try:
+                if status == "lineups":
+                    self._scheduler_log("SCORE", f"match {match_id} lineups -> refreshing score cache")
+                    self.update_match_data(
+                        match_id,
+                        use_playing_xi=True,
+                        include_scorecards=False,
+                        force_refresh_playing_xi=True,
+                    )
+                elif status == "live":
+                    self._scheduler_log("SCORE", f"match {match_id} live -> refreshing scores")
+                    self.update_match_data(
+                        match_id,
+                        use_playing_xi=True,
+                        include_scorecards=True,
+                        force_refresh_playing_xi=True,
+                    )
+                    updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
+                    if updated_status == "nr":
+                        continue
+                    self.compute_player_points_for_match(match_id)
+                    self.compute_points_for_match(match_id)
+                    processed += 1
+                elif status == "completed":
+                    if match_id in computed_matches:
+                        continue
+                    self._scheduler_log("SCORE", f"match {match_id} completed -> revalidating")
+                    self.update_match_data(
+                        match_id,
+                        use_playing_xi=True,
+                        include_scorecards=True,
+                        force_refresh_playing_xi=True,
+                    )
+                    updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
+                    if updated_status != "completed":
+                        continue
+                    self.compute_player_points_for_match(match_id)
+                    self.compute_points_for_match(match_id)
+                    processed += 1
+            except Exception as e:
+                self._scheduler_log("SCORE", f"match {match_id} error: {e}")
+                traceback.print_exc()
+
+        return {
+            "eligible": len(locked_match_ids_to_load),
+            "processed": processed,
+            "matches": len(matches_data),
+        }
+
+    def refresh_lineup_cache_once(self):
+        matches_data = data_service.get_cached_data("matches")
+        lineup_match_ids = []
+
+        for m in matches_data:
+            match_id = str(m["MatchID"])
+            status = self.get_match_status(m)
+            if status == "lineups":
+                lineup_match_ids.append(match_id)
+
+        self._scheduler_log("XI", f"tick matches={len(matches_data)} eligible={len(lineup_match_ids)}")
+
+        if not lineup_match_ids:
+            return {"eligible": 0, "refreshed": 0, "finalized": 0}
+
+        self.ensure_match_teams_loaded(lineup_match_ids)
+        refreshed = 0
+        finalized = 0
+        for match_id in lineup_match_ids:
+            try:
+                match_row = self.match_rows.get(match_id, {})
+                if data_service.is_cached_playing_xi_final(
+                    int(match_id),
+                    match_row.get("Team1", ""),
+                    match_row.get("Team2", ""),
+                    match_row.get("Date", ""),
+                    match_row.get("Time", ""),
+                ):
+                    finalized += 1
+                    self._scheduler_log("XI", f"match {match_id} already finalized, skipping")
+                    continue
+                self._scheduler_log("XI", f"match {match_id} refreshing XI cache")
+                self.update_match_data(
+                    match_id,
+                    use_playing_xi=True,
+                    include_scorecards=False,
+                    force_refresh_playing_xi=True,
+                )
+                refreshed += 1
+            except Exception as exc:
+                self._scheduler_log("XI", f"match {match_id} refresh error: {exc}")
+                traceback.print_exc()
+
+        return {"eligible": len(lineup_match_ids), "refreshed": refreshed, "finalized": finalized}
+
+    def refresh_toss_cache_once(self):
+        matches_data = data_service.get_cached_data("matches")
+        toss_match_ids = []
+
+        for m in matches_data:
+            match_id = str(m["MatchID"])
+            status = self.get_match_status(m)
+            if status == "lineups":
+                toss_match_ids.append(match_id)
+
+        self._scheduler_log("TOSS", f"tick matches={len(matches_data)} eligible={len(toss_match_ids)}")
+
+        if not toss_match_ids:
+            return {"eligible": 0, "refreshed": 0, "announced": 0}
+
+        self.ensure_match_teams_loaded(toss_match_ids)
+        refreshed = 0
+        announced = 0
+        for match_id in toss_match_ids:
+            try:
+                match_row = self.match_rows.get(match_id, {})
+                if is_cached_toss_announced(int(match_id)):
+                    announced += 1
+                    self._scheduler_log("TOSS", f"match {match_id} already announced, skipping")
+                    continue
+                match_obj = self.matches.get(match_id)
+                if not match_obj:
+                    self._scheduler_log("TOSS", f"match {match_id} has no match object, skipping")
+                    continue
+                self._scheduler_log("TOSS", f"match {match_id} refreshing toss cache")
+                fetch_toss_info(
+                    int(match_id),
+                    match_obj.team1,
+                    match_obj.team2,
+                    match_row.get("Date"),
+                    match_row.get("Time"),
+                    match_row.get("TossTime") or match_row.get("toss_time"),
+                    force_refresh=True,
+                )
+                refreshed += 1
+            except Exception as exc:
+                self._scheduler_log("TOSS", f"match {match_id} refresh error: {exc}")
+                traceback.print_exc()
+
+        return {"eligible": len(toss_match_ids), "refreshed": refreshed, "announced": announced}
+
     def start_scheduler(self):
         def run():
             while True:
-                sleep_seconds = 60
                 try:
-                    print("\n--- Scheduler tick ---")
-                    matches_data = data_service.get_cached_data("matches")
-                    computed_matches = data_service.get_computed_match_ids()
-                    locked_match_ids_to_load = []
-                    has_lineup_window_match = False
-
-                    for m in matches_data:
-                        match_id = str(m["MatchID"])
-                        status = self.get_match_status(m)
-                        if status in ("lineups", "live"):
-                            locked_match_ids_to_load.append(match_id)
-                        if status == "lineups":
-                            has_lineup_window_match = True
-                        elif status == "completed" and match_id not in computed_matches:
-                            locked_match_ids_to_load.append(match_id)
-
-                    self.ensure_match_teams_loaded(locked_match_ids_to_load)
-                    self.sync_persistent_match_statuses(matches_data)
-
-                    processed = 0
-
-                    for m in matches_data:
-                        match_id = str(m["MatchID"])
-                        status = self.get_match_status(m)
-
-                        if status == "future":
-                            continue
-
-                        # Per-match error handling — one failure doesn't stop others
-                        try:
-                            if status == "lineups":
-                                print(f"  Match {match_id}: {status.upper()} — fetching scores")
-                                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=False)
-                            elif status == "live":
-                                print(f"  Match {match_id}: LIVE - fetching scores")
-                                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
-                                updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
-                                if updated_status == "nr":
-                                    continue
-                                self.compute_player_points_for_match(match_id)
-                                self.compute_points_for_match(match_id)
-                                processed += 1
-
-                            elif status == "completed":
-                                if match_id in computed_matches:
-                                    continue
-                                print(f"  Match {match_id}: COMPLETED - revalidating terminal scorecard")
-                                self.update_match_data(match_id, use_playing_xi=True, include_scorecards=True)
-                                updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
-                                if updated_status != "completed":
-                                    continue
-                                self.compute_player_points_for_match(match_id)
-                                self.compute_points_for_match(match_id)
-                                processed += 1
-
-                            elif status == "nr":
-                                continue
-
-                        except Exception as e:
-                            print(f"  Match {match_id}: ERROR — {e}")
-                            traceback.print_exc()
-                            continue  # Keep processing other matches
-
-                    if has_lineup_window_match:
-                        sleep_seconds = 15
-
-                    # Only persist if we processed something
+                    self._scheduler_log("SCORE", "scheduler tick start")
+                    summary = self.refresh_scores_once()
+                    processed = summary["processed"]
                     if processed > 0:
                         try:
                             self.persist_player_points_to_local()
                             self.persist_to_local()
-                            print(f"  Persisted {processed} matches")
+                            self._scheduler_log("SCORE", f"persisted matches={processed}")
                         except Exception as e:
-                            print(f"  Persist ERROR: {e}")
+                            self._scheduler_log("SCORE", f"persist error: {e}")
                             traceback.print_exc()
-
                 except Exception as e:
-                    print(f"Scheduler outer error: {e}")
+                    self._scheduler_log("SCORE", f"scheduler outer error: {e}")
                     traceback.print_exc()
 
-                time.sleep(sleep_seconds)
+                time.sleep(60)
 
-        thread = threading.Thread(target=run, daemon=True)
+        thread = threading.Thread(target=run, daemon=True, name="score-scheduler")
+        thread.start()
+
+    def start_lineup_cache_scheduler(self):
+        def run():
+            while True:
+                try:
+                    summary = self.refresh_lineup_cache_once()
+                    time.sleep(15 if summary["eligible"] else 30)
+                except Exception as e:
+                    self._scheduler_log("XI", f"scheduler error: {e}")
+                    traceback.print_exc()
+                    time.sleep(30)
+
+        thread = threading.Thread(target=run, daemon=True, name="lineup-cache-scheduler")
+        thread.start()
+
+    def start_toss_cache_scheduler(self):
+        def run():
+            while True:
+                try:
+                    summary = self.refresh_toss_cache_once()
+                    time.sleep(15 if summary["eligible"] else 30)
+                except Exception as e:
+                    self._scheduler_log("TOSS", f"scheduler error: {e}")
+                    traceback.print_exc()
+                    time.sleep(30)
+
+        thread = threading.Thread(target=run, daemon=True, name="toss-cache-scheduler")
         thread.start()

@@ -153,6 +153,8 @@ def bootstrap_app():
         matches_data = data_service.get_cached_data("matches")
 
         tournament.initialize(players_data, matches_data, [])
+        tournament.start_lineup_cache_scheduler()
+        tournament.start_toss_cache_scheduler()
         tournament.start_scheduler()
         start_completed_match_recompute_if_needed()
 

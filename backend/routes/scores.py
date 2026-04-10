@@ -210,9 +210,12 @@ def _is_live_window(match_row) -> bool:
     toss_time = str(match_row.get("toss_time") or "").strip()
     if toss_time:
         try:
-            window_start = IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
+            window_start = IST.localize(datetime.strptime(f"{match_row['match_date']} {toss_time}", "%Y-%m-%d %H:%M"))
         except Exception:
-            window_start = match_datetime - timedelta(minutes=30)
+            try:
+                window_start = IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
+            except Exception:
+                window_start = match_datetime - timedelta(minutes=30)
     else:
         window_start = match_datetime - timedelta(minutes=30)
     return window_start <= now < match_datetime + timedelta(hours=5)
@@ -277,6 +280,7 @@ def _build_live_match_payload(match_id: int, match_row, registry, players_data, 
             match_row["match_date"],
             match_row["match_time"],
             match_row.get("toss_time"),
+            force_refresh=True,
         )
         playing_ids = playing_xi.get("player_ids", [])
         if playing_ids:

@@ -7,7 +7,7 @@ from backend.config import IST
 from backend.database import get_db
 from backend.middleware.auth import get_current_user
 from backend.services import data_service
-from backend.services.scraper import fetch_toss_info, should_attempt_toss_fetch
+from backend.services.scraper import get_cached_toss_info
 from backend.services.venue_stats import (
     get_today_cached_venue_stats,
     prime_today_venue_cache,
@@ -52,10 +52,6 @@ def compute_runtime_match_status(match_date: str, match_time: str, stored_status
         return "completed", True
 
     return "live", True
-
-
-def _should_fetch_toss_for_dashboard(match_date: str, match_time: str, toss_time: str | None, status: str) -> bool:
-    return status == "future" and should_attempt_toss_fetch(match_date, match_time, toss_time)
 
 
 @router.get("/matches")
@@ -112,18 +108,8 @@ def _build_matches_payload() -> list[dict]:
     result = []
     for match in prepared_matches:
         match["venue"] = get_today_cached_venue_stats(match["id"], match["match_date"], match["status"])
-        match["toss"] = (
-            fetch_toss_info(
-                int(match["id"]),
-                match["team1"],
-                match["team2"],
-                match["match_date"],
-                match["match_time"],
-                match.get("toss_time"),
-            )
-            if _should_fetch_toss_for_dashboard(match["match_date"], match["match_time"], match.get("toss_time"), match["status"])
-            else None
-        )
+        cached_toss = get_cached_toss_info(int(match["id"]))
+        match["toss"] = cached_toss if cached_toss and cached_toss.get("announced") else None
         result.append(match)
 
     today_matches = [m for m in result if (m["match_date"] == today_key or m["status"] == "live") and m["status"] not in {"completed", "nr"}]

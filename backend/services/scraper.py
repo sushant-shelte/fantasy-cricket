@@ -84,15 +84,20 @@ def compute_toss_time(match_date: str | None, match_time: str | None) -> str | N
     match_start = _parse_match_datetime(match_date, match_time)
     if not match_start:
         return None
-    return (match_start - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M")
+    return (match_start - timedelta(minutes=30)).strftime("%H:%M")
 
 
 def _resolve_window_start(match_date: str | None, match_time: str | None, toss_time: str | None = None):
     if toss_time:
         try:
-            return IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
+            parsed = datetime.strptime(toss_time, "%H:%M")
+            if match_date:
+                return IST.localize(datetime.strptime(f"{match_date} {parsed.strftime('%H:%M')}", "%Y-%m-%d %H:%M"))
         except Exception:
-            pass
+            try:
+                return IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
+            except Exception:
+                pass
     match_start = _parse_match_datetime(match_date, match_time)
     if not match_start:
         return None
@@ -1106,6 +1111,7 @@ def fetch_playing_xi(
     match_date: str | None = None,
     match_time: str | None = None,
     toss_time: str | None = None,
+    force_refresh: bool = False,
 ) -> dict:
     cached = PLAYING_XI_CACHE.get(int(match_id))
     now_ts = time.time()
@@ -1119,17 +1125,43 @@ def fetch_playing_xi(
     if cached:
         payload = _copy_playing_xi_payload(cached["payload"])
         if cached.get("finalized"):
+            try:
+                data_service.set_cached_match_playing_xi(
+                    match_id, team1, team2, match_date or "", match_time or "", payload
+                )
+            except Exception:
+                pass
             return payload
-        if allow_cache_read and now_ts - cached.get("fetched_at", 0) < PLAYING_XI_TTL_SECONDS:
+        if not force_refresh and allow_cache_read and now_ts - cached.get("fetched_at", 0) < PLAYING_XI_TTL_SECONDS:
+            try:
+                data_service.set_cached_match_playing_xi(
+                    match_id, team1, team2, match_date or "", match_time or "", payload
+                )
+            except Exception:
+                pass
             return payload
 
     if not _should_attempt_playing_xi_fetch(match_date, match_time, toss_time):
-        return {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
+        payload = {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
+        try:
+            data_service.set_cached_match_playing_xi(
+                match_id, team1, team2, match_date or "", match_time or "", payload
+            )
+        except Exception:
+            pass
+        return payload
 
     cricbuzz_match_id = data_service.get_stored_cricbuzz_match_id(int(match_id)) or resolve_cricbuzz_match_id(int(match_id), team1, team2)
     if not cricbuzz_match_id:
         print(f"[Playing XI] Match {match_id}: no Cricbuzz match id found after schedule lookup")
-        return {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
+        payload = {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
+        try:
+            data_service.set_cached_match_playing_xi(
+                match_id, team1, team2, match_date or "", match_time or "", payload
+            )
+        except Exception:
+            pass
+        return payload
 
     commentary_url = build_cricbuzz_commentary_url(cricbuzz_match_id)
     squads_url = build_cricbuzz_playing_xi_url(cricbuzz_match_id)
@@ -1186,6 +1218,12 @@ def fetch_playing_xi(
                 "fetched_at": now_ts,
                 "finalized": False,
             }
+            try:
+                data_service.set_cached_match_playing_xi(
+                    match_id, team1, team2, match_date or "", match_time or "", payload
+                )
+            except Exception:
+                pass
             return _copy_playing_xi_payload(payload)
 
         parsed_payload = parse_playing_xi_from_sources(
@@ -1206,6 +1244,12 @@ def fetch_playing_xi(
                 "fetched_at": now_ts,
                 "finalized": False,
             }
+            try:
+                data_service.set_cached_match_playing_xi(
+                    match_id, team1, team2, match_date or "", match_time or "", payload
+                )
+            except Exception:
+                pass
             return _copy_playing_xi_payload(payload)
 
         source_url = parsed_payload["url"] or commentary_url
@@ -1230,6 +1274,12 @@ def fetch_playing_xi(
             "fetched_at": now_ts,
             "finalized": parsed_payload["finalized"],
         }
+        try:
+            data_service.set_cached_match_playing_xi(
+                match_id, team1, team2, match_date or "", match_time or "", payload
+            )
+        except Exception:
+            pass
         return _copy_playing_xi_payload(payload)
     except Exception as e:
         print("Error fetching playing XI:", e)
@@ -1239,6 +1289,12 @@ def fetch_playing_xi(
             "fetched_at": now_ts,
             "finalized": False,
         }
+        try:
+            data_service.set_cached_match_playing_xi(
+                match_id, team1, team2, match_date or "", match_time or "", payload
+            )
+        except Exception:
+            pass
         return _copy_playing_xi_payload(payload)
 
 
@@ -1249,6 +1305,7 @@ def fetch_toss_info(
     match_date: str | None = None,
     match_time: str | None = None,
     toss_time: str | None = None,
+    force_refresh: bool = False,
 ) -> dict:
     cached = TOSS_INFO_CACHE.get(int(match_id))
     now_ts = time.time()
@@ -1261,7 +1318,7 @@ def fetch_toss_info(
     if cached:
         if cached.get("announced"):
             return _copy_toss_payload(cached["payload"])
-        if now_ts - cached.get("fetched_at", 0) < TOSS_INFO_TTL_SECONDS:
+        if not force_refresh and now_ts - cached.get("fetched_at", 0) < TOSS_INFO_TTL_SECONDS:
             return _copy_toss_payload(cached["payload"])
 
     if not should_attempt_toss_fetch(match_date, match_time, toss_time):
@@ -1429,6 +1486,27 @@ def sync_match_metadata_from_schedule(db=None) -> dict[str, int]:
         "toss_time": updated_toss_times,
         "cricbuzz_match_id": updated_cricbuzz_ids,
     }
+
+
+def get_cached_toss_info(match_id: int) -> dict | None:
+    cached = TOSS_INFO_CACHE.get(int(match_id))
+    if not cached:
+        return None
+    return _copy_toss_payload(cached["payload"])
+
+
+def is_cached_toss_announced(match_id: int) -> bool:
+    cached = TOSS_INFO_CACHE.get(int(match_id))
+    return bool(cached and cached.get("announced"))
+
+
+def invalidate_live_metadata_cache(match_id: int | None = None) -> None:
+    if match_id is None:
+        PLAYING_XI_CACHE.clear()
+        TOSS_INFO_CACHE.clear()
+        return
+    PLAYING_XI_CACHE.pop(int(match_id), None)
+    TOSS_INFO_CACHE.pop(int(match_id), None)
 
 
 def populate_match_venues(db) -> None:

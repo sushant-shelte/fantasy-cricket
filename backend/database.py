@@ -218,7 +218,7 @@ def _ensure_matches_metadata_sqlite(conn):
         UPDATE matches
         SET toss_time = COALESCE(
             toss_time,
-            strftime('%Y-%m-%d %H:%M', datetime(match_date || ' ' || match_time, '-30 minutes'))
+            strftime('%H:%M', datetime(match_date || ' ' || match_time, '-30 minutes'))
         )
         WHERE toss_time IS NULL OR toss_time = ''
         """
@@ -235,7 +235,7 @@ def _ensure_matches_metadata_postgres(cursor):
             toss_time,
             TO_CHAR(
                 (match_date::date + match_time::time - INTERVAL '30 minutes'),
-                'YYYY-MM-DD HH24:MI'
+                'HH24:MI'
             )
         )
         WHERE toss_time IS NULL OR toss_time = ''

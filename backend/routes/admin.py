@@ -13,7 +13,7 @@ from backend.config import ROLES
 from backend.services import data_service
 from backend.routes.leaderboard import invalidate_leaderboard_cache
 from backend.routes.matches import invalidate_matches_response_cache
-from backend.services.scraper import compute_toss_time
+from backend.services.scraper import compute_toss_time, invalidate_live_metadata_cache
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -303,6 +303,7 @@ async def update_match(
     explicit_status = (body.status or "").strip().lower() if body.status is not None else None
     if schedule_changed or teams_changed or explicit_status in {"future", "live", "nr"}:
         data_service.clear_points_for_match(match_id)
+        invalidate_live_metadata_cache(match_id)
     db.commit()
     data_service.invalidate_cache("matches")
     data_service.invalidate_match_player_payloads()
@@ -343,6 +344,7 @@ async def delete_match(
     db.commit()
     data_service.invalidate_cache("matches")
     data_service.invalidate_match_player_payloads()
+    invalidate_live_metadata_cache(match_id)
     invalidate_matches_response_cache()
     _refresh_tournament_static_state(refresh_schedule_map=True)
 
@@ -380,6 +382,7 @@ async def recalculate_match(
         tournament_ref.persist_player_points_to_local()
         tournament_ref.persist_to_local()
         data_service.invalidate_match_player_payloads()
+    invalidate_live_metadata_cache(match_id)
 
     data_service.invalidate_cache("matches")
     invalidate_matches_response_cache()

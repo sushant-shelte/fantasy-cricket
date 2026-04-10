@@ -8,8 +8,6 @@ from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.config import IST, ROLES
 from backend.services import data_service
-from backend.services.scraper import fetch_playing_xi
-
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
 
@@ -161,22 +159,7 @@ async def my_lineup_statuses(
         ):
             playing_xi = cached_playing_xi
         else:
-            playing_xi = fetch_playing_xi(
-                match_id,
-                match["team1"],
-                match["team2"],
-                players,
-                match["match_date"],
-                match["match_time"],
-            )
-            playing_xi = data_service.set_cached_match_playing_xi(
-                match_id,
-                match["team1"],
-                match["team2"],
-                match["match_date"],
-                match["match_time"],
-                playing_xi,
-            )
+            playing_xi = {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
 
         playing_ids = set(playing_xi.get("player_ids", []))
         substitute_ids = set(playing_xi.get("substitute_ids", []))
