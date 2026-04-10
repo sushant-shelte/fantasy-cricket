@@ -194,6 +194,8 @@ def start_completed_match_recompute_if_needed():
 def startup():
     admin.set_tournament(tournament)
     start_bootstrap_if_needed()
+    # Start background fetcher for Cricbuzz scraping
+    data_service.start_background_fetcher()
     # Populate venue data from Cricbuzz in background (fails silently)
     import threading
     def _populate_venues():
@@ -204,6 +206,11 @@ def startup():
         except Exception:
             pass
     threading.Thread(target=_populate_venues, daemon=True).start()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    data_service.stop_background_fetcher()
 
 
 @app.get("/api/health")

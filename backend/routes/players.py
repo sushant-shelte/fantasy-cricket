@@ -198,8 +198,8 @@ async def list_players(
                 team1,
                 team2,
                 players,
-                match["match_date"],
-                match["match_time"],
+                match_date,
+                match_time,
             )
         except Exception as exc:
             print(f"[players] Playing XI fetch failed for match {match_id}: {exc}")
@@ -210,8 +210,8 @@ async def list_players(
                 match_id,
                 team1,
                 team2,
-                match["match_date"],
-                match["match_time"],
+                match_date,
+                match_time,
             )
         except Exception as exc:
             print(f"[players] Toss fetch failed for match {match_id}: {exc}")

@@ -7,7 +7,6 @@ from backend.config import IST
 from backend.database import get_db
 from backend.middleware.auth import get_current_user
 from backend.services import data_service
-from backend.services.scraper import fetch_toss_info, should_attempt_toss_fetch
 from backend.services.venue_stats import (
     get_today_cached_venue_stats,
     prime_today_venue_cache,
@@ -42,7 +41,10 @@ def compute_runtime_match_status(match_date: str, match_time: str, stored_status
     if normalized_status in {"completed", "nr"}:
         return normalized_status, True
 
+    # Within 30 minutes before match start: "lineups" state
     if now < match_datetime:
+        if now >= match_datetime - timedelta(minutes=30):
+            return "lineups", False
         return "future", False
 
     if normalized_status == "live":
@@ -55,7 +57,8 @@ def compute_runtime_match_status(match_date: str, match_time: str, stored_status
 
 
 def _should_fetch_toss_for_dashboard(match_date: str, match_time: str, status: str) -> bool:
-    return status == "future" and should_attempt_toss_fetch(match_date, match_time)
+    # Only fetch toss for matches in "lineup" state (within 30min of start)
+    return status == "lineups"
 
 
 @router.get("/matches")
@@ -112,17 +115,28 @@ def _build_matches_payload() -> list[dict]:
     result = []
     for match in prepared_matches:
         match["venue"] = get_today_cached_venue_stats(match["id"], match["match_date"], match["status"])
-        match["toss"] = (
-            fetch_toss_info(
+        
+        # Queue toss fetch for lineup matches, then get cached result (may be None if still fetching)
+        should_fetch = _should_fetch_toss_for_dashboard(match["match_date"], match["match_time"], match["status"])
+        if should_fetch:
+            data_service.queue_toss_fetch(
                 int(match["id"]),
                 match["team1"],
                 match["team2"],
                 match["match_date"],
                 match["match_time"],
+                should_fetch=True,
             )
-            if _should_fetch_toss_for_dashboard(match["match_date"], match["match_time"], match["status"])
-            else None
-        )
+            # Try to get cached toss (background fetcher may have processed it already)
+            cached_toss = data_service.get_cached_toss_info(
+                int(match["id"]),
+                match["match_date"],
+                match["match_time"],
+            )
+            match["toss"] = cached_toss
+        else:
+            match["toss"] = None
+        
         result.append(match)
 
     today_matches = [m for m in result if (m["match_date"] == today_key or m["status"] == "live") and m["status"] not in {"completed", "nr"}]
@@ -136,7 +150,7 @@ def _build_matches_payload() -> list[dict]:
     payload = today_matches + future_matches + completed_matches
     route_ms = (time.perf_counter() - route_started) * 1000
     if route_ms >= 80:
-        print(f"[MATCHES timing] build={route_ms:.1f}ms rows={len(payload)}")
+        print(f"[MATCHES timing] build={route_ms:.1f}ms rows={len(payload)} (toss fetches queued, not blocking)")
     return payload
 
 
