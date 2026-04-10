@@ -67,6 +67,18 @@ def _row_value(row, *keys, default=None):
     return default
 
 
+def _match_status_value(match_row) -> str:
+    return str(_row_value(match_row, "status", "Status", default="") or "").strip().lower()
+
+
+def _is_live_score_target(match_row) -> bool:
+    return _match_status_value(match_row) == "live"
+
+
+def _is_completed_score_target(match_row) -> bool:
+    return _match_status_value(match_row) == "completed"
+
+
 def invalidate_scores_response_cache():
     with SCORES_RESPONSE_CACHE_LOCK:
         SCORES_RESPONSE_CACHE["matches"] = {}
@@ -102,6 +114,22 @@ def _wait_for_cached_score_payload(match_id: int, timeout_seconds: float = 8.0, 
     return _get_cached_score_payload(match_id)
 
 
+def _ensure_score_payload_cached(match_id: int, match_row=None) -> dict | None:
+    cached_payload = _wait_for_cached_score_payload(match_id)
+    if cached_payload is not None:
+        return cached_payload
+
+    if match_row is not None and _match_status_value(match_row) in {"live", "completed"}:
+        _log_scores_cache(f"cold cache match={match_id} -> refreshing before response")
+        try:
+            refresh_scores_response_cache_once()
+        except Exception as exc:
+            _log_scores_cache(f"cold cache refresh failed match={match_id}: {exc}")
+        cached_payload = _wait_for_cached_score_payload(match_id)
+
+    return cached_payload
+
+
 def _store_scores_response_cache(snapshot: dict[int, dict]) -> None:
     with SCORES_RESPONSE_CACHE_LOCK:
         SCORES_RESPONSE_CACHE["matches"] = copy.deepcopy(snapshot)
@@ -111,9 +139,13 @@ def _store_scores_response_cache(snapshot: dict[int, dict]) -> None:
 
 
 def _build_match_scores_payload(match_id: int, match_row, registry, players_data, db) -> dict | None:
-    match_status = str(match_row.get("status") or "").strip().lower()
+    match_status = _match_status_value(match_row)
     if match_status == "nr":
         return _empty_match_scores_payload("nr")
+    if _is_completed_score_target(match_row):
+        return _build_completed_match_scores_payload(match_id, match_row, registry, players_data, db)
+    if not _is_live_score_target(match_row):
+        return None
 
     match_obj = None
     html_content = None
@@ -201,6 +233,105 @@ def _build_match_scores_payload(match_id: int, match_row, registry, players_data
     }
 
 
+def _build_completed_match_scores_payload(match_id: int, match_row, registry, players_data, db) -> dict | None:
+    match_status = _match_status_value(match_row)
+    if match_status == "nr":
+        return _empty_match_scores_payload("nr")
+
+    match_obj = _get_completed_match_from_tournament(match_id)
+    team1 = clean_team_name(_row_value(match_row, "team1", "Team1", default=""))
+    team2 = clean_team_name(_row_value(match_row, "team2", "Team2", default=""))
+    owners_by_player = _load_player_owners(db, match_id)
+
+    pp_rows = db.execute(
+        "SELECT * FROM player_points WHERE match_id = ?",
+        (match_id,),
+    ).fetchall()
+    pp_lookup: dict[str, float] = {}
+    role_lookup: dict[str, str] = {}
+    for row in pp_rows:
+        pp_lookup[str(row["player_id"])] = float(row["points"])
+        role_lookup[str(row["player_id"])] = row["role"]
+
+    players = []
+    if match_obj and getattr(match_obj, "players", None):
+        for p in match_obj.players.values():
+            pid_str = str(p.player_id)
+            role = role_lookup.get(pid_str) or registry.players.get(p.player_id, {}).get("Role")
+            points = round(float(pp_lookup.get(pid_str, 0)), 2)
+            players.append({
+                "player_id": int(p.player_id),
+                "name": p.name,
+                "team": p.team or registry.players.get(p.player_id, {}).get("Team", ""),
+                "role": role,
+                "played": bool(getattr(p, "played", False)),
+                "is_out": bool(getattr(p, "is_out", False)),
+                "runs": getattr(p, "runs", 0),
+                "balls": getattr(p, "balls", 0),
+                "fours": getattr(p, "fours", 0),
+                "sixes": getattr(p, "sixes", 0),
+                "strike_rate": getattr(p, "strike_rate", 0),
+                "overs": getattr(p, "overs", 0),
+                "maidens": getattr(p, "maidens", 0),
+                "runs_conceded": getattr(p, "runs_conceded", 0),
+                "wickets": getattr(p, "wickets", 0),
+                "bowled": getattr(p, "bowled", 0),
+                "lbw": getattr(p, "lbw", 0),
+                "economy": getattr(p, "economy", 0),
+                "dot_balls": getattr(p, "dot_balls", 0),
+                "catches": getattr(p, "catches", 0),
+                "runout_direct": getattr(p, "runout_direct", 0),
+                "stumpings": getattr(p, "stumpings", 0),
+                "runout_indirect": getattr(p, "runout_indirect", 0),
+                "points": points,
+                "breakdown": [],
+                "owners": owners_by_player.get(int(p.player_id), []),
+            })
+    else:
+        players_rows = _build_players_rows(players_data, team1, team2)
+        for row in players_rows:
+            pid = int(row["id"])
+            pid_str = str(pid)
+            players.append({
+                "player_id": pid,
+                "name": row["name"],
+                "team": row["team"],
+                "role": role_lookup.get(pid_str) or row["role"],
+                "played": pid_str in pp_lookup,
+                "is_out": False,
+                "runs": 0,
+                "balls": 0,
+                "fours": 0,
+                "sixes": 0,
+                "strike_rate": 0,
+                "overs": 0,
+                "maidens": 0,
+                "runs_conceded": 0,
+                "wickets": 0,
+                "bowled": 0,
+                "lbw": 0,
+                "economy": 0,
+                "dot_balls": 0,
+                "catches": 0,
+                "runout_direct": 0,
+                "stumpings": 0,
+                "runout_indirect": 0,
+                "points": round(float(pp_lookup.get(pid_str, 0)), 2),
+                "breakdown": [],
+                "owners": owners_by_player.get(pid, []),
+            })
+
+    players.sort(key=lambda x: x["points"], reverse=True)
+    contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
+
+    return {
+        "players": players,
+        "contestants": contestants,
+        "match_status": match_status or "completed",
+        "scorecard": _serialize_scorecard(match_obj) if match_obj else [],
+    }
+
+
 def refresh_scores_response_cache_once() -> dict:
     db = get_db()
     registry, players_data = _build_registry(db)
@@ -214,16 +345,27 @@ def refresh_scores_response_cache_once() -> dict:
 
     for match_row in matches_data:
         match_id = int(match_row["MatchID"])
-        status = str(match_row.get("Status") or "").strip().lower()
-        if status in {"live", "completed", "nr"} or _is_live_window(match_row):
-            eligible += 1
+        status = _match_status_value(match_row)
         try:
-            payload = _build_match_scores_payload(match_id, match_row, registry, players_data, db)
-            if payload is not None:
-                snapshot[match_id] = payload
+            if status == "future":
+                continue
+            if status == "nr":
+                snapshot[match_id] = _empty_match_scores_payload("nr")
                 refreshed += 1
-            else:
-                _log_scores_cache(f"match {match_id} skipped no hydrated payload")
+                continue
+            if status == "completed":
+                eligible += 1
+                payload = _build_completed_match_scores_payload(match_id, match_row, registry, players_data, db)
+                if payload is not None:
+                    snapshot[match_id] = payload
+                    refreshed += 1
+                continue
+            if status == "live":
+                eligible += 1
+                payload = _build_match_scores_payload(match_id, match_row, registry, players_data, db)
+                if payload is not None:
+                    snapshot[match_id] = payload
+                    refreshed += 1
         except Exception as exc:
             errors += 1
             _log_scores_cache(f"match {match_id} refresh error: {exc}")
@@ -641,12 +783,12 @@ async def match_scores(
     if not match_row:
         raise HTTPException(status_code=404, detail="Match not found")
 
-    match_status = str(match_row.get("status") or "").strip().lower()
+    match_status = _match_status_value(match_row)
 
     if match_status == "nr":
         return _empty_match_scores_payload("nr")
 
-    cached_payload = _wait_for_cached_score_payload(match_id)
+    cached_payload = _ensure_score_payload_cached(match_id, match_row)
     if cached_payload is None:
         _log_scores_cache(
             f"cache miss match={match_id} status={match_status or 'unknown'} ready={SCORES_RESPONSE_CACHE['ready']}"
@@ -771,7 +913,7 @@ def _load_match_and_points(db, match_id):
     if not match_row:
         return None, None, {}, {}
 
-    cached_payload = _wait_for_cached_score_payload(match_id)
+    cached_payload = _ensure_score_payload_cached(match_id, match_row)
     if not cached_payload:
         return match_row, None, {}, {}
 
