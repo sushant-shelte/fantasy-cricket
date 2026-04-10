@@ -8,6 +8,7 @@ from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.config import IST, ROLES
 from backend.services import data_service
+from backend.services.scraper import fetch_playing_xi
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -92,65 +93,49 @@ async def my_lineup_statuses(
     match_ids: str = Query(...),
     user: dict = Depends(get_current_user),
 ):
-    from backend.routes.matches import compute_runtime_match_status
-    
     started = time.perf_counter()
     requested_ids = [int(match_id.strip()) for match_id in match_ids.split(",") if match_id.strip()]
     if not requested_ids:
         return {}
 
     db = get_db()
-    today_str = get_now().strftime("%Y-%m-%d")
     placeholders = ",".join("?" * len(requested_ids))
 
     match_rows = db.execute(
         f"SELECT * FROM matches WHERE id IN ({placeholders})",
         requested_ids,
     ).fetchall()
-    
-    # Filter to today's matches only
-    eligible_matches = {}
-    for row in match_rows:
-        match_dict = dict(row)
-        status, _ = compute_runtime_match_status(
-            match_dict["match_date"],
-            match_dict["match_time"],
-            match_dict.get("status"),
-        )
-        # Only include today's matches that are in lineup state (within 30min of start)
-        if match_dict["match_date"] == today_str and status == "lineups":
-            eligible_matches[row["id"]] = match_dict
-    
-    if not eligible_matches:
-        # Return empty response for all requested matches
-        return {str(match_id): {
-            "announced": False,
-            "complete": False,
-            "unannouncedSelected": 0,
-            "substituteSelected": 0,
-            "backupCount": 0,
-        } for match_id in requested_ids}
-    
-    eligible_match_ids = list(eligible_matches.keys())
-    backup_counts = data_service.get_backup_counts_for_user(user["id"], eligible_match_ids)
+    match_lookup = {row["id"]: dict(row) for row in match_rows}
+    backup_counts = data_service.get_backup_counts_for_user(user["id"], requested_ids)
 
     team_rows = db.execute(
         f"""
         SELECT match_id, player_id
         FROM user_teams
         WHERE user_id = ?
-          AND match_id IN ({','.join('?' * len(eligible_match_ids))})
+          AND match_id IN ({placeholders})
         """,
-        [user["id"], *eligible_match_ids],
+        [user["id"], *requested_ids],
     ).fetchall()
 
     selected_by_match = {}
     for row in team_rows:
         selected_by_match.setdefault(int(row["match_id"]), set()).add(int(row["player_id"]))
 
-    # Queue background fetches for playing XI
-    for match_id in eligible_match_ids:
-        match = eligible_matches[match_id]
+    result = {}
+    for match_id in requested_ids:
+        match = match_lookup.get(match_id)
+        selected_ids = selected_by_match.get(match_id, set())
+        if not match or not selected_ids:
+            result[str(match_id)] = {
+                "announced": False,
+                "complete": False,
+                "unannouncedSelected": 0,
+                "substituteSelected": 0,
+                "backupCount": backup_counts.get(match_id, 0),
+            }
+            continue
+
         player_rows = db.execute(
             """
             SELECT id, name, team, role, aliases
@@ -160,53 +145,14 @@ async def my_lineup_statuses(
             (match["team1"], match["team2"]),
         ).fetchall()
         players = [dict(row) for row in player_rows]
-        
-        # Queue the fetch instead of doing it sync
-        data_service.queue_playing_xi_fetch(
+        playing_xi = fetch_playing_xi(
             match_id,
             match["team1"],
             match["team2"],
             players,
             match["match_date"],
             match["match_time"],
-            should_fetch=True,
         )
-
-    result = {}
-    for match_id in requested_ids:
-        # For non-eligible matches, return empty status
-        if match_id not in eligible_matches:
-            result[str(match_id)] = {
-                "announced": False,
-                "complete": False,
-                "unannouncedSelected": 0,
-                "substituteSelected": 0,
-                "backupCount": 0,
-            }
-            continue
-        
-        match = eligible_matches[match_id]
-        selected_ids = selected_by_match.get(match_id, set())
-        
-        # Try to get cached playing XI (from background fetcher)
-        playing_xi = data_service.get_cached_playing_xi(
-            match_id,
-            match["team1"],
-            match["team2"],
-            match["match_date"],
-            match["match_time"],
-        )
-        
-        # If not cached yet, use empty response (background fetcher is processing)
-        if playing_xi is None:
-            result[str(match_id)] = {
-                "announced": False,
-                "complete": False,
-                "unannouncedSelected": 0,
-                "substituteSelected": 0,
-                "backupCount": backup_counts.get(match_id, 0),
-            }
-            continue
 
         playing_ids = set(playing_xi.get("player_ids", []))
         substitute_ids = set(playing_xi.get("substitute_ids", []))
@@ -231,7 +177,7 @@ async def my_lineup_statuses(
     if elapsed_ms >= 80:
         print(
             f"[API timing] GET /api/teams/my-lineup-statuses total={elapsed_ms:.1f}ms "
-            f"user_id={user['id']} matches={len(requested_ids)} filtered_to_lineup={len(eligible_matches)}"
+            f"user_id={user['id']} matches={len(requested_ids)}"
         )
     return result
 
@@ -241,46 +187,17 @@ async def my_backup_counts(
     match_ids: str = Query(...),
     user: dict = Depends(get_current_user),
 ):
-    from backend.routes.matches import compute_runtime_match_status
-    
     started = time.perf_counter()
     requested_ids = [int(match_id.strip()) for match_id in match_ids.split(",") if match_id.strip()]
     if not requested_ids:
         return {}
-    
-    db = get_db()
-    today_str = get_now().strftime("%Y-%m-%d")
-    placeholders = ",".join("?" * len(requested_ids))
-    
-    # Get match info to filter by date
-    match_rows = db.execute(
-        f"SELECT id, match_date, match_time, status FROM matches WHERE id IN ({placeholders})",
-        requested_ids,
-    ).fetchall()
-    
-    # Filter to today's matches until they start (future or lineup state)
-    eligible_match_ids = []
-    for row in match_rows:
-        status, _ = compute_runtime_match_status(
-            row["match_date"],
-            row["match_time"],
-            row["status"],
-        )
-        # Only include today's matches before they start
-        if row["match_date"] == today_str and status in ("future", "lineups"):
-            eligible_match_ids.append(int(row["id"]))
-    
-    if not eligible_match_ids:
-        return {str(match_id): 0 for match_id in requested_ids}
-    
-    counts = data_service.get_backup_counts_for_user(user["id"], eligible_match_ids)
+    counts = data_service.get_backup_counts_for_user(user["id"], requested_ids)
     result = {str(match_id): counts.get(match_id, 0) for match_id in requested_ids}
-    
     elapsed_ms = (time.perf_counter() - started) * 1000
     if elapsed_ms >= 80:
         print(
             f"[API timing] GET /api/teams/my-backup-counts total={elapsed_ms:.1f}ms "
-            f"user_id={user['id']} matches={len(requested_ids)} filtered_to_today={len(eligible_match_ids)}"
+            f"user_id={user['id']} matches={len(requested_ids)}"
         )
     return result
 

@@ -362,27 +362,14 @@ async def recalculate_match(
     updated_match_row = tournament_ref.match_rows.get(match_id_str, {})
     refreshed_status = tournament_ref.get_match_status(updated_match_row)
 
-    # Always refresh availability-related caches for this match after recompute.
-    team1 = updated_match_row.get("Team1") or match_row["team1"]
-    team2 = updated_match_row.get("Team2") or match_row["team2"]
-    match_date = updated_match_row.get("Date") or match_row["match_date"]
-    match_time = updated_match_row.get("Time") or match_row["match_time"]
-    data_service.invalidate_runtime_caches_for_match(
-        match_id,
-        team1=team1,
-        team2=team2,
-        match_date=match_date,
-        match_time=match_time,
-    )
-
     if refreshed_status == "completed":
         tournament_ref.compute_player_points_for_match(match_id_str)
         tournament_ref.compute_points_for_match(match_id_str)
         tournament_ref.persist_player_points_to_local()
         tournament_ref.persist_to_local()
+        data_service.invalidate_match_player_payloads()
 
     data_service.invalidate_cache("matches")
-    data_service.invalidate_match_player_payloads(match_id)
     invalidate_matches_response_cache()
     invalidate_leaderboard_cache()
 

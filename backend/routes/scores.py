@@ -387,7 +387,7 @@ async def match_scores(
         match_row,
         registry,
         players_data,
-        include_playing_xi=False,
+        include_playing_xi=_is_live_window(match_row),
     )
 
     if not html_content:
@@ -515,7 +515,7 @@ async def team_breakdown(
             match_row,
             registry,
             players_data,
-            include_playing_xi=False,
+            include_playing_xi=_is_live_window(match_row),
         )
         if html_content:
             # Calculate points so breakdown is available
@@ -596,7 +596,7 @@ def _load_match_and_points(db, match_id):
         match_row,
         registry,
         players_data,
-        include_playing_xi=False,
+        include_playing_xi=_is_live_window(match_row),
     )
 
     pp_rows = db.execute("SELECT * FROM player_points WHERE match_id = ?", (match_id,)).fetchall()
