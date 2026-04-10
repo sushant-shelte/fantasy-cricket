@@ -80,6 +80,13 @@ class PgConnectionWrapper:
         if self._is_closed():
             self._conn = _connect_postgres(self._dsn)
 
+    def _rollback_safely(self):
+        try:
+            if not self._is_closed():
+                self._conn.rollback()
+        except Exception:
+            pass
+
     def execute(self, sql, params=None):
         self._ensure_connection()
         sql = sql.replace("?", "%s")
@@ -87,25 +94,38 @@ class PgConnectionWrapper:
             cursor = self._conn.cursor()
             cursor.execute(sql, params)
         except Exception as exc:
-            if not _should_reconnect_postgres(exc):
+            self._rollback_safely()
+            if _is_failed_transaction_postgres(exc):
+                cursor = self._conn.cursor()
+                cursor.execute(sql, params)
+            elif _should_reconnect_postgres(exc):
+                self._conn = _connect_postgres(self._dsn)
+                cursor = self._conn.cursor()
+                cursor.execute(sql, params)
+            else:
                 raise
-            self._conn = _connect_postgres(self._dsn)
-            cursor = self._conn.cursor()
-            cursor.execute(sql, params)
         return PgCursorWrapper(cursor, self._conn)
 
     def executescript(self, sql):
         self._ensure_connection()
-        cursor = self._conn.cursor()
-        for stmt in sql.split(";"):
-            stmt = stmt.strip()
-            if stmt:
-                cursor.execute(stmt)
-        self._conn.commit()
+        try:
+            cursor = self._conn.cursor()
+            for stmt in sql.split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    cursor.execute(stmt)
+            self._conn.commit()
+        except Exception:
+            self._rollback_safely()
+            raise
 
     def commit(self):
         self._ensure_connection()
-        self._conn.commit()
+        try:
+            self._conn.commit()
+        except Exception:
+            self._rollback_safely()
+            raise
 
     def close(self):
         if self._conn is not None and not self._is_closed():
@@ -133,6 +153,11 @@ def _connect_postgres(dsn: str):
 def _should_reconnect_postgres(exc: Exception) -> bool:
     message = str(exc).lower()
     return "connection already closed" in message or "closed the connection unexpectedly" in message
+
+
+def _is_failed_transaction_postgres(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "current transaction is aborted" in message or "in failed sql transaction" in message
 
 
 def _sqlite_column_exists(conn, table_name, column_name):
