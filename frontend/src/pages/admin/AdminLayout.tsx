@@ -111,7 +111,7 @@ export default function AdminLayout() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen bg-slate-950 flex">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col w-64 bg-gray-900 min-h-screen fixed left-0 top-0 z-30">
         {sidebar}
@@ -142,18 +142,18 @@ export default function AdminLayout() {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 lg:ml-64">
+      <div className="flex-1 lg:ml-64 bg-slate-950">
         {/* Mobile header */}
-        <header className="lg:hidden bg-white shadow px-4 py-3 flex items-center gap-4 sticky top-0 z-20">
-          <button onClick={() => setSidebarOpen(true)} className="text-gray-600 hover:text-gray-900">
+        <header className="lg:hidden bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center gap-4 sticky top-0 z-20">
+          <button onClick={() => setSidebarOpen(true)} className="text-slate-300 hover:text-white">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <h1 className="text-lg font-semibold text-gray-800">Admin Panel</h1>
+          <h1 className="text-lg font-semibold text-slate-100">Admin Panel</h1>
         </header>
 
-        <main className="p-6">
+        <main className="p-6 bg-slate-950 min-h-screen">
           <Outlet />
         </main>
       </div>
