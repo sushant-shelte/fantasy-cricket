@@ -183,6 +183,41 @@ def _ensure_team_backups_sqlite(conn):
     """)
 
 
+def _ensure_matches_metadata_sqlite(conn):
+    if not _sqlite_column_exists(conn, "matches", "cricbuzz_match_id"):
+        conn.execute("ALTER TABLE matches ADD COLUMN cricbuzz_match_id INTEGER DEFAULT NULL")
+    if not _sqlite_column_exists(conn, "matches", "toss_time"):
+        conn.execute("ALTER TABLE matches ADD COLUMN toss_time TEXT DEFAULT NULL")
+    conn.execute(
+        """
+        UPDATE matches
+        SET toss_time = COALESCE(
+            toss_time,
+            strftime('%Y-%m-%d %H:%M', datetime(match_date || ' ' || match_time, '-30 minutes'))
+        )
+        WHERE toss_time IS NULL OR toss_time = ''
+        """
+    )
+
+
+def _ensure_matches_metadata_postgres(cursor):
+    cursor.execute("ALTER TABLE matches ADD COLUMN IF NOT EXISTS cricbuzz_match_id INTEGER")
+    cursor.execute("ALTER TABLE matches ADD COLUMN IF NOT EXISTS toss_time TEXT")
+    cursor.execute(
+        """
+        UPDATE matches
+        SET toss_time = COALESCE(
+            toss_time,
+            TO_CHAR(
+                (match_date::date + match_time::time - INTERVAL '30 minutes'),
+                'YYYY-MM-DD HH24:MI'
+            )
+        )
+        WHERE toss_time IS NULL OR toss_time = ''
+        """
+    )
+
+
 def get_db():
     if not hasattr(_local, "conn") or _local.conn is None:
         if _is_postgres():
@@ -232,7 +267,9 @@ def init_db():
                 match_date TEXT NOT NULL,
                 match_time TEXT NOT NULL,
                 status TEXT DEFAULT 'future',
-                venue TEXT DEFAULT NULL
+                venue TEXT DEFAULT NULL,
+                cricbuzz_match_id INTEGER DEFAULT NULL,
+                toss_time TEXT DEFAULT NULL
             )
         """)
         cursor.execute("""
@@ -241,6 +278,7 @@ def init_db():
         """)
         if not cursor.fetchone():
             cursor.execute("ALTER TABLE matches ADD COLUMN venue TEXT DEFAULT NULL")
+        _ensure_matches_metadata_postgres(cursor)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_teams (
                 id SERIAL PRIMARY KEY,
@@ -320,7 +358,9 @@ def init_db():
                 match_date TEXT NOT NULL,
                 match_time TEXT NOT NULL,
                 status TEXT DEFAULT 'future',
-                venue TEXT DEFAULT NULL
+                venue TEXT DEFAULT NULL,
+                cricbuzz_match_id INTEGER DEFAULT NULL,
+                toss_time TEXT DEFAULT NULL
             );
             CREATE TABLE IF NOT EXISTS user_teams (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -377,5 +417,6 @@ def init_db():
             conn.execute("ALTER TABLE matches ADD COLUMN venue TEXT DEFAULT NULL")
         except Exception:
             pass
+        _ensure_matches_metadata_sqlite(conn)
         conn.commit()
         conn.close()

@@ -15,6 +15,7 @@ from backend.config import IST
 from backend.database import init_db, get_db
 from backend.firebase_setup import init_firebase
 from backend.services import data_service
+from backend.services.scraper import compute_toss_time, sync_match_metadata_from_schedule
 from backend.services.venue_stats import prime_today_venue_cache
 from backend.models.tournament import Tournament
 from backend.routes import auth, matches, players, teams, scores, leaderboard, admin
@@ -95,16 +96,31 @@ def seed_db_if_needed():
         time_str = row[2].strftime("%H:%M")
         db.execute(
             """
-            INSERT INTO matches (id, team1, team2, match_date, match_time, status)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO matches (id, team1, team2, match_date, match_time, status, toss_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (id) DO UPDATE SET
                 team1 = ?,
                 team2 = ?,
                 match_date = ?,
                 match_time = ?,
-                status = ?
+                status = ?,
+                toss_time = ?
             """,
-            (int(row[0]), row[3], row[4], date_str, time_str, "future", row[3], row[4], date_str, time_str, "future"),
+            (
+                int(row[0]),
+                row[3],
+                row[4],
+                date_str,
+                time_str,
+                "future",
+                compute_toss_time(date_str, time_str),
+                row[3],
+                row[4],
+                date_str,
+                time_str,
+                "future",
+                compute_toss_time(date_str, time_str),
+            ),
         )
         match_count += 1
 
@@ -119,6 +135,7 @@ def bootstrap_app():
         init_db()
         print("Database initialized")
         seed_db_if_needed()
+        sync_match_metadata_from_schedule(get_db())
 
         init_firebase()
         data_service.prime_static_cache()

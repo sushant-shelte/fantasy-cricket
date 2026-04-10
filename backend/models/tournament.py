@@ -43,6 +43,7 @@ class Tournament:
         self.locked_match_ids_loaded = set()
         if teams_data:
             self.load_teams(teams_data)
+        self.sync_persistent_match_statuses()
 
     def refresh_static_data(self, players_data, matches_data, refresh_schedule_map=False):
         self.registry = PlayerRegistry(players_data)
@@ -164,6 +165,19 @@ class Tournament:
         invalidate_matches_response_cache()
         return True
 
+    def sync_persistent_match_statuses(self, match_rows=None):
+        rows = match_rows or list(self.match_rows.values())
+        changed = 0
+        for match_row in rows:
+            match_id = str(match_row.get("MatchID") or match_row.get("id") or "")
+            if not match_id:
+                continue
+            status = self.get_match_status(match_row)
+            if status in {"live", "completed", "nr"}:
+                if self._set_persistent_match_status(match_id, status):
+                    changed += 1
+        return changed
+
     def _has_match_started(self, match_row) -> bool:
         try:
             match_datetime = datetime.strptime(
@@ -242,10 +256,19 @@ class Tournament:
         now = datetime.now(IST)
 
         stored_status = str(match_row.get("Status") or "").strip().lower()
+        toss_time = str(match_row.get("TossTime") or match_row.get("toss_time") or "").strip()
+        if toss_time:
+            try:
+                window_start = IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
+            except Exception:
+                window_start = match_datetime - timedelta(minutes=30)
+        else:
+            window_start = match_datetime - timedelta(minutes=30)
+
         if stored_status in {"completed", "nr"}:
             return stored_status
 
-        if now < match_datetime - timedelta(minutes=30):
+        if now < window_start:
             return "future"
         if now < match_datetime:
             return "lineups"
@@ -432,6 +455,7 @@ class Tournament:
                             locked_match_ids_to_load.append(match_id)
 
                     self.ensure_match_teams_loaded(locked_match_ids_to_load)
+                    self.sync_persistent_match_statuses(matches_data)
 
                     processed = 0
 

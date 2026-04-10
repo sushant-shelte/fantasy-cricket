@@ -16,6 +16,7 @@ from backend.config import (
     TEAM_MAP,
 )
 from backend.models.registry import PlayerRegistry
+from backend.services import data_service
 
 
 CRICBUZZ_MATCH_ID_MAP: dict[int, int] = {}
@@ -68,38 +69,64 @@ def _is_playing_xi_announced(payload: dict) -> bool:
     return len(payload.get("player_ids", [])) == 22
 
 
-def _should_attempt_playing_xi_fetch(match_date: str | None, match_time: str | None) -> bool:
+def _parse_match_datetime(match_date: str | None, match_time: str | None):
     if not match_date or not match_time:
-        return True
+        return None
 
     try:
         match_start = IST.localize(datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M"))
     except Exception:
+        return None
+    return match_start
+
+
+def compute_toss_time(match_date: str | None, match_time: str | None) -> str | None:
+    match_start = _parse_match_datetime(match_date, match_time)
+    if not match_start:
+        return None
+    return (match_start - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M")
+
+
+def _resolve_window_start(match_date: str | None, match_time: str | None, toss_time: str | None = None):
+    if toss_time:
+        try:
+            return IST.localize(datetime.strptime(toss_time, "%Y-%m-%d %H:%M"))
+        except Exception:
+            pass
+    match_start = _parse_match_datetime(match_date, match_time)
+    if not match_start:
+        return None
+    return match_start - timedelta(minutes=30)
+
+
+def _should_attempt_playing_xi_fetch(match_date: str | None, match_time: str | None, toss_time: str | None = None) -> bool:
+    match_start = _parse_match_datetime(match_date, match_time)
+    if not match_start:
         return True
 
-    return datetime.now(IST) >= (match_start - timedelta(minutes=30))
+    window_start = _resolve_window_start(match_date, match_time, toss_time)
+    if not window_start:
+        return True
+
+    return datetime.now(IST) >= window_start
 
 
-def should_attempt_toss_fetch(match_date: str | None, match_time: str | None) -> bool:
-    if not match_date or not match_time:
+def should_attempt_toss_fetch(match_date: str | None, match_time: str | None, toss_time: str | None = None) -> bool:
+    match_start = _parse_match_datetime(match_date, match_time)
+    if not match_start:
         return False
 
-    try:
-        match_start = IST.localize(datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M"))
-    except Exception:
+    window_start = _resolve_window_start(match_date, match_time, toss_time)
+    if not window_start:
         return False
 
     now = datetime.now(IST)
-    return (match_start - timedelta(minutes=30)) <= now < match_start
+    return window_start <= now < match_start
 
 
 def _is_before_match_start(match_date: str | None, match_time: str | None) -> bool:
-    if not match_date or not match_time:
-        return False
-
-    try:
-        match_start = IST.localize(datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M"))
-    except Exception:
+    match_start = _parse_match_datetime(match_date, match_time)
+    if not match_start:
         return False
 
     return datetime.now(IST) < match_start
@@ -118,10 +145,9 @@ def fetch_scorecard_html(scorecard_id):
 
 
 def fetch_cricbuzz_scorecard_html(match_id: int, team1: str | None = None, team2: str | None = None):
-    if team1 and team2:
+    cricbuzz_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id)) or data_service.get_stored_cricbuzz_match_id(int(match_id))
+    if not cricbuzz_match_id and team1 and team2:
         cricbuzz_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2)
-    else:
-        cricbuzz_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
     if not cricbuzz_match_id:
         print(f"[Cricbuzz Scorecard] Match {match_id}: no cached Cricbuzz match id found")
         return None
@@ -131,10 +157,27 @@ def fetch_cricbuzz_scorecard_html(match_id: int, team1: str | None = None, team2
         res = _session_get(url)
         if res.status_code != 200:
             print(f"[Cricbuzz Scorecard] Match {match_id}: status {res.status_code} for {url}")
+            if team1 and team2:
+                refreshed_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2, force_refresh=True)
+                if refreshed_match_id and refreshed_match_id != cricbuzz_match_id:
+                    refreshed_url = f"https://www.cricbuzz.com/live-cricket-scorecard/{refreshed_match_id}"
+                    refreshed_res = _session_get(refreshed_url)
+                    if refreshed_res.status_code == 200:
+                        return refreshed_res.text
             return None
         return res.text
     except Exception as e:
         print(f"[Cricbuzz Scorecard] Match {match_id}: error fetching {url}: {e}")
+        if team1 and team2:
+            refreshed_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2, force_refresh=True)
+            if refreshed_match_id and refreshed_match_id != cricbuzz_match_id:
+                refreshed_url = f"https://www.cricbuzz.com/live-cricket-scorecard/{refreshed_match_id}"
+                try:
+                    refreshed_res = _session_get(refreshed_url)
+                    if refreshed_res.status_code == 200:
+                        return refreshed_res.text
+                except Exception:
+                    pass
         return None
 
 
@@ -249,29 +292,61 @@ def _extract_candidate_names_from_json(value, names: list[str]):
             _extract_candidate_names_from_json(item, names)
 
 
+def _normalize_cricbuzz_match_key(match_id: int, team1: str, team2: str) -> tuple[int, frozenset[str]]:
+    return (
+        int(match_id),
+        frozenset({_to_short_team_name(team1), _to_short_team_name(team2)}),
+    )
+
+
+def _fetch_and_store_cricbuzz_match_id(match_id: int, team1: str, team2: str) -> int | None:
+    schedule_lookup = _fetch_cricbuzz_schedule_lookup()
+    if not schedule_lookup:
+        return None
+
+    key = _normalize_cricbuzz_match_key(match_id, team1, team2)
+    resolved = schedule_lookup.get(key)
+    if resolved:
+        CRICBUZZ_MATCH_ID_MAP[int(match_id)] = resolved
+        try:
+            data_service.update_match_fields(int(match_id), cricbuzz_match_id=int(resolved))
+        except Exception:
+            pass
+    return resolved
+
+
 def initialize_cricbuzz_match_map(matches_data: list[dict]) -> dict[int, int]:
     global CRICBUZZ_MATCH_ID_MAP
 
-    schedule_lookup = _fetch_cricbuzz_schedule_lookup()
-    if schedule_lookup is None:
-        CRICBUZZ_MATCH_ID_MAP = {}
-        return CRICBUZZ_MATCH_ID_MAP
-
     mapping: dict[int, int] = {}
+    missing_matches: list[dict] = []
     for match in matches_data:
         our_match_id = int(match["MatchID"])
-        key = (
-            our_match_id,
-            frozenset({
-                _to_short_team_name(match["Team1"]),
-                _to_short_team_name(match["Team2"]),
-            }),
-        )
-        cricbuzz_match_id = schedule_lookup.get(key)
+        stored_match_id = match.get("CricbuzzMatchID")
+        cricbuzz_match_id = int(stored_match_id) if stored_match_id not in (None, "") else None
         if cricbuzz_match_id:
             mapping[our_match_id] = cricbuzz_match_id
+        else:
+            missing_matches.append(match)
 
     CRICBUZZ_MATCH_ID_MAP.update(mapping)
+
+    if missing_matches:
+        schedule_lookup = _fetch_cricbuzz_schedule_lookup()
+        if schedule_lookup:
+            for match in missing_matches:
+                our_match_id = int(match["MatchID"])
+                key = _normalize_cricbuzz_match_key(our_match_id, match["Team1"], match["Team2"])
+                cricbuzz_match_id = schedule_lookup.get(key)
+                if not cricbuzz_match_id:
+                    continue
+                mapping[our_match_id] = cricbuzz_match_id
+                CRICBUZZ_MATCH_ID_MAP[our_match_id] = cricbuzz_match_id
+                try:
+                    data_service.update_match_fields(our_match_id, cricbuzz_match_id=int(cricbuzz_match_id))
+                except Exception:
+                    pass
+
     print(f"[Cricbuzz] Cached {len(CRICBUZZ_MATCH_ID_MAP)} match id mappings")
     return CRICBUZZ_MATCH_ID_MAP
 
@@ -362,22 +437,32 @@ def _extract_cricbuzz_embedded_json(html_text: str, key: str) -> dict | None:
         return None
 
 
-def resolve_cricbuzz_match_id(match_id: int, team1: str, team2: str) -> int | None:
+def resolve_cricbuzz_match_id(match_id: int, team1: str, team2: str, force_refresh: bool = False) -> int | None:
+    stored_match_id = None
+    try:
+        stored_match_id = data_service.get_stored_cricbuzz_match_id(int(match_id))
+    except Exception:
+        stored_match_id = None
+
+    if stored_match_id and not force_refresh:
+        CRICBUZZ_MATCH_ID_MAP[int(match_id)] = stored_match_id
+        return stored_match_id
+
     cached_match_id = CRICBUZZ_MATCH_ID_MAP.get(int(match_id))
+    if cached_match_id and not force_refresh:
+        return cached_match_id
+
+    resolved = _fetch_and_store_cricbuzz_match_id(match_id, team1, team2)
+    if resolved:
+        CRICBUZZ_MATCH_ID_MAP[int(match_id)] = resolved
+        return resolved
+
     if cached_match_id:
         return cached_match_id
 
-    schedule_lookup = _fetch_cricbuzz_schedule_lookup()
-    if not schedule_lookup:
-        return None
+    if stored_match_id:
+        return stored_match_id
 
-    key = (
-        int(match_id),
-        frozenset({_to_short_team_name(team1), _to_short_team_name(team2)}),
-    )
-    resolved = schedule_lookup.get(key)
-    if resolved:
-        CRICBUZZ_MATCH_ID_MAP[int(match_id)] = resolved
     return resolved
 
 
@@ -1020,10 +1105,17 @@ def fetch_playing_xi(
     players_rows: list[dict],
     match_date: str | None = None,
     match_time: str | None = None,
+    toss_time: str | None = None,
 ) -> dict:
     cached = PLAYING_XI_CACHE.get(int(match_id))
     now_ts = time.time()
     allow_cache_read = not _is_before_match_start(match_date, match_time)
+    if not toss_time:
+        try:
+            match_row = data_service.get_match_by_id(int(match_id))
+            toss_time = toss_time or (match_row or {}).get("toss_time")
+        except Exception:
+            toss_time = toss_time or None
     if cached:
         payload = _copy_playing_xi_payload(cached["payload"])
         if cached.get("finalized"):
@@ -1031,10 +1123,10 @@ def fetch_playing_xi(
         if allow_cache_read and now_ts - cached.get("fetched_at", 0) < PLAYING_XI_TTL_SECONDS:
             return payload
 
-    if not _should_attempt_playing_xi_fetch(match_date, match_time):
+    if not _should_attempt_playing_xi_fetch(match_date, match_time, toss_time):
         return {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
 
-    cricbuzz_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2)
+    cricbuzz_match_id = data_service.get_stored_cricbuzz_match_id(int(match_id)) or resolve_cricbuzz_match_id(int(match_id), team1, team2)
     if not cricbuzz_match_id:
         print(f"[Playing XI] Match {match_id}: no Cricbuzz match id found after schedule lookup")
         return {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}
@@ -1048,6 +1140,15 @@ def fetch_playing_xi(
         res = _session_get(squads_url)
         if res.status_code == 200:
             squads_html = res.text
+        elif team1 and team2:
+            refreshed_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2, force_refresh=True)
+            if refreshed_match_id and refreshed_match_id != cricbuzz_match_id:
+                cricbuzz_match_id = refreshed_match_id
+                commentary_url = build_cricbuzz_commentary_url(cricbuzz_match_id)
+                squads_url = build_cricbuzz_playing_xi_url(cricbuzz_match_id)
+                res = _session_get(squads_url)
+                if res.status_code == 200:
+                    squads_html = res.text
 
         parsed_from_squads = None
         if squads_html:
@@ -1067,6 +1168,15 @@ def fetch_playing_xi(
             commentary_res = _session_get(commentary_url)
             if commentary_res.status_code == 200:
                 commentary_html = commentary_res.text
+            elif team1 and team2:
+                refreshed_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2, force_refresh=True)
+                if refreshed_match_id and refreshed_match_id != cricbuzz_match_id:
+                    cricbuzz_match_id = refreshed_match_id
+                    commentary_url = build_cricbuzz_commentary_url(cricbuzz_match_id)
+                    squads_url = build_cricbuzz_playing_xi_url(cricbuzz_match_id)
+                    commentary_res = _session_get(commentary_url)
+                    if commentary_res.status_code == 200:
+                        commentary_html = commentary_res.text
 
         if not squads_html and not commentary_html:
             print(f"[Playing XI] Match {match_id}: unable to fetch squads/commentary")
@@ -1138,16 +1248,23 @@ def fetch_toss_info(
     team2: str,
     match_date: str | None = None,
     match_time: str | None = None,
+    toss_time: str | None = None,
 ) -> dict:
     cached = TOSS_INFO_CACHE.get(int(match_id))
     now_ts = time.time()
+    if not toss_time:
+        try:
+            match_row = data_service.get_match_by_id(int(match_id))
+            toss_time = toss_time or (match_row or {}).get("toss_time")
+        except Exception:
+            toss_time = toss_time or None
     if cached:
         if cached.get("announced"):
             return _copy_toss_payload(cached["payload"])
         if now_ts - cached.get("fetched_at", 0) < TOSS_INFO_TTL_SECONDS:
             return _copy_toss_payload(cached["payload"])
 
-    if not should_attempt_toss_fetch(match_date, match_time):
+    if not should_attempt_toss_fetch(match_date, match_time, toss_time):
         payload = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
         TOSS_INFO_CACHE[int(match_id)] = {
             "payload": payload,
@@ -1156,7 +1273,7 @@ def fetch_toss_info(
         }
         return _copy_toss_payload(payload)
 
-    cricbuzz_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2)
+    cricbuzz_match_id = data_service.get_stored_cricbuzz_match_id(int(match_id)) or resolve_cricbuzz_match_id(int(match_id), team1, team2)
     if not cricbuzz_match_id:
         payload = {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
         TOSS_INFO_CACHE[int(match_id)] = {
@@ -1173,6 +1290,22 @@ def fetch_toss_info(
         try:
             res = _session_get(url)
             if res.status_code != 200:
+                if team1 and team2:
+                    refreshed_match_id = resolve_cricbuzz_match_id(int(match_id), team1, team2, force_refresh=True)
+                    if refreshed_match_id and refreshed_match_id != cricbuzz_match_id:
+                        cricbuzz_match_id = refreshed_match_id
+                        retry_url = build_cricbuzz_commentary_url(cricbuzz_match_id) if url == commentary_url else f"https://www.cricbuzz.com/live-cricket-scorecard/{cricbuzz_match_id}"
+                        retry_res = _session_get(retry_url)
+                        if retry_res.status_code == 200:
+                            parsed = _extract_toss_info_from_html(retry_res.text, team1, team2)
+                            if parsed:
+                                parsed["url"] = retry_url
+                                TOSS_INFO_CACHE[int(match_id)] = {
+                                    "payload": parsed,
+                                    "fetched_at": now_ts,
+                                    "announced": True,
+                                }
+                                return _copy_toss_payload(parsed)
                 continue
             parsed = _extract_toss_info_from_html(res.text, team1, team2)
             if parsed:
@@ -1229,6 +1362,73 @@ def fetch_venues_from_cricbuzz() -> dict[int, str]:
     except Exception as e:
         print(f"[Cricbuzz] Error fetching venues: {e}")
         return {}
+
+
+def sync_match_metadata_from_schedule(db=None) -> dict[str, int]:
+    """Backfill cached match metadata from the schedule page when needed."""
+    close_db = False
+    if db is None:
+        db = data_service.get_db()
+        close_db = False
+
+    rows = db.execute(
+        """
+        SELECT id, team1, team2, match_date, match_time, cricbuzz_match_id, toss_time
+        FROM matches
+        """
+    ).fetchall()
+
+    updated_toss_times = 0
+    updated_cricbuzz_ids = 0
+    missing_cricbuzz_rows: list[dict] = []
+
+    for row in rows:
+        match_id = int(row["id"])
+        computed_toss_time = compute_toss_time(row["match_date"], row["match_time"])
+        if computed_toss_time and row["toss_time"] != computed_toss_time:
+            db.execute(
+                "UPDATE matches SET toss_time = ? WHERE id = ?",
+                (computed_toss_time, match_id),
+            )
+            updated_toss_times += 1
+
+        if row["cricbuzz_match_id"] in (None, ""):
+            missing_cricbuzz_rows.append(dict(row))
+
+    schedule_lookup = None
+    if missing_cricbuzz_rows:
+        schedule_lookup = _fetch_cricbuzz_schedule_lookup()
+
+    if schedule_lookup:
+        for row in missing_cricbuzz_rows:
+            match_id = int(row["id"])
+            key = _normalize_cricbuzz_match_key(match_id, row["team1"], row["team2"])
+            cricbuzz_match_id = schedule_lookup.get(key)
+            if not cricbuzz_match_id:
+                continue
+            db.execute(
+                "UPDATE matches SET cricbuzz_match_id = ? WHERE id = ?",
+                (int(cricbuzz_match_id), match_id),
+            )
+            CRICBUZZ_MATCH_ID_MAP[match_id] = int(cricbuzz_match_id)
+            updated_cricbuzz_ids += 1
+
+    if updated_toss_times or updated_cricbuzz_ids:
+        db.commit()
+        try:
+            data_service.invalidate_cache("matches")
+        except Exception:
+            pass
+        try:
+            from backend.routes.matches import invalidate_matches_response_cache
+            invalidate_matches_response_cache()
+        except Exception:
+            pass
+
+    return {
+        "toss_time": updated_toss_times,
+        "cricbuzz_match_id": updated_cricbuzz_ids,
+    }
 
 
 def populate_match_venues(db) -> None:

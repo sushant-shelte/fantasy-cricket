@@ -24,6 +24,7 @@ sys.path.insert(
 
 from backend.database import init_db, get_db
 from backend.config import DATA_DIR
+from backend.services.scraper import compute_toss_time
 
 
 def _read_json(filename: str) -> list[dict]:
@@ -62,14 +63,15 @@ def seed_matches(db):
     print(f"  Seeding {len(matches)} matches ...")
     for m in matches:
         db.execute(
-            """INSERT OR REPLACE INTO matches (id, team1, team2, match_date, match_time)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT OR REPLACE INTO matches (id, team1, team2, match_date, match_time, toss_time)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 int(m["MatchID"]),
                 m["Team1"],
                 m["Team2"],
                 m["Date"],
                 m["Time"],
+                compute_toss_time(m["Date"], m["Time"]),
             ),
         )
     db.commit()

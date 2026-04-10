@@ -13,6 +13,7 @@ from backend.config import ROLES
 from backend.services import data_service
 from backend.routes.leaderboard import invalidate_leaderboard_cache
 from backend.routes.matches import invalidate_matches_response_cache
+from backend.services.scraper import compute_toss_time
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -229,8 +230,15 @@ async def create_match(
 ):
     db = get_db()
     cursor = db.execute(
-        "INSERT INTO matches (team1, team2, match_date, match_time, status) VALUES (?, ?, ?, ?, ?)",
-        (body.team1, body.team2, body.match_date, body.match_time, (body.status or "future").strip().lower()),
+        "INSERT INTO matches (team1, team2, match_date, match_time, status, toss_time) VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            body.team1,
+            body.team2,
+            body.match_date,
+            body.match_time,
+            (body.status or "future").strip().lower(),
+            compute_toss_time(body.match_date, body.match_time),
+        ),
     )
     db.commit()
     data_service.invalidate_cache("matches")
@@ -282,6 +290,10 @@ async def update_match(
     elif schedule_changed or teams_changed:
         updates.append("status = ?")
         params.append("future")
+
+    if schedule_changed or teams_changed:
+        updates.append("toss_time = ?")
+        params.append(compute_toss_time(body.match_date or existing["match_date"], body.match_time or existing["match_time"]))
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")

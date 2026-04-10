@@ -54,8 +54,8 @@ def compute_runtime_match_status(match_date: str, match_time: str, stored_status
     return "live", True
 
 
-def _should_fetch_toss_for_dashboard(match_date: str, match_time: str, status: str) -> bool:
-    return status == "future" and should_attempt_toss_fetch(match_date, match_time)
+def _should_fetch_toss_for_dashboard(match_date: str, match_time: str, toss_time: str | None, status: str) -> bool:
+    return status == "future" and should_attempt_toss_fetch(match_date, match_time, toss_time)
 
 
 @router.get("/matches")
@@ -119,8 +119,9 @@ def _build_matches_payload() -> list[dict]:
                 match["team2"],
                 match["match_date"],
                 match["match_time"],
+                match.get("toss_time"),
             )
-            if _should_fetch_toss_for_dashboard(match["match_date"], match["match_time"], match["status"])
+            if _should_fetch_toss_for_dashboard(match["match_date"], match["match_time"], match.get("toss_time"), match["status"])
             else None
         )
         result.append(match)

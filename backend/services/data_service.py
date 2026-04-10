@@ -185,7 +185,7 @@ def _cached_users() -> list[dict]:
 def _cached_matches() -> list[dict]:
     db = get_db()
     rows = db.execute(
-        "SELECT id, team1, team2, match_date, match_time, status, venue FROM matches"
+        "SELECT id, team1, team2, match_date, match_time, status, venue, cricbuzz_match_id, toss_time FROM matches"
     ).fetchall()
     return [
         {
@@ -196,6 +196,8 @@ def _cached_matches() -> list[dict]:
             "Time": r["match_time"],
             "Status": r["status"],
             "Venue": r["venue"],
+            "CricbuzzMatchID": r["cricbuzz_match_id"],
+            "TossTime": r["toss_time"],
         }
         for r in rows
     ]
@@ -310,9 +312,55 @@ def get_matches_api_rows() -> list[dict]:
             "match_time": row["Time"],
             "status": row.get("Status", "future"),
             "venue": row.get("Venue"),
+            "cricbuzz_match_id": row.get("CricbuzzMatchID"),
+            "toss_time": row.get("TossTime"),
         }
         for row in rows
     ]
+
+
+def get_match_by_id(match_id: int) -> dict | None:
+    db = get_db()
+    row = db.execute("SELECT * FROM matches WHERE id = ?", (int(match_id),)).fetchone()
+    return _row_to_dict(row) if row else None
+
+
+def get_stored_cricbuzz_match_id(match_id: int) -> int | None:
+    db = get_db()
+    row = db.execute(
+        "SELECT cricbuzz_match_id FROM matches WHERE id = ?",
+        (int(match_id),),
+    ).fetchone()
+    if not row:
+        return None
+    value = row["cricbuzz_match_id"]
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def update_match_fields(match_id: int, **fields) -> bool:
+    allowed_fields = {"team1", "team2", "match_date", "match_time", "status", "venue", "cricbuzz_match_id", "toss_time"}
+    updates = []
+    values = []
+    for key, value in fields.items():
+        if key not in allowed_fields:
+            continue
+        updates.append(f"{key} = ?")
+        values.append(value)
+
+    if not updates:
+        return False
+
+    db = get_db()
+    values.append(int(match_id))
+    db.execute(f"UPDATE matches SET {', '.join(updates)} WHERE id = ?", values)
+    db.commit()
+    invalidate_cache("matches")
+    return True
 
 
 def update_match_status(match_id: int, status: str) -> bool:
