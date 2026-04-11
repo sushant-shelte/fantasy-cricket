@@ -4,7 +4,7 @@ import time
 import traceback
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.config import ESPN_MATCH_ID_OFFSET, IST
 from backend.middleware.auth import get_current_user
@@ -93,6 +93,26 @@ def _get_cached_score_payload(match_id: int) -> dict | None:
         return _copy_score_payload(payload)
 
 
+def _get_scores_cache_version() -> int:
+    with SCORES_RESPONSE_CACHE_LOCK:
+        return int(float(SCORES_RESPONSE_CACHE["generated_at"] or 0.0) * 1000)
+
+
+def _assert_score_snapshot_version(snapshot_version: int | None):
+    if snapshot_version is None:
+        return
+
+    current_version = _get_scores_cache_version()
+    if current_version != int(snapshot_version):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "Score snapshot changed, retry",
+                "snapshot_version": current_version,
+            },
+        )
+
+
 def _wait_for_cached_score_payload(match_id: int, timeout_seconds: float = 8.0, poll_seconds: float = 0.25) -> dict | None:
     deadline = time.time() + timeout_seconds
     first_wait_log = True
@@ -136,6 +156,16 @@ def _store_scores_response_cache(snapshot: dict[int, dict]) -> None:
         SCORES_RESPONSE_CACHE["generated_at"] = time.time()
         SCORES_RESPONSE_CACHE["ready"] = True
     _log_scores_cache(f"response cache swapped matches={len(snapshot)}")
+
+    try:
+        from backend.routes.leaderboard import refresh_leaderboard_cache_once
+
+        summary = refresh_leaderboard_cache_once()
+        _log_scores_cache(
+            f"leaderboard cache refreshed leaderboard={summary['leaderboard']} points_table={summary['points_table']}"
+        )
+    except Exception as exc:
+        _log_scores_cache(f"leaderboard cache refresh failed: {exc}")
 
 
 def _build_match_scores_payload(match_id: int, match_row, registry, players_data, db) -> dict | None:
@@ -230,6 +260,7 @@ def _build_match_scores_payload(match_id: int, match_row, registry, players_data
         "contestants": contestants,
         "match_status": match_status or "live",
         "scorecard": _serialize_scorecard(match_obj),
+        "snapshot_version": _get_scores_cache_version(),
     }
 
 
@@ -329,6 +360,7 @@ def _build_completed_match_scores_payload(match_id: int, match_row, registry, pl
         "contestants": contestants,
         "match_status": match_status or "completed",
         "scorecard": _serialize_scorecard(match_obj) if match_obj else [],
+        "snapshot_version": _get_scores_cache_version(),
     }
 
 
@@ -822,11 +854,13 @@ async def my_team_for_match(
 async def team_breakdown(
     match_id: int,
     user_id: int = None,
+    snapshot_version: int | None = Query(default=None),
     user: dict = Depends(get_current_user),
 ):
     """Get detailed breakdown of a user's team points for a match."""
     db = get_db()
     target_user_id = user_id or user["id"]
+    _assert_score_snapshot_version(snapshot_version)
 
     # Get user's team
     team_rows = db.execute(
@@ -846,6 +880,7 @@ async def team_breakdown(
     match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return {"error": "Match not found"}
+    _assert_score_snapshot_version(snapshot_version)
     if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
         _log_scores_cache(f"team-breakdown cache miss match={match_id}")
         raise HTTPException(status_code=503, detail="Score cache not ready")
@@ -987,9 +1022,11 @@ def _build_team_snapshot(db, user_id, match_id, match_obj, pp_lookup, role_looku
 async def team_diff(
     match_id: int,
     other_user_id: int,
+    snapshot_version: int | None = Query(default=None),
     user: dict = Depends(get_current_user),
 ):
     db = get_db()
+    _assert_score_snapshot_version(snapshot_version)
 
     if user["id"] == other_user_id:
         return {"error": "Select another contestant to compare"}
@@ -997,6 +1034,7 @@ async def team_diff(
     match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return {"error": "Match not found"}
+    _assert_score_snapshot_version(snapshot_version)
     if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
         _log_scores_cache(f"team-diff cache miss match={match_id}")
         raise HTTPException(status_code=503, detail="Score cache not ready")
@@ -1078,13 +1116,16 @@ async def team_diff(
 @router.get("/{match_id}/contestants")
 async def match_contestants(
     match_id: int,
+    snapshot_version: int | None = Query(default=None),
     user: dict = Depends(get_current_user),
 ):
     """List contestants who picked teams for this match (for the diff dropdown)."""
     db = get_db()
+    _assert_score_snapshot_version(snapshot_version)
     match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return []
+    _assert_score_snapshot_version(snapshot_version)
     if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
         _log_scores_cache(f"contestants cache miss match={match_id}")
         raise HTTPException(status_code=503, detail="Score cache not ready")

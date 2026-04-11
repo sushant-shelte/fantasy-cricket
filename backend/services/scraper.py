@@ -1175,7 +1175,7 @@ def fetch_playing_xi(
             toss_time = toss_time or None
     if cached:
         payload = _copy_playing_xi_payload(cached["payload"])
-        if cached.get("finalized") and not force_refresh:
+        if cached.get("finalized"):
             try:
                 data_service.set_cached_match_playing_xi(
                     match_id, team1, team2, match_date or "", match_time or "", payload

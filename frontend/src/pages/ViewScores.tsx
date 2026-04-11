@@ -95,6 +95,7 @@ export default function ViewScoresPage() {
   const [myTeam, setMyTeam] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [scoresSnapshotVersion, setScoresSnapshotVersion] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Tab state — read from URL param if present
@@ -116,6 +117,9 @@ export default function ViewScoresPage() {
   const [diffData, setDiffData] = useState<TeamDiffData | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
 
+  const isSnapshotConflict = (error: unknown) =>
+    Boolean((error as { response?: { status?: number } })?.response?.status === 409);
+
   const fetchScores = async () => {
     try {
       const [scoresRes, teamRes] = await Promise.all([
@@ -125,47 +129,93 @@ export default function ViewScoresPage() {
       setPlayerScores(scoresRes.data.players || []);
       setContestants(scoresRes.data.contestants || []);
       setScorecard(scoresRes.data.scorecard || []);
+      setScoresSnapshotVersion(scoresRes.data.snapshot_version ?? null);
       const team = teamRes.data || [];
       setMyTeam(new Set(team.map((t: string | { player_name: string }) => typeof t === 'string' ? t : t.player_name)));
       setLastUpdated(new Date());
+      return scoresRes.data;
     } catch { /* silent */ }
     finally { setLoading(false); }
+    return null;
   };
 
-  const fetchBreakdown = async () => {
+  const fetchBreakdown = async (retry = true) => {
     setBreakdownLoading(true);
     try {
-      const res = await client.get(`/api/scores/${matchId}/team-breakdown`);
+      const res = await client.get(`/api/scores/${matchId}/team-breakdown`, {
+        params: scoresSnapshotVersion ? { snapshot_version: scoresSnapshotVersion } : undefined,
+      });
       setBreakdown(res.data);
-    } catch { setBreakdown(null); }
+    } catch (error) {
+      if (retry && isSnapshotConflict(error)) {
+        const snapshot = await fetchScores();
+        if (snapshot?.snapshot_version) {
+          await fetchBreakdown(false);
+          return;
+        }
+      }
+      setBreakdown(null);
+    }
     finally { setBreakdownLoading(false); }
   };
 
-  const fetchContestantBreakdown = async (userId: number) => {
+  const fetchContestantBreakdown = async (userId: number, retry = true) => {
     setSelectedContestantLoading(true);
     try {
-      const res = await client.get(`/api/scores/${matchId}/team-breakdown?user_id=${userId}`);
+      const res = await client.get(`/api/scores/${matchId}/team-breakdown`, {
+        params: {
+          user_id: userId,
+          ...(scoresSnapshotVersion ? { snapshot_version: scoresSnapshotVersion } : {}),
+        },
+      });
       setSelectedContestantBreakdown(res.data);
-    } catch {
+    } catch (error) {
+      if (retry && isSnapshotConflict(error)) {
+        const snapshot = await fetchScores();
+        if (snapshot?.snapshot_version) {
+          await fetchContestantBreakdown(userId, false);
+          return;
+        }
+      }
       setSelectedContestantBreakdown(null);
     } finally {
       setSelectedContestantLoading(false);
     }
   };
 
-  const fetchDiffContestants = async () => {
+  const fetchDiffContestants = async (sourceContestants?: ContestantScore[]) => {
+    if (sourceContestants && sourceContestants.length > 0) {
+      setDiffContestants(sourceContestants.filter((c: Contestant) => c.id !== profile?.id));
+      return;
+    }
     try {
-      const res = await client.get(`/api/scores/${matchId}/contestants`);
+      const res = await client.get(`/api/scores/${matchId}/contestants`, {
+        params: scoresSnapshotVersion ? { snapshot_version: scoresSnapshotVersion } : undefined,
+      });
       setDiffContestants(res.data.filter((c: Contestant) => c.id !== profile?.id));
     } catch { /* silent */ }
   };
 
-  const fetchDiff = async (otherId: number) => {
+  const fetchDiff = async (otherId: number, retry = true) => {
     setDiffLoading(true);
     try {
-      const res = await client.get(`/api/scores/${matchId}/team-diff?other_user_id=${otherId}`);
+      const res = await client.get(`/api/scores/${matchId}/team-diff`, {
+        params: {
+          other_user_id: otherId,
+          ...(scoresSnapshotVersion ? { snapshot_version: scoresSnapshotVersion } : {}),
+        },
+      });
       setDiffData(res.data);
-    } catch { setDiffData(null); }
+    } catch (error) {
+      if (retry && isSnapshotConflict(error)) {
+        const snapshot = await fetchScores();
+        if (snapshot?.snapshot_version) {
+          await fetchDiff(otherId, false);
+          return;
+        }
+      }
+      setDiffData(null);
+    }
     finally { setDiffLoading(false); }
   };
 
@@ -185,21 +235,27 @@ export default function ViewScoresPage() {
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
 
-    if (tab === 'scores' || tab === 'scorecard') {
-      setLoading(true);
-      fetchScores();
-      intervalRef.current = setInterval(fetchScores, 30000);
-    } else if (tab === 'myteam') {
-      setLoading(false);
-      fetchBreakdown();
-      intervalRef.current = setInterval(fetchBreakdown, 60000);
-    } else if (tab === 'diff') {
-      setLoading(false);
-      fetchDiffContestants();
-      if (selectedOther) {
-        fetchDiff(selectedOther);
+    const run = async () => {
+      if (tab === 'scores' || tab === 'scorecard') {
+        setLoading(true);
+        await fetchScores();
+        intervalRef.current = setInterval(fetchScores, 30000);
+      } else if (tab === 'myteam') {
+        setLoading(false);
+        await fetchScores();
+        await fetchBreakdown();
+        intervalRef.current = setInterval(fetchBreakdown, 60000);
+      } else if (tab === 'diff') {
+        setLoading(false);
+        const snapshot = await fetchScores();
+        await fetchDiffContestants(snapshot?.contestants || []);
+        if (selectedOther) {
+          await fetchDiff(selectedOther);
+        }
       }
-    }
+    };
+
+    run();
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

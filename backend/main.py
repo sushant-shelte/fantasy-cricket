@@ -158,6 +158,8 @@ def bootstrap_app():
         tournament.start_scheduler()
         print("[BOOT] Starting scores cache scheduler")
         scores.start_scores_cache_scheduler()
+        print("[BOOT] Starting leaderboard cache scheduler")
+        leaderboard.start_leaderboard_cache_scheduler()
         print("[BOOT] Priming scores cache")
         try:
             prime_summary = scores.refresh_scores_response_cache_once()
@@ -170,6 +172,15 @@ def bootstrap_app():
             )
         except Exception as exc:
             print(f"[BOOT] Scores cache prime failed: {exc}")
+        try:
+            leaderboard_summary = leaderboard.refresh_leaderboard_cache_once()
+            print(
+                "[BOOT] Leaderboard cache primed "
+                f"leaderboard={leaderboard_summary['leaderboard']} "
+                f"points_table={leaderboard_summary['points_table']}"
+            )
+        except Exception as exc:
+            print(f"[BOOT] Leaderboard cache prime failed: {exc}")
         start_completed_match_recompute_if_needed()
 
         bootstrap_ready = True

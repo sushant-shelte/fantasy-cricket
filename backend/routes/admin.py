@@ -326,6 +326,12 @@ async def update_match(
             tournament_ref.compute_points_for_match(match_id_str)
             tournament_ref.persist_player_points_to_local()
             tournament_ref.persist_to_local()
+            try:
+                from backend.routes.leaderboard import refresh_leaderboard_cache_once
+
+                refresh_leaderboard_cache_once()
+            except Exception:
+                pass
         elif explicit_status in {"future", "live", "nr"}:
             tournament_ref.player_points.pop(match_id_str, None)
             for contestant in tournament_ref.contestants.values():
@@ -393,6 +399,14 @@ async def recalculate_match(
     data_service.invalidate_cache("matches")
     invalidate_matches_response_cache()
     invalidate_leaderboard_cache()
+
+    if refreshed_status == "completed":
+        try:
+            from backend.routes.leaderboard import refresh_leaderboard_cache_once
+
+            refresh_leaderboard_cache_once()
+        except Exception:
+            pass
 
     return {
         "success": True,

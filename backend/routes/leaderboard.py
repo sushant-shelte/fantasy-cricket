@@ -1,3 +1,6 @@
+import threading
+import time
+import copy
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
@@ -21,12 +24,27 @@ LEADERBOARD_CACHE = {
     "points_table": None,
     "player_points_version": "",
 }
+LEADERBOARD_CACHE_LOCK = threading.Lock()
+LEADERBOARD_CACHE_SCHEDULER_LOCK = threading.Lock()
+LEADERBOARD_CACHE_SCHEDULER_STARTED = False
 
 
 def invalidate_leaderboard_cache():
-    LEADERBOARD_CACHE["leaderboard"] = None
-    LEADERBOARD_CACHE["points_table"] = None
-    LEADERBOARD_CACHE["player_points_version"] = ""
+    with LEADERBOARD_CACHE_LOCK:
+        LEADERBOARD_CACHE["leaderboard"] = None
+        LEADERBOARD_CACHE["points_table"] = None
+        LEADERBOARD_CACHE["player_points_version"] = ""
+
+
+def _get_cached_leaderboard_snapshot() -> dict | None:
+    with LEADERBOARD_CACHE_LOCK:
+        if LEADERBOARD_CACHE["leaderboard"] is None or LEADERBOARD_CACHE["points_table"] is None:
+            return None
+        return {
+            "leaderboard": copy.deepcopy(LEADERBOARD_CACHE["leaderboard"]),
+            "points_table": copy.deepcopy(LEADERBOARD_CACHE["points_table"]),
+            "player_points_version": LEADERBOARD_CACHE["player_points_version"],
+        }
 
 
 def _compute_non_participant_points(lowest_points: float) -> float:
@@ -292,28 +310,72 @@ def _build_points_table(db):
     return result
 
 
-def _ensure_leaderboard_cache(db):
-    player_points_version = data_service.get_latest_player_points_update()
-    cache_ready = LEADERBOARD_CACHE["leaderboard"] is not None and LEADERBOARD_CACHE["points_table"] is not None
+def _wait_for_leaderboard_cache(timeout_seconds: float = 8.0, poll_seconds: float = 0.25) -> dict | None:
+    deadline = time.time() + timeout_seconds
+    first_wait_log = True
 
-    if (
-        not cache_ready
-        or LEADERBOARD_CACHE["player_points_version"] != player_points_version
-    ):
-        LEADERBOARD_CACHE["leaderboard"] = _build_leaderboard(db)
-        LEADERBOARD_CACHE["points_table"] = _build_points_table(db)
+    while time.time() < deadline:
+        cached_snapshot = _get_cached_leaderboard_snapshot()
+        if cached_snapshot is not None:
+            return cached_snapshot
+
+        if first_wait_log:
+            print(f"[LEADERBOARD] waiting for cache timeout={timeout_seconds:.1f}s")
+            first_wait_log = False
+
+        time.sleep(poll_seconds)
+
+    return _get_cached_leaderboard_snapshot()
+
+
+def refresh_leaderboard_cache_once() -> dict:
+    db = get_db()
+    leaderboard = _build_leaderboard(db)
+    points_table = _build_points_table(db)
+    player_points_version = data_service.get_latest_player_points_update()
+    with LEADERBOARD_CACHE_LOCK:
+        LEADERBOARD_CACHE["leaderboard"] = leaderboard
+        LEADERBOARD_CACHE["points_table"] = points_table
         LEADERBOARD_CACHE["player_points_version"] = player_points_version
+    return {
+        "leaderboard": len(leaderboard),
+        "points_table": len(points_table),
+        "player_points_version": player_points_version,
+    }
+
+
+def start_leaderboard_cache_scheduler():
+    global LEADERBOARD_CACHE_SCHEDULER_STARTED
+    with LEADERBOARD_CACHE_SCHEDULER_LOCK:
+        if LEADERBOARD_CACHE_SCHEDULER_STARTED:
+            return
+        LEADERBOARD_CACHE_SCHEDULER_STARTED = True
+
+    def run():
+        while True:
+            try:
+                summary = refresh_leaderboard_cache_once()
+                sleep_seconds = 15 if summary["leaderboard"] or summary["points_table"] else 45
+            except Exception as exc:
+                print(f"[LEADERBOARD] scheduler error: {exc}")
+                sleep_seconds = 30
+            time.sleep(sleep_seconds)
+
+    thread = threading.Thread(target=run, daemon=True, name="leaderboard-cache-scheduler")
+    thread.start()
 
 
 @router.get("/leaderboard")
 async def leaderboard(user: dict = Depends(get_current_user)):
-    db = get_db()
-    _ensure_leaderboard_cache(db)
-    return LEADERBOARD_CACHE["leaderboard"] or []
+    cached_snapshot = _wait_for_leaderboard_cache()
+    if cached_snapshot is None:
+        return []
+    return cached_snapshot["leaderboard"]
 
 
 @router.get("/points-table")
 async def points_table(user: dict = Depends(get_current_user)):
-    db = get_db()
-    _ensure_leaderboard_cache(db)
-    return LEADERBOARD_CACHE["points_table"] or []
+    cached_snapshot = _wait_for_leaderboard_cache()
+    if cached_snapshot is None:
+        return []
+    return cached_snapshot["points_table"]
