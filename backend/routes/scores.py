@@ -880,7 +880,6 @@ async def team_breakdown(
     match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return {"error": "Match not found"}
-    _assert_score_snapshot_version(snapshot_version)
     if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
         _log_scores_cache(f"team-breakdown cache miss match={match_id}")
         raise HTTPException(status_code=503, detail="Score cache not ready")
@@ -1034,7 +1033,6 @@ async def team_diff(
     match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return {"error": "Match not found"}
-    _assert_score_snapshot_version(snapshot_version)
     if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
         _log_scores_cache(f"team-diff cache miss match={match_id}")
         raise HTTPException(status_code=503, detail="Score cache not ready")
@@ -1125,7 +1123,6 @@ async def match_contestants(
     match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return []
-    _assert_score_snapshot_version(snapshot_version)
     if not cached_payload and str(match_row.get("status") or "").strip().lower() != "nr":
         _log_scores_cache(f"contestants cache miss match={match_id}")
         raise HTTPException(status_code=503, detail="Score cache not ready")

@@ -96,6 +96,7 @@ export default function ViewScoresPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [scoresSnapshotVersion, setScoresSnapshotVersion] = useState<number | null>(null);
+  const [scoresRefreshing, setScoresRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Tab state — read from URL param if present
@@ -155,7 +156,9 @@ export default function ViewScoresPage() {
           return;
         }
       }
-      setBreakdown(null);
+      if (!breakdown) {
+        setBreakdown(null);
+      }
     }
     finally { setBreakdownLoading(false); }
   };
@@ -179,7 +182,9 @@ export default function ViewScoresPage() {
           return;
         }
       }
-      setSelectedContestantBreakdown(null);
+      if (!selectedContestantBreakdown) {
+        setSelectedContestantBreakdown(null);
+      }
     } finally {
       setSelectedContestantLoading(false);
     }
@@ -216,7 +221,9 @@ export default function ViewScoresPage() {
           return;
         }
       }
-      setDiffData(null);
+      if (!diffData) {
+        setDiffData(null);
+      }
     }
     finally { setDiffLoading(false); }
   };
@@ -229,6 +236,7 @@ export default function ViewScoresPage() {
     setMyTeam(new Set());
     setLastUpdated(null);
     setScoresSnapshotVersion(null);
+    setScoresRefreshing(false);
     setBreakdown(null);
     setDiffData(null);
     setDiffContestants([]);
@@ -243,8 +251,11 @@ export default function ViewScoresPage() {
 
     const run = async () => {
       if (tab === 'scores' || tab === 'scorecard') {
-        setLoading(true);
+        const hasExistingScores = playerScores.length > 0 || contestants.length > 0 || scorecard.length > 0;
+        setLoading(!hasExistingScores);
+        setScoresRefreshing(hasExistingScores);
         await fetchScores();
+        setScoresRefreshing(false);
         intervalRef.current = setInterval(fetchScores, 30000);
       } else if (tab === 'myteam') {
         setLoading(false);
@@ -398,7 +409,6 @@ export default function ViewScoresPage() {
     }
 
     setSelectedContestantId(contestantId);
-    setSelectedContestantBreakdown(null);
     fetchContestantBreakdown(contestantId);
   };
 
@@ -553,6 +563,12 @@ export default function ViewScoresPage() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
               </span>
               Auto-refreshes every 30s
+              {scoresRefreshing && (
+                <>
+                  <span className="text-white/25">•</span>
+                  <span className="text-white/35">Refreshing latest snapshot...</span>
+                </>
+              )}
             </div>
 
             {/* Contestant Rankings */}
@@ -598,7 +614,7 @@ export default function ViewScoresPage() {
 
                         {isSelected && (
                           <div className="border-t border-white/5 bg-black/20 px-4 py-4">
-                            {selectedContestantLoading ? (
+                            {selectedContestantLoading && !selectedContestantBreakdown ? (
                               <div className="flex items-center justify-center py-4">
                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
                               </div>
@@ -613,6 +629,9 @@ export default function ViewScoresPage() {
                                   </div>
                                   <p className="text-sm font-bold text-blue-400">{selectedContestantBreakdown.total} pts</p>
                                 </div>
+                                {selectedContestantLoading && (
+                                  <p className="text-[10px] uppercase tracking-[0.2em] text-white/30">Refreshing latest data...</p>
+                                )}
                                 <div className="grid gap-2 sm:grid-cols-2">
                                   {selectedContestantBreakdown.players.map((player, index) => (
                                     <div key={`${player.name}-${index}`} className={`rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(player.team).tintClass} px-3 py-2.5`}>
@@ -889,6 +908,12 @@ export default function ViewScoresPage() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
               </span>
               Reuses live score data and refreshes every 30s
+              {scoresRefreshing && (
+                <>
+                  <span className="text-white/25">•</span>
+                  <span className="text-white/35">Refreshing latest snapshot...</span>
+                </>
+              )}
             </div>
 
             {scorecard.length === 0 ? (
@@ -903,7 +928,7 @@ export default function ViewScoresPage() {
 
         {tab === 'myteam' && (
           <div className="space-y-4">
-            {breakdownLoading ? (
+            {breakdownLoading && !breakdown ? (
               <div className="flex justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
               </div>
@@ -913,6 +938,12 @@ export default function ViewScoresPage() {
               </div>
             ) : breakdown ? (
               <>
+                {breakdownLoading && (
+                  <div className="flex items-center gap-2 text-xs text-white/35">
+                    <span className="inline-flex h-2 w-2 rounded-full bg-sky-400 animate-pulse" />
+                    Refreshing latest team analysis...
+                  </div>
+                )}
                 {/* Ground Preview with Points */}
                 <div className="rounded-2xl overflow-hidden shadow-2xl max-w-md mx-auto"
                   style={{ background: 'linear-gradient(180deg, #1a5e1a 0%, #2d8a2d 30%, #3da33d 50%, #2d8a2d 70%, #1a5e1a 100%)' }}>
@@ -1053,14 +1084,20 @@ export default function ViewScoresPage() {
               )}
             </div>
 
-            {diffLoading && (
+            {diffLoading && !diffData && (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
               </div>
             )}
 
-            {diffData && !diffLoading && !diffData.error && (
+            {diffData && !diffData.error && (
               <>
+                {diffLoading && (
+                  <div className="flex items-center gap-2 text-xs text-white/35">
+                    <span className="inline-flex h-2 w-2 rounded-full bg-sky-400 animate-pulse" />
+                    Refreshing latest comparison...
+                  </div>
+                )}
                 {/* Score summary */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-white/10 border border-white/20 rounded-2xl p-4 text-center">
@@ -1136,7 +1173,7 @@ export default function ViewScoresPage() {
               </>
             )}
 
-            {diffData?.error && (
+            {diffData?.error && !diffLoading && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-400 text-sm">
                 {diffData.error}
               </div>
