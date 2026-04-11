@@ -139,18 +139,19 @@ export default function ViewScoresPage() {
     return null;
   };
 
-  const fetchBreakdown = async (retry = true) => {
+  const fetchBreakdown = async (retry = true, snapshotVersionOverride?: number | null) => {
     setBreakdownLoading(true);
     try {
+      const snapshotVersion = snapshotVersionOverride ?? scoresSnapshotVersion;
       const res = await client.get(`/api/scores/${matchId}/team-breakdown`, {
-        params: scoresSnapshotVersion ? { snapshot_version: scoresSnapshotVersion } : undefined,
+        params: snapshotVersion ? { snapshot_version: snapshotVersion } : undefined,
       });
       setBreakdown(res.data);
     } catch (error) {
       if (retry && isSnapshotConflict(error)) {
         const snapshot = await fetchScores();
         if (snapshot?.snapshot_version) {
-          await fetchBreakdown(false);
+          await fetchBreakdown(false, snapshot.snapshot_version);
           return;
         }
       }
@@ -159,13 +160,14 @@ export default function ViewScoresPage() {
     finally { setBreakdownLoading(false); }
   };
 
-  const fetchContestantBreakdown = async (userId: number, retry = true) => {
+  const fetchContestantBreakdown = async (userId: number, retry = true, snapshotVersionOverride?: number | null) => {
     setSelectedContestantLoading(true);
     try {
+      const snapshotVersion = snapshotVersionOverride ?? scoresSnapshotVersion;
       const res = await client.get(`/api/scores/${matchId}/team-breakdown`, {
         params: {
           user_id: userId,
-          ...(scoresSnapshotVersion ? { snapshot_version: scoresSnapshotVersion } : {}),
+          ...(snapshotVersion ? { snapshot_version: snapshotVersion } : {}),
         },
       });
       setSelectedContestantBreakdown(res.data);
@@ -173,7 +175,7 @@ export default function ViewScoresPage() {
       if (retry && isSnapshotConflict(error)) {
         const snapshot = await fetchScores();
         if (snapshot?.snapshot_version) {
-          await fetchContestantBreakdown(userId, false);
+          await fetchContestantBreakdown(userId, false, snapshot.snapshot_version);
           return;
         }
       }
@@ -196,13 +198,13 @@ export default function ViewScoresPage() {
     } catch { /* silent */ }
   };
 
-  const fetchDiff = async (otherId: number, retry = true) => {
+  const fetchDiff = async (otherId: number, retry = true, snapshotVersionOverride?: number | null) => {
     setDiffLoading(true);
     try {
       const res = await client.get(`/api/scores/${matchId}/team-diff`, {
         params: {
           other_user_id: otherId,
-          ...(scoresSnapshotVersion ? { snapshot_version: scoresSnapshotVersion } : {}),
+          ...((snapshotVersionOverride ?? scoresSnapshotVersion) ? { snapshot_version: snapshotVersionOverride ?? scoresSnapshotVersion } : {}),
         },
       });
       setDiffData(res.data);
@@ -210,7 +212,7 @@ export default function ViewScoresPage() {
       if (retry && isSnapshotConflict(error)) {
         const snapshot = await fetchScores();
         if (snapshot?.snapshot_version) {
-          await fetchDiff(otherId, false);
+          await fetchDiff(otherId, false, snapshot.snapshot_version);
           return;
         }
       }
@@ -226,10 +228,14 @@ export default function ViewScoresPage() {
     setScorecard([]);
     setMyTeam(new Set());
     setLastUpdated(null);
+    setScoresSnapshotVersion(null);
     setBreakdown(null);
     setDiffData(null);
     setDiffContestants([]);
+    setSelectedContestantId(null);
+    setSelectedContestantBreakdown(null);
     setOpenScorecardIndex(0);
+    setSelectedOther(null);
   }, [matchId]);
 
   useEffect(() => {
@@ -242,15 +248,15 @@ export default function ViewScoresPage() {
         intervalRef.current = setInterval(fetchScores, 30000);
       } else if (tab === 'myteam') {
         setLoading(false);
-        await fetchScores();
-        await fetchBreakdown();
-        intervalRef.current = setInterval(fetchBreakdown, 60000);
+        const snapshot = await fetchScores();
+        await fetchBreakdown(true, snapshot?.snapshot_version ?? null);
+        intervalRef.current = setInterval(() => fetchBreakdown(true, snapshot?.snapshot_version ?? null), 60000);
       } else if (tab === 'diff') {
         setLoading(false);
         const snapshot = await fetchScores();
         await fetchDiffContestants(snapshot?.contestants || []);
         if (selectedOther) {
-          await fetchDiff(selectedOther);
+          await fetchDiff(selectedOther, true, snapshot?.snapshot_version ?? null);
         }
       }
     };
