@@ -321,7 +321,7 @@ async def update_match(
         match_id_str = str(match_id)
         if explicit_status == "completed":
             tournament_ref.ensure_match_teams_loaded([match_id_str], force=True)
-            tournament_ref.update_match_data(match_id_str, use_playing_xi=True)
+            tournament_ref.update_match_data(match_id_str, use_playing_xi=True, force_refresh_playing_xi=True)
             tournament_ref.compute_player_points_for_match(match_id_str)
             tournament_ref.compute_points_for_match(match_id_str)
             tournament_ref.persist_player_points_to_local()
@@ -378,7 +378,7 @@ async def recalculate_match(
     tournament_ref.ensure_match_teams_loaded([match_id_str], force=True)
 
     # Fetch scorecard first so final match status can be refreshed from Cricbuzz.
-    tournament_ref.update_match_data(match_id_str, use_playing_xi=True)
+    tournament_ref.update_match_data(match_id_str, use_playing_xi=True, force_refresh_playing_xi=True)
     updated_match_row = tournament_ref.match_rows.get(match_id_str, {})
     refreshed_status = tournament_ref.get_match_status(updated_match_row)
 

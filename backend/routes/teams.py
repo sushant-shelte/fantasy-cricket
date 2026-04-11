@@ -150,13 +150,7 @@ async def my_lineup_statuses(
             match["match_date"],
             match["match_time"],
         )
-        if cached_playing_xi and data_service.is_cached_playing_xi_final(
-            match_id,
-            match["team1"],
-            match["team2"],
-            match["match_date"],
-            match["match_time"],
-        ):
+        if cached_playing_xi and cached_playing_xi.get("announced"):
             playing_xi = cached_playing_xi
         else:
             playing_xi = {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}

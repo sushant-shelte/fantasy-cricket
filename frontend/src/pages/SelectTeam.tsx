@@ -15,6 +15,7 @@ interface SelectedPlayer {
 interface PlayingXiState {
   announced: boolean;
   url: string | null;
+  playingCount?: number;
   substituteCount?: number;
 }
 
@@ -176,6 +177,17 @@ export default function SelectTeamPage() {
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const backupPanelRef = useRef<HTMLDivElement | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+
+  const hasFullAvailabilityBreakdown =
+    playingXi.announced &&
+    (((playingXi.playingCount || 0) >= 22) ||
+      ((playingXi.substituteCount || 0) >= 10) ||
+      players.some(
+        (player) =>
+          player.availability_status === 'substitute' ||
+          player.availability_status === 'unavailable',
+      ));
 
   useEffect(() => {
     const fetchData = async () => {
@@ -195,6 +207,7 @@ export default function SelectTeamPage() {
         setPlayingXi({
           announced: Boolean(data.playing_xi?.announced),
           url: data.playing_xi?.url || null,
+          playingCount: data.playing_xi?.playing_count || 0,
           substituteCount: data.playing_xi?.substitute_count || 0,
         });
         setTossInfo(data.toss || null);
@@ -223,6 +236,46 @@ export default function SelectTeamPage() {
     };
     fetchData();
   }, [matchId, toast]);
+
+  useEffect(() => {
+    if (refreshTimerRef.current) {
+      window.clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+
+    if (!loading && (!playingXi.announced || !hasFullAvailabilityBreakdown)) {
+      refreshTimerRef.current = window.setInterval(() => {
+        void (async () => {
+          try {
+            const res = await client.get(`/api/players?match_id=${matchId}`);
+            const data = res.data || {};
+            const groupedPlayers = data.players || data;
+            const flat = Array.isArray(groupedPlayers)
+              ? groupedPlayers
+              : (Object.values(groupedPlayers).flat() as Player[]);
+            setPlayers(flat);
+            setMatchTeams(Array.isArray(data.match_teams) ? data.match_teams : []);
+            setPlayingXi({
+              announced: Boolean(data.playing_xi?.announced),
+              url: data.playing_xi?.url || null,
+              playingCount: data.playing_xi?.playing_count || 0,
+              substituteCount: data.playing_xi?.substitute_count || 0,
+            });
+            setTossInfo(data.toss || null);
+          } catch {
+            // keep trying until the cache becomes ready
+          }
+        })();
+      }, 15000);
+    }
+
+    return () => {
+      if (refreshTimerRef.current) {
+        window.clearInterval(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [matchId, loading, playingXi.announced, hasFullAvailabilityBreakdown]);
 
   useEffect(() => {
     if (!showBackupPanel) return;
@@ -480,15 +533,6 @@ export default function SelectTeamPage() {
 
   const getLineupSectionPlayers = (team: string, status: Player['availability_status']) =>
     sortPlayersForLineupView(lineupPlayersByTeam[team]?.[status || ''] || []);
-
-  const hasFullAvailabilityBreakdown =
-    playingXi.announced &&
-    (((playingXi.substituteCount || 0) >= 10) ||
-      players.some(
-        (player) =>
-          player.availability_status === 'substitute' ||
-          player.availability_status === 'unavailable',
-      ));
 
   const getPreAnnouncementPlayers = (team: string) =>
     [...(preAnnouncementPlayersByTeam[team] || [])].sort((a, b) => {

@@ -199,13 +199,7 @@ async def list_players(
             match_date,
             match_time,
         )
-        if cached_playing_xi and data_service.is_cached_playing_xi_final(
-            match_id,
-            team1,
-            team2,
-            match_date,
-            match_time,
-        ):
+        if cached_playing_xi and cached_playing_xi.get("announced"):
             playing_xi_data = cached_playing_xi
 
         toss_info = get_cached_toss_info(match_id) or {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
@@ -256,6 +250,7 @@ async def list_players(
             "playing_xi": {
                 "announced": playing_xi_data["announced"],
                 "url": playing_xi_data["url"],
+                "playing_count": len(playing_ids),
                 "substitute_count": len(substitute_ids),
             },
             "toss": toss_info,

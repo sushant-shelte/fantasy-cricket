@@ -841,6 +841,48 @@ def _extract_playing_xi_from_commentary(
     unmatched_playing: list[str] = []
     unmatched_substitutes: list[str] = []
     announced = False
+    normalized_page_text = " ".join(page_text.split())
+
+    def _extract_block_names(section_label: str, team: str, name_variants: set[str]) -> list[str]:
+        patterns = [
+            rf"{re.escape(team)}\s+{re.escape(section_label)}\s*[:\-]\s*(.+?)(?=(?:{re.escape(team1)}|{re.escape(team2)}|Here are the|$))",
+            rf"{re.escape(_expand_team_name(team))}\s+{re.escape(section_label)}\s*[:\-]\s*(.+?)(?=(?:{re.escape(team1)}|{re.escape(team2)}|Here are the|$))",
+        ]
+        for variant in name_variants:
+            if not variant:
+                continue
+            patterns.extend([
+                rf"{re.escape(variant)}\s+{re.escape(section_label)}\s*[:\-]\s*(.+?)(?=(?:{re.escape(team1)}|{re.escape(team2)}|Here are the|$))",
+                rf"{re.escape(variant)}\s*[:\-]\s*(.+?)(?=(?:{re.escape(team1)}|{re.escape(team2)}|Here are the|$))",
+            ])
+
+        for pattern in patterns:
+            match = re.search(pattern, normalized_page_text, flags=re.IGNORECASE)
+            if match:
+                raw_text = match.group(1).strip()
+                names = _extract_comma_separated_names(raw_text.split("\n", 1)[0])
+                if names:
+                    return names
+        return []
+
+    def _extract_general_block_after_heading(heading_text: str, team: str) -> list[str]:
+        heading_match = re.search(re.escape(heading_text), normalized_page_text, flags=re.IGNORECASE)
+        if not heading_match:
+            return []
+        start = heading_match.end()
+        tail = normalized_page_text[start:]
+        team_markers = [team1, team2, _expand_team_name(team1), _expand_team_name(team2)]
+        stop_pos = len(tail)
+        for marker in team_markers:
+            if not marker:
+                continue
+            marker_pos = tail.lower().find(marker.lower())
+            if marker_pos >= 0:
+                stop_pos = min(stop_pos, marker_pos)
+        block = tail[:stop_pos].strip(" :.-\n")
+        if not block:
+            return []
+        return _extract_comma_separated_names(block.split("\n", 1)[0])
 
     for team, name_variants in expanded_team_names.items():
         xi_names: list[str] = []
@@ -863,6 +905,15 @@ def _extract_playing_xi_from_commentary(
             )
             if subs_match and not substitute_names:
                 substitute_names = _extract_comma_separated_names(subs_match.group(1).split("\n", 1)[0])
+
+        if not substitute_names:
+            substitute_names = _extract_block_names("Impact substitutes", team, name_variants)
+        if not substitute_names:
+            substitute_names = _extract_general_block_after_heading("Here are the Impact substitutes for both the teams", team)
+        if not xi_names:
+            xi_names = _extract_block_names("Playing XI", team, name_variants)
+        if not xi_names:
+            xi_names = _extract_general_block_after_heading("Here are the Playing XI for both the teams", team)
 
         if xi_names:
             resolved_ids, unresolved_names = _resolve_team_player_ids_from_names(xi_names, team, players_rows)
@@ -1124,7 +1175,7 @@ def fetch_playing_xi(
             toss_time = toss_time or None
     if cached:
         payload = _copy_playing_xi_payload(cached["payload"])
-        if cached.get("finalized"):
+        if cached.get("finalized") and not force_refresh:
             try:
                 data_service.set_cached_match_playing_xi(
                     match_id, team1, team2, match_date or "", match_time or "", payload
