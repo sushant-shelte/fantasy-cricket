@@ -98,21 +98,6 @@ def _get_scores_cache_version() -> int:
         return int(float(SCORES_RESPONSE_CACHE["generated_at"] or 0.0) * 1000)
 
 
-def _assert_score_snapshot_version(snapshot_version: int | None):
-    if snapshot_version is None:
-        return
-
-    current_version = _get_scores_cache_version()
-    if current_version != int(snapshot_version):
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "Score snapshot changed, retry",
-                "snapshot_version": current_version,
-            },
-        )
-
-
 def _wait_for_cached_score_payload(match_id: int, timeout_seconds: float = 8.0, poll_seconds: float = 0.25) -> dict | None:
     deadline = time.time() + timeout_seconds
     first_wait_log = True
@@ -860,7 +845,6 @@ async def team_breakdown(
     """Get detailed breakdown of a user's team points for a match."""
     db = get_db()
     target_user_id = user_id or user["id"]
-    _assert_score_snapshot_version(snapshot_version)
 
     # Get user's team
     team_rows = db.execute(
@@ -1025,7 +1009,6 @@ async def team_diff(
     user: dict = Depends(get_current_user),
 ):
     db = get_db()
-    _assert_score_snapshot_version(snapshot_version)
 
     if user["id"] == other_user_id:
         return {"error": "Select another contestant to compare"}
@@ -1119,7 +1102,6 @@ async def match_contestants(
 ):
     """List contestants who picked teams for this match (for the diff dropdown)."""
     db = get_db()
-    _assert_score_snapshot_version(snapshot_version)
     match_row, cached_payload, pp_lookup, role_lookup = _load_match_and_points(db, match_id)
     if not match_row:
         return []
