@@ -153,7 +153,7 @@ export default function AdminLayout() {
           <h1 className="text-lg font-semibold text-slate-100">Admin Panel</h1>
         </header>
 
-        <main className="p-6 bg-slate-950 min-h-screen">
+        <main className="p-6 bg-slate-950 min-h-screen text-slate-900">
           <Outlet />
         </main>
       </div>

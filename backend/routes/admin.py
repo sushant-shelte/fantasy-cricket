@@ -206,6 +206,7 @@ class CreateMatchBody(BaseModel):
     match_date: str
     match_time: str
     status: Optional[str] = "future"
+    toss_time: Optional[str] = None
 
 
 class UpdateMatchBody(BaseModel):
@@ -214,6 +215,7 @@ class UpdateMatchBody(BaseModel):
     match_date: Optional[str] = None
     match_time: Optional[str] = None
     status: Optional[str] = None
+    toss_time: Optional[str] = None
 
 
 @router.get("/matches")
@@ -229,6 +231,7 @@ async def create_match(
     user: dict = Depends(require_admin),
 ):
     db = get_db()
+    toss_time = body.toss_time if body.toss_time is not None else compute_toss_time(body.match_date, body.match_time)
     cursor = db.execute(
         "INSERT INTO matches (team1, team2, match_date, match_time, status, toss_time) VALUES (?, ?, ?, ?, ?, ?)",
         (
@@ -237,7 +240,7 @@ async def create_match(
             body.match_date,
             body.match_time,
             (body.status or "future").strip().lower(),
-            compute_toss_time(body.match_date, body.match_time),
+            toss_time,
         ),
     )
     db.commit()
@@ -291,7 +294,10 @@ async def update_match(
         updates.append("status = ?")
         params.append("future")
 
-    if schedule_changed or teams_changed:
+    if body.toss_time is not None:
+        updates.append("toss_time = ?")
+        params.append(body.toss_time)
+    elif schedule_changed or teams_changed:
         updates.append("toss_time = ?")
         params.append(compute_toss_time(body.match_date or existing["match_date"], body.match_time or existing["match_time"]))
 
@@ -560,20 +566,42 @@ async def update_team(
 
     _validate_team_selection(db, body.match_id, body.players)
 
-    db.execute(
-        "DELETE FROM user_teams WHERE user_id = ? AND match_id = ?",
-        (body.user_id, body.match_id),
-    )
-
     updated_at = _now_str()
+    existing_rows = db.execute(
+        """
+        SELECT id, player_id
+        FROM user_teams
+        WHERE user_id = ? AND match_id = ?
+        """,
+        (body.user_id, body.match_id),
+    ).fetchall()
+    existing_by_player = {int(row["player_id"]): dict(row) for row in existing_rows}
+    incoming_player_ids = set()
+
     for player in body.players:
-        db.execute(
-            """
-            INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (body.user_id, body.match_id, player.player_id, int(player.is_captain), int(player.is_vice_captain), updated_at),
-        )
+        incoming_player_ids.add(int(player.player_id))
+        existing_row = existing_by_player.get(int(player.player_id))
+        if existing_row:
+            db.execute(
+                """
+                UPDATE user_teams
+                SET is_captain = ?, is_vice_captain = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (int(player.is_captain), int(player.is_vice_captain), updated_at, int(existing_row["id"])),
+            )
+        else:
+            db.execute(
+                """
+                INSERT INTO user_teams (user_id, match_id, player_id, is_captain, is_vice_captain, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (body.user_id, body.match_id, player.player_id, int(player.is_captain), int(player.is_vice_captain), updated_at),
+            )
+
+    for player_id, existing_row in existing_by_player.items():
+        if player_id not in incoming_player_ids:
+            db.execute("DELETE FROM user_teams WHERE id = ?", (int(existing_row["id"]),))
 
     db.commit()
     data_service.prune_user_backups(body.user_id, body.match_id, [player.player_id for player in body.players])

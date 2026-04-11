@@ -180,6 +180,129 @@ def _ensure_user_teams_updated_at_postgres(cursor):
     )
 
 
+def _ensure_user_teams_audit_sqlite(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_teams_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_team_id INTEGER,
+            user_id INTEGER NOT NULL,
+            match_id INTEGER NOT NULL,
+            old_player_id INTEGER,
+            new_player_id INTEGER,
+            old_is_captain INTEGER,
+            new_is_captain INTEGER,
+            old_is_vice_captain INTEGER,
+            new_is_vice_captain INTEGER,
+            old_updated_at TEXT,
+            new_updated_at TEXT,
+            action TEXT NOT NULL DEFAULT 'UPDATE',
+            changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.executescript("""
+        DROP TRIGGER IF EXISTS trg_user_teams_audit_update;
+        CREATE TRIGGER trg_user_teams_audit_update
+        AFTER UPDATE ON user_teams
+        FOR EACH ROW
+        BEGIN
+            INSERT INTO user_teams_audit (
+                user_team_id,
+                user_id,
+                match_id,
+                old_player_id,
+                new_player_id,
+                old_is_captain,
+                new_is_captain,
+                old_is_vice_captain,
+                new_is_vice_captain,
+                old_updated_at,
+                new_updated_at,
+                action,
+                changed_at
+            ) VALUES (
+                OLD.id,
+                OLD.user_id,
+                OLD.match_id,
+                OLD.player_id,
+                NEW.player_id,
+                OLD.is_captain,
+                NEW.is_captain,
+                OLD.is_vice_captain,
+                NEW.is_vice_captain,
+                OLD.updated_at,
+                NEW.updated_at,
+                'UPDATE',
+                datetime('now')
+            );
+        END;
+    """)
+
+
+def _ensure_user_teams_audit_postgres(cursor):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_teams_audit (
+            id BIGSERIAL PRIMARY KEY,
+            user_team_id INTEGER,
+            user_id INTEGER NOT NULL,
+            match_id INTEGER NOT NULL,
+            old_player_id INTEGER,
+            new_player_id INTEGER,
+            old_is_captain INTEGER,
+            new_is_captain INTEGER,
+            old_is_vice_captain INTEGER,
+            new_is_vice_captain INTEGER,
+            old_updated_at TEXT,
+            new_updated_at TEXT,
+            action TEXT NOT NULL DEFAULT 'UPDATE',
+            changed_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+    """)
+    cursor.execute("""
+        CREATE OR REPLACE FUNCTION log_user_teams_update_audit()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            INSERT INTO user_teams_audit (
+                user_team_id,
+                user_id,
+                match_id,
+                old_player_id,
+                new_player_id,
+                old_is_captain,
+                new_is_captain,
+                old_is_vice_captain,
+                new_is_vice_captain,
+                old_updated_at,
+                new_updated_at,
+                action,
+                changed_at
+            ) VALUES (
+                OLD.id,
+                OLD.user_id,
+                OLD.match_id,
+                OLD.player_id,
+                NEW.player_id,
+                OLD.is_captain,
+                NEW.is_captain,
+                OLD.is_vice_captain,
+                NEW.is_vice_captain,
+                OLD.updated_at,
+                NEW.updated_at,
+                'UPDATE',
+                NOW()
+            );
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    cursor.execute("DROP TRIGGER IF EXISTS trg_user_teams_audit_update ON user_teams")
+    cursor.execute("""
+        CREATE TRIGGER trg_user_teams_audit_update
+        AFTER UPDATE ON user_teams
+        FOR EACH ROW
+        EXECUTE FUNCTION log_user_teams_update_audit()
+    """)
+
+
 def _ensure_team_backups_postgres(cursor):
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS team_backups (
@@ -317,6 +440,7 @@ def init_db():
             )
         """)
         _ensure_user_teams_updated_at_postgres(cursor)
+        _ensure_user_teams_audit_postgres(cursor)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS contestant_points (
                 id SERIAL PRIMARY KEY,
@@ -397,6 +521,22 @@ def init_db():
                 updated_at TEXT,
                 UNIQUE(user_id, match_id, player_id)
             );
+            CREATE TABLE IF NOT EXISTS user_teams_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_team_id INTEGER,
+                user_id INTEGER NOT NULL,
+                match_id INTEGER NOT NULL,
+                old_player_id INTEGER,
+                new_player_id INTEGER,
+                old_is_captain INTEGER,
+                new_is_captain INTEGER,
+                old_is_vice_captain INTEGER,
+                new_is_vice_captain INTEGER,
+                old_updated_at TEXT,
+                new_updated_at TEXT,
+                action TEXT NOT NULL DEFAULT 'UPDATE',
+                changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
             CREATE TABLE IF NOT EXISTS contestant_points (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL REFERENCES users(id),
@@ -437,6 +577,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_team_backups_match ON team_backups(match_id);
         """)
         _ensure_user_teams_updated_at_sqlite(conn)
+        _ensure_user_teams_audit_sqlite(conn)
         _ensure_team_backups_sqlite(conn)
         try:
             conn.execute("ALTER TABLE matches ADD COLUMN venue TEXT DEFAULT NULL")

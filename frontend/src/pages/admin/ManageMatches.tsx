@@ -9,10 +9,11 @@ interface MatchForm {
   team2: string;
   match_date: string;
   match_time: string;
+  toss_time: string;
   status: Match['status'];
 }
 
-const emptyForm: MatchForm = { team1: 'CSK', team2: 'RCB', match_date: '', match_time: '', status: 'future' };
+const emptyForm: MatchForm = { team1: 'CSK', team2: 'RCB', match_date: '', match_time: '', toss_time: '', status: 'future' };
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -80,6 +81,7 @@ export default function ManageMatches() {
       team2: match.team2,
       match_date: match.match_date,
       match_time: match.match_time,
+      toss_time: match.toss_time || '',
       status: match.status,
     });
     setModalOpen(true);
@@ -88,10 +90,14 @@ export default function ManageMatches() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        toss_time: form.toss_time.trim() || null,
+      };
       if (editingId) {
-        await client.put(`/api/admin/matches/${editingId}`, form);
+        await client.put(`/api/admin/matches/${editingId}`, payload);
       } else {
-        await client.post('/api/admin/matches', form);
+        await client.post('/api/admin/matches', payload);
       }
       setModalOpen(false);
       await fetchMatches();
@@ -123,7 +129,7 @@ export default function ManageMatches() {
   }
 
   return (
-    <div>
+    <div className="text-slate-900">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Manage Matches</h1>
         <button
@@ -147,6 +153,7 @@ export default function ManageMatches() {
                 <th className="px-6 py-3">Team 2</th>
                 <th className="px-6 py-3">Date</th>
                 <th className="px-6 py-3">Time</th>
+                <th className="px-6 py-3">Toss Time</th>
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3">Actions</th>
               </tr>
@@ -159,6 +166,7 @@ export default function ManageMatches() {
                   <td className="px-6 py-4 font-medium text-gray-800">{match.team2}</td>
                   <td className="px-6 py-4 text-gray-600">{match.match_date}</td>
                   <td className="px-6 py-4 text-gray-600">{match.match_time}</td>
+                  <td className="px-6 py-4 text-gray-600">{match.toss_time || '-'}</td>
                   <td className="px-6 py-4">{statusBadge(match.status)}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
@@ -180,7 +188,7 @@ export default function ManageMatches() {
               ))}
               {matches.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-400">
                     No matches found.
                   </td>
                 </tr>
@@ -240,6 +248,16 @@ export default function ManageMatches() {
                   onChange={(e) => setForm({ ...form, match_time: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Toss Time</label>
+                <input
+                  type="time"
+                  value={form.toss_time}
+                  onChange={(e) => setForm({ ...form, toss_time: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">Leave blank to auto-generate from match time.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>

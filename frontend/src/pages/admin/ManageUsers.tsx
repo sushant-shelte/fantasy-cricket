@@ -54,7 +54,7 @@ export default function ManageUsers() {
   }
 
   return (
-    <div>
+    <div className="text-slate-900">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Manage Users</h1>
 
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">

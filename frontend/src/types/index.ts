@@ -32,6 +32,7 @@ export type Match = {
   team2: string;
   match_date: string;
   match_time: string;
+  toss_time?: string | null;
   status: 'future' | 'live' | 'completed' | 'nr';
   locked: boolean;
   venue?: VenueStats | null;
