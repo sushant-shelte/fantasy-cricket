@@ -25,6 +25,24 @@ def build_player_role_map(players_data):
     return {int(p["PlayerID"]): p["Role"] for p in players_data}
 
 
+def _invalidate_leaderboard_cache():
+    from backend.routes.leaderboard import invalidate_leaderboard_cache
+
+    invalidate_leaderboard_cache()
+
+
+def _refresh_leaderboard_cache_once():
+    from backend.routes.leaderboard import refresh_leaderboard_cache_once
+
+    return refresh_leaderboard_cache_once()
+
+
+def _invalidate_matches_response_cache():
+    from backend.routes.matches import invalidate_matches_response_cache
+
+    invalidate_matches_response_cache()
+
+
 class Tournament:
     def __init__(self):
         self.matches = {}
@@ -147,9 +165,6 @@ class Tournament:
             print(f"[ALERT] Match {match_id}: active scoring player count is {active_count} (expected 22 to 24)")
 
     def _set_persistent_match_status(self, match_id: str, status: str) -> bool:
-        from backend.routes.leaderboard import invalidate_leaderboard_cache
-        from backend.routes.matches import invalidate_matches_response_cache
-
         changed = data_service.update_match_status(int(match_id), status)
         if not changed:
             return False
@@ -163,8 +178,36 @@ class Tournament:
             for contestant in self.contestants.values():
                 contestant.points.pop(match_id, None)
 
-        invalidate_leaderboard_cache()
-        invalidate_matches_response_cache()
+        _invalidate_leaderboard_cache()
+        _invalidate_matches_response_cache()
+        return True
+
+    def _finalize_completed_match(self, match_id: str, reason: str = "scorecard completion") -> bool:
+        changed = self._set_persistent_match_status(match_id, "completed")
+        if not changed:
+            return False
+
+        self.compute_player_points_for_match(match_id)
+        self.compute_points_for_match(match_id)
+
+        try:
+            self.persist_player_points_to_local()
+            self.persist_to_local()
+        except Exception as exc:
+            self._scheduler_log("SCORE", f"persist after completion failed for match {match_id}: {exc}")
+            traceback.print_exc()
+
+        try:
+            summary = _refresh_leaderboard_cache_once()
+            self._scheduler_log(
+                "SCORE",
+                f"leaderboard cache refreshed after match {match_id} completion "
+                f"({reason}) leaderboard={summary['leaderboard']} points_table={summary['points_table']}",
+            )
+        except Exception as exc:
+            self._scheduler_log("SCORE", f"leaderboard refresh after completion failed for match {match_id}: {exc}")
+            traceback.print_exc()
+
         return True
 
     def sync_persistent_match_statuses(self, match_rows=None):
@@ -247,6 +290,14 @@ class Tournament:
             soup = BeautifulSoup(espn_html_text, "html.parser")
             match.parse_espn_bowling_dot_balls(soup)
             self._log_active_player_count(match_id, match)
+
+        completion_state = getattr(match, "get_scorecard_completion_state", lambda: None)()
+        if completion_state and completion_state.get("status") == "completed":
+            reason = completion_state.get("reason", "scorecard completion")
+            self._scheduler_log("SCORE", f"match {match_id} completed from scorecard ({reason})")
+            return self._finalize_completed_match(match_id, reason)
+
+        return False
 
     def get_match_status(self, match_row):
         try:
@@ -391,9 +442,6 @@ class Tournament:
             data_service.invalidate_match_player_payloads()
 
     def recompute_completed_matches(self, reason: str = "manual", include_nr: bool = False):
-        from backend.routes.leaderboard import invalidate_leaderboard_cache
-        from backend.routes.matches import invalidate_matches_response_cache
-
         print(f"\n--- Completed matches recompute ({reason}) ---")
         players_data = data_service.get_cached_data("players")
         matches_data = data_service.get_cached_data("matches")
@@ -410,38 +458,51 @@ class Tournament:
         ]
 
         if not terminal_match_ids:
-            invalidate_leaderboard_cache()
-            invalidate_matches_response_cache()
+            _invalidate_leaderboard_cache()
+            _invalidate_matches_response_cache()
             print("  No terminal matches found for recompute")
             return 0
 
         self.ensure_match_teams_loaded(terminal_match_ids, force=True)
 
         processed = 0
+        needs_persist = False
         for match_id in terminal_match_ids:
             try:
                 print(f"  Match {match_id}: terminal status - revalidating scorecard")
-                self.update_match_data(
+                finalized_from_scorecard = self.update_match_data(
                     match_id,
                     use_playing_xi=True,
                     include_scorecards=True,
                     force_refresh_playing_xi=True,
                 )
+                if finalized_from_scorecard:
+                    processed += 1
+                    continue
                 if self.get_match_status(self.match_rows.get(match_id, {})) != "completed":
                     continue
                 self.compute_player_points_for_match(match_id)
                 self.compute_points_for_match(match_id)
+                needs_persist = True
                 processed += 1
             except Exception as exc:
                 print(f"  Match {match_id}: ERROR - {exc}")
                 traceback.print_exc()
 
-        if processed > 0:
+        if needs_persist:
             self.persist_player_points_to_local()
             self.persist_to_local()
+            try:
+                summary = _refresh_leaderboard_cache_once()
+                self._scheduler_log(
+                    "SCORE",
+                    f"leaderboard cache refreshed after recompute leaderboard={summary['leaderboard']} points_table={summary['points_table']}",
+                )
+            except Exception as exc:
+                self._scheduler_log("SCORE", f"leaderboard refresh after recompute failed: {exc}")
+                traceback.print_exc()
 
-        invalidate_leaderboard_cache()
-        invalidate_matches_response_cache()
+        _invalidate_matches_response_cache()
         print(f"  Recomputed {processed} completed matches")
         return processed
 
@@ -471,6 +532,7 @@ class Tournament:
         self.sync_persistent_match_statuses(matches_data)
 
         processed = 0
+        needs_persist = False
         for m in matches_data:
             match_id = str(m["MatchID"])
             status = self.get_match_status(m)
@@ -481,44 +543,68 @@ class Tournament:
             try:
                 if status == "lineups":
                     self._scheduler_log("SCORE", f"match {match_id} lineups -> refreshing score cache")
-                    self.update_match_data(
+                    finalized_from_scorecard = self.update_match_data(
                         match_id,
                         use_playing_xi=True,
                         include_scorecards=False,
                         force_refresh_playing_xi=True,
                     )
+                    if finalized_from_scorecard:
+                        processed += 1
+                        continue
                 elif status == "live":
                     self._scheduler_log("SCORE", f"match {match_id} live -> refreshing scores")
-                    self.update_match_data(
+                    finalized_from_scorecard = self.update_match_data(
                         match_id,
                         use_playing_xi=True,
                         include_scorecards=True,
                         force_refresh_playing_xi=True,
                     )
+                    if finalized_from_scorecard:
+                        processed += 1
+                        continue
                     updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
                     if updated_status == "nr":
                         continue
                     self.compute_player_points_for_match(match_id)
                     self.compute_points_for_match(match_id)
+                    needs_persist = True
                     processed += 1
                 elif status == "completed":
                     if match_id in computed_matches:
                         continue
                     self._scheduler_log("SCORE", f"match {match_id} completed -> revalidating")
-                    self.update_match_data(
+                    finalized_from_scorecard = self.update_match_data(
                         match_id,
                         use_playing_xi=True,
                         include_scorecards=True,
                         force_refresh_playing_xi=True,
                     )
+                    if finalized_from_scorecard:
+                        processed += 1
+                        continue
                     updated_status = self.get_match_status(self.match_rows.get(match_id, {}))
                     if updated_status != "completed":
                         continue
                     self.compute_player_points_for_match(match_id)
                     self.compute_points_for_match(match_id)
+                    needs_persist = True
                     processed += 1
             except Exception as e:
                 self._scheduler_log("SCORE", f"match {match_id} error: {e}")
+                traceback.print_exc()
+
+        if needs_persist:
+            self.persist_player_points_to_local()
+            self.persist_to_local()
+            try:
+                summary = _refresh_leaderboard_cache_once()
+                self._scheduler_log(
+                    "SCORE",
+                    f"leaderboard cache refreshed leaderboard={summary['leaderboard']} points_table={summary['points_table']}",
+                )
+            except Exception as exc:
+                self._scheduler_log("SCORE", f"leaderboard refresh failed: {exc}")
                 traceback.print_exc()
 
         return {
@@ -534,7 +620,7 @@ class Tournament:
         for m in matches_data:
             match_id = str(m["MatchID"])
             status = self.get_match_status(m)
-            if status == "lineups":
+            if status in {"lineups", "live"}:
                 lineup_match_ids.append(match_id)
 
         self._scheduler_log("XI", f"tick matches={len(matches_data)} eligible={len(lineup_match_ids)}")
@@ -624,15 +710,8 @@ class Tournament:
                 try:
                     self._scheduler_log("SCORE", "scheduler tick start")
                     summary = self.refresh_scores_once()
-                    processed = summary["processed"]
-                    if processed > 0:
-                        try:
-                            self.persist_player_points_to_local()
-                            self.persist_to_local()
-                            self._scheduler_log("SCORE", f"persisted matches={processed}")
-                        except Exception as e:
-                            self._scheduler_log("SCORE", f"persist error: {e}")
-                            traceback.print_exc()
+                    if summary["processed"] > 0:
+                        self._scheduler_log("SCORE", f"persisted matches={summary['processed']}")
                 except Exception as e:
                     self._scheduler_log("SCORE", f"scheduler outer error: {e}")
                     traceback.print_exc()

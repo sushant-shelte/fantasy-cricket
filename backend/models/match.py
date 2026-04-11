@@ -313,6 +313,42 @@ class Match:
 
         return parsed_any
 
+    def get_scorecard_completion_state(self):
+        """Infer completion from parsed innings without any extra fetches."""
+        if len(self.scorecard) < 2:
+            return None
+
+        first_innings = self.scorecard[0] or {}
+        second_innings = self.scorecard[-1] or {}
+
+        try:
+            first_total = int(first_innings.get("total_runs") or 0)
+            second_total = int(second_innings.get("total_runs") or 0)
+            second_wickets = int(second_innings.get("total_wickets") or 0)
+            second_overs = float(second_innings.get("total_overs") or 0)
+        except Exception:
+            return None
+
+        if second_overs == 20:
+            return {
+                "status": "completed",
+                "reason": "second innings reached 20 overs",
+            }
+
+        if second_wickets == 10:
+            return {
+                "status": "completed",
+                "reason": "second innings lost 10 wickets",
+            }
+
+        if second_total > first_total:
+            return {
+                "status": "completed",
+                "reason": "second innings reached or surpassed first innings total",
+            }
+
+        return None
+
     def parse_espn_bowling_dot_balls(self, soup: BeautifulSoup):
         temp_match = Match(self.match_id, self.team1, self.team2, self.registry)
         if not temp_match.parse_espn_scorecard(soup):

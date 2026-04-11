@@ -49,59 +49,72 @@ export default function DashboardPage() {
   const { profile } = useAuth();
   const getCountdown = useCountdown();
 
-  useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-        const dashboardStart = performance.now();
-        console.time('dashboard:/api/dashboard/matches + /api/teams/my-matches');
-        const [matchRes, teamsRes] = await Promise.all([
-          client.get('/api/dashboard/matches'),
-          client.get('/api/teams/my-matches'),
-        ]);
-        console.timeEnd('dashboard:/api/dashboard/matches + /api/teams/my-matches');
+  const loadDashboard = useCallback(async () => {
+    try {
+      const dashboardStart = performance.now();
+      console.time('dashboard:/api/dashboard/matches + /api/teams/my-matches');
+      const [matchRes, teamsRes] = await Promise.all([
+        client.get('/api/dashboard/matches'),
+        client.get('/api/teams/my-matches'),
+      ]);
+      console.timeEnd('dashboard:/api/dashboard/matches + /api/teams/my-matches');
 
-        const loadedMatches: Match[] = matchRes.data;
-        const loadedMyTeams = new Set<number>(teamsRes.data);
-        setMatches(loadedMatches);
-        setMyTeams(loadedMyTeams);
+      const loadedMatches: Match[] = matchRes.data;
+      const loadedMyTeams = new Set<number>(teamsRes.data);
+      setMatches(loadedMatches);
+      setMyTeams(loadedMyTeams);
 
-          const futureMatchesWithTeams = loadedMatches.filter((match) => match.status === 'future' && loadedMyTeams.has(match.id));
-          const matchesToCheck = futureMatchesWithTeams;
+      const futureMatchesWithTeams = loadedMatches.filter((match) => match.status === 'future' && loadedMyTeams.has(match.id));
 
-          if (matchesToCheck.length > 0) {
-            const ids = matchesToCheck.map((match) => match.id).join(',');
-            console.time('dashboard:/api/teams/my-lineup-statuses');
-            const lineupRes = await client.get(`/api/teams/my-lineup-statuses?match_ids=${ids}`);
-            console.timeEnd('dashboard:/api/teams/my-lineup-statuses');
-            setTeamLineupInfo(lineupRes.data || {});
-          } else {
-            setTeamLineupInfo({});
-          }
+      if (futureMatchesWithTeams.length > 0) {
+        const ids = futureMatchesWithTeams.map((match) => match.id).join(',');
+        console.time('dashboard:/api/teams/my-lineup-statuses');
+        const lineupRes = await client.get(`/api/teams/my-lineup-statuses?match_ids=${ids}`);
+        console.timeEnd('dashboard:/api/teams/my-lineup-statuses');
+        setTeamLineupInfo(lineupRes.data || {});
 
-        if (futureMatchesWithTeams.length > 0) {
-          const ids = futureMatchesWithTeams.map((match) => match.id).join(',');
-          console.time('dashboard:/api/teams/my-backup-counts');
-          const backupRes = await client.get(`/api/teams/my-backup-counts?match_ids=${ids}`);
-          console.timeEnd('dashboard:/api/teams/my-backup-counts');
-          const counts: Record<number, number> = {};
-          Object.entries(backupRes.data || {}).forEach(([matchId, count]) => {
-            counts[Number(matchId)] = Number(count || 0);
-          });
-          setBackupCounts(counts);
-        } else {
-          setBackupCounts({});
-        }
-        console.log(`dashboard:total ${(performance.now() - dashboardStart).toFixed(1)}ms`);
-        } catch {
-          setTeamLineupInfo({});
-          setBackupCounts({});
-        } finally {
-        setLoading(false);
+        console.time('dashboard:/api/teams/my-backup-counts');
+        const backupRes = await client.get(`/api/teams/my-backup-counts?match_ids=${ids}`);
+        console.timeEnd('dashboard:/api/teams/my-backup-counts');
+        const counts: Record<number, number> = {};
+        Object.entries(backupRes.data || {}).forEach(([matchId, count]) => {
+          counts[Number(matchId)] = Number(count || 0);
+        });
+        setBackupCounts(counts);
+      } else {
+        setTeamLineupInfo({});
+        setBackupCounts({});
       }
+
+      console.log(`dashboard:total ${(performance.now() - dashboardStart).toFixed(1)}ms`);
+    } catch {
+      setTeamLineupInfo({});
+      setBackupCounts({});
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const run = async () => {
+      if (!alive) return;
+      await loadDashboard();
+      if (!alive) return;
+      intervalId = setInterval(() => {
+        void loadDashboard();
+      }, 30000);
     };
 
-    loadDashboard();
-  }, []);
+    void run();
+
+    return () => {
+      alive = false;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [loadDashboard]);
 
   const formatDate = (dateStr: string, timeStr: string) => {
     try {
