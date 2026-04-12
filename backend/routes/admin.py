@@ -11,8 +11,6 @@ from backend.services import data_service
 from backend.config import IST
 from backend.config import ROLES
 from backend.services import data_service
-from backend.routes.leaderboard import invalidate_leaderboard_cache
-from backend.routes.matches import invalidate_matches_response_cache
 from backend.services.scraper import compute_toss_time, invalidate_live_metadata_cache
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -39,6 +37,48 @@ def _refresh_tournament_static_state(refresh_schedule_map: bool = False):
         data_service.get_cached_data("matches"),
         refresh_schedule_map=refresh_schedule_map,
     )
+
+
+def _refresh_admin_caches(
+    *,
+    tables: set[str],
+    refresh_schedule_map: bool = False,
+    match_id: int | None = None,
+):
+    tables = {table.lower() for table in tables}
+
+    for table in tables:
+        if table in {"players", "matches", "users", "user_teams", "team_backups", "contestant_points", "player_points"}:
+            data_service.invalidate_cache(table)
+
+    if tables & {"players", "matches", "user_teams", "team_backups", "contestant_points", "player_points", "users"}:
+        data_service.invalidate_match_player_payloads()
+
+    if "matches" in tables and match_id is not None:
+        invalidate_live_metadata_cache(match_id)
+
+    if "matches" in tables:
+        _refresh_tournament_static_state(refresh_schedule_map=refresh_schedule_map)
+    elif "players" in tables:
+        _refresh_tournament_static_state(refresh_schedule_map=refresh_schedule_map)
+
+    if "matches" in tables:
+        try:
+            from backend.routes.matches import invalidate_matches_response_cache, refresh_matches_response_cache_once
+
+            invalidate_matches_response_cache()
+            refresh_matches_response_cache_once()
+        except Exception as exc:
+            print(f"[ADMIN] matches cache refresh failed: {exc}")
+
+    if tables & {"players", "matches", "users", "user_teams", "team_backups", "contestant_points", "player_points"}:
+        try:
+            from backend.routes.scores import invalidate_scores_response_cache, refresh_scores_response_cache_once
+
+            invalidate_scores_response_cache()
+            refresh_scores_response_cache_once()
+        except Exception as exc:
+            print(f"[ADMIN] scores cache refresh failed: {exc}")
 
 
 # --- User Management ---
@@ -86,7 +126,7 @@ async def update_user(
     params.append(user_id)
     db.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
-    data_service.invalidate_cache("users")
+    _refresh_admin_caches(tables={"users"})
 
     updated = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     return dict(updated)
@@ -126,9 +166,7 @@ async def create_player(
         (body.name, body.team, body.role, body.aliases or ""),
     )
     db.commit()
-    data_service.invalidate_cache("players")
-    data_service.invalidate_match_player_payloads()
-    _refresh_tournament_static_state(refresh_schedule_map=True)
+    _refresh_admin_caches(tables={"players"}, refresh_schedule_map=True)
 
     player = db.execute(
         "SELECT * FROM players WHERE id = ?", (cursor.lastrowid,)
@@ -170,9 +208,7 @@ async def update_player(
     params.append(player_id)
     db.execute(f"UPDATE players SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
-    data_service.invalidate_cache("players")
-    data_service.invalidate_match_player_payloads()
-    _refresh_tournament_static_state(refresh_schedule_map=True)
+    _refresh_admin_caches(tables={"players"}, refresh_schedule_map=True)
 
     updated = db.execute("SELECT * FROM players WHERE id = ?", (player_id,)).fetchone()
     return dict(updated)
@@ -191,9 +227,7 @@ async def delete_player(
 
     db.execute("DELETE FROM players WHERE id = ?", (player_id,))
     db.commit()
-    data_service.invalidate_cache("players")
-    data_service.invalidate_match_player_payloads()
-    _refresh_tournament_static_state()
+    _refresh_admin_caches(tables={"players"})
 
     return {"success": True}
 
@@ -244,9 +278,7 @@ async def create_match(
         ),
     )
     db.commit()
-    data_service.invalidate_cache("matches")
-    invalidate_matches_response_cache()
-    _refresh_tournament_static_state(refresh_schedule_map=True)
+    _refresh_admin_caches(tables={"matches"}, refresh_schedule_map=True)
 
     match = db.execute(
         "SELECT * FROM matches WHERE id = ?", (cursor.lastrowid,)
@@ -311,11 +343,7 @@ async def update_match(
         data_service.clear_points_for_match(match_id)
         invalidate_live_metadata_cache(match_id)
     db.commit()
-    data_service.invalidate_cache("matches")
-    data_service.invalidate_match_player_payloads()
-    invalidate_matches_response_cache()
-    invalidate_leaderboard_cache()
-    _refresh_tournament_static_state(refresh_schedule_map=True)
+    _refresh_admin_caches(tables={"matches"}, refresh_schedule_map=True, match_id=match_id)
 
     if tournament_ref is not None:
         match_id_str = str(match_id)
@@ -326,12 +354,6 @@ async def update_match(
             tournament_ref.compute_points_for_match(match_id_str)
             tournament_ref.persist_player_points_to_local()
             tournament_ref.persist_to_local()
-            try:
-                from backend.routes.leaderboard import refresh_leaderboard_cache_once
-
-                refresh_leaderboard_cache_once()
-            except Exception:
-                pass
         elif explicit_status in {"future", "live", "nr"}:
             tournament_ref.player_points.pop(match_id_str, None)
             for contestant in tournament_ref.contestants.values():
@@ -354,11 +376,7 @@ async def delete_match(
 
     db.execute("DELETE FROM matches WHERE id = ?", (match_id,))
     db.commit()
-    data_service.invalidate_cache("matches")
-    data_service.invalidate_match_player_payloads()
-    invalidate_live_metadata_cache(match_id)
-    invalidate_matches_response_cache()
-    _refresh_tournament_static_state(refresh_schedule_map=True)
+    _refresh_admin_caches(tables={"matches"}, refresh_schedule_map=True, match_id=match_id)
 
     return {"success": True}
 
@@ -396,17 +414,7 @@ async def recalculate_match(
         data_service.invalidate_match_player_payloads()
     invalidate_live_metadata_cache(match_id)
 
-    data_service.invalidate_cache("matches")
-    invalidate_matches_response_cache()
-    invalidate_leaderboard_cache()
-
-    if refreshed_status == "completed":
-        try:
-            from backend.routes.leaderboard import refresh_leaderboard_cache_once
-
-            refresh_leaderboard_cache_once()
-        except Exception:
-            pass
+    _refresh_admin_caches(tables={"matches"}, refresh_schedule_map=True, match_id=match_id)
 
     return {
         "success": True,
@@ -619,6 +627,7 @@ async def update_team(
 
     db.commit()
     data_service.prune_user_backups(body.user_id, body.match_id, [player.player_id for player in body.players])
+    _refresh_admin_caches(tables={"user_teams"})
 
     return {
         "success": True,
@@ -667,13 +676,10 @@ async def clear_table(
 
     db.execute(CLEARABLE_TABLES[table_name])
     db.commit()
-    if table_name in {"players", "matches"}:
-        data_service.invalidate_cache(table_name)
-    if table_name == "matches":
-        invalidate_matches_response_cache()
-        _refresh_tournament_static_state(refresh_schedule_map=True)
-    elif table_name == "players":
-        _refresh_tournament_static_state()
+    _refresh_admin_caches(
+        tables={table_name},
+        refresh_schedule_map=(table_name == "matches"),
+    )
 
     return {"success": True, "message": f"Cleared all data from {table_name}"}
 
@@ -706,4 +712,5 @@ async def admin_submit_team(body: AdminSubmitTeamBody, user: dict = Depends(requ
         )
     db.commit()
     data_service.prune_user_backups(body.user_id, body.match_id, [player.player_id for player in body.players])
+    _refresh_admin_caches(tables={"user_teams"})
     return {"success": True}

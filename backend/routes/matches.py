@@ -79,6 +79,20 @@ def invalidate_matches_response_cache():
     MATCHES_RESPONSE_CACHE["today_key"] = ""
 
 
+def refresh_matches_response_cache_once() -> dict:
+    payload = _build_matches_payload()
+    today_key = datetime.now(IST).strftime("%Y-%m-%d")
+    MATCHES_RESPONSE_CACHE["matches"] = payload
+    MATCHES_RESPONSE_CACHE["dashboard"] = payload
+    MATCHES_RESPONSE_CACHE["generated_at"] = time.time()
+    MATCHES_RESPONSE_CACHE["today_key"] = today_key
+    return {
+        "matches": len(payload),
+        "dashboard": len(payload),
+        "today_key": today_key,
+    }
+
+
 def _is_matches_cache_valid(cache_key: str, today_key: str) -> bool:
     if MATCHES_RESPONSE_CACHE.get(cache_key) is None:
         return False
