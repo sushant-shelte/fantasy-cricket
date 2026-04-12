@@ -229,6 +229,14 @@ export default function ViewScoresPage() {
   };
 
   useEffect(() => {
+    if (tab !== 'scores') return;
+    if (selectedContestantId == null) return;
+    if (!scoresSnapshotVersion) return;
+
+    void fetchContestantBreakdown(selectedContestantId, false, scoresSnapshotVersion);
+  }, [scoresSnapshotVersion, selectedContestantId, tab]);
+
+  useEffect(() => {
     setLoading(true);
     setPlayerScores([]);
     setContestants([]);

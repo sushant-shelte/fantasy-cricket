@@ -935,16 +935,32 @@ def _load_match_and_points(db, match_id):
     if not cached_payload:
         return match_row, None, {}, {}
 
+    pp_rows = db.execute(
+        "SELECT player_id, points, role FROM player_points WHERE match_id = ?",
+        (match_id,),
+    ).fetchall()
     pp_lookup = {
-        str(player["player_id"]): float(player.get("points", 0))
-        for player in cached_payload.get("players", [])
-        if player.get("player_id") is not None
+        str(row["player_id"]): float(row["points"])
+        for row in pp_rows
     }
     role_lookup = {
-        str(player["player_id"]): player.get("role")
-        for player in cached_payload.get("players", [])
-        if player.get("player_id") is not None and player.get("role")
+        str(row["player_id"]): row["role"]
+        for row in pp_rows
+        if row["role"]
     }
+
+    if not pp_lookup:
+        pp_lookup = {
+            str(player["player_id"]): float(player.get("points", 0))
+            for player in cached_payload.get("players", [])
+            if player.get("player_id") is not None
+        }
+        role_lookup = {
+            str(player["player_id"]): player.get("role")
+            for player in cached_payload.get("players", [])
+            if player.get("player_id") is not None and player.get("role")
+        }
+
     return match_row, cached_payload, pp_lookup, role_lookup
 
 
