@@ -522,11 +522,7 @@ export default function ViewScoresPage() {
               <p className="text-[10px] text-white/30">Pts</p>
             </div>
           </div>
-          <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-white/35">
-            <span>Base {player.base_points}</span>
-            <span>{player.multiplier > 1 ? `x${player.multiplier}` : 'x1'}</span>
-            {player.is_backup ? <span className="text-sky-300">Backup</span> : <span>&nbsp;</span>}
-          </div>
+          {player.is_backup && <div className="mt-1.5 text-[10px] text-sky-300">Backup</div>}
         </div>
       );
     };
@@ -667,7 +663,7 @@ export default function ViewScoresPage() {
             </div>
           </div>
           <div className="flex w-full justify-end sm:w-auto">
-            <div className="flex flex-wrap justify-end gap-1 rounded-xl bg-white/5 p-1.5">
+            <div className="grid w-full grid-cols-2 gap-1 rounded-xl bg-white/5 p-1 sm:w-auto">
               {VIEW_TABS.map((entry) => (
                 <button
                   key={entry.key}
