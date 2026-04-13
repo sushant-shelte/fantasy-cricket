@@ -830,6 +830,7 @@ def _extract_playing_xi_from_commentary(
     page_text = soup.get_text("\n", strip=True)
     if not page_text:
         return [], [], [], [], False
+    page_lines = [line.strip() for line in page_text.splitlines() if line.strip()]
 
     expanded_team_names = {
         team1: {team1, _expand_team_name(team1)},
@@ -842,6 +843,46 @@ def _extract_playing_xi_from_commentary(
     unmatched_substitutes: list[str] = []
     announced = False
     normalized_page_text = " ".join(page_text.split())
+
+    def _extract_names_from_line(line: str, team: str) -> tuple[list[str], list[str]]:
+        """Parse a single commentary line for team-specific XI/substitute names."""
+        team_variants = expanded_team_names[team]
+        for variant in team_variants:
+            if not variant:
+                continue
+
+            xi_match = re.search(
+                rf"^{re.escape(variant)}\s*\(Playing XI\)\s*[:\-]\s*(.+)$",
+                line,
+                flags=re.IGNORECASE,
+            )
+            if xi_match:
+                return _extract_comma_separated_names(xi_match.group(1)), []
+
+            subs_match = re.search(
+                rf"^{re.escape(variant)}\s+Impact\s+(?:sub|subs|substitute|substitutes)\s*[:\-]\s*(.+)$",
+                line,
+                flags=re.IGNORECASE,
+            )
+            if subs_match:
+                return [], _extract_comma_separated_names(subs_match.group(1))
+
+        return [], []
+
+    def _extract_from_lines(team: str) -> tuple[list[str], list[str]]:
+        xi_names: list[str] = []
+        substitute_names: list[str] = []
+
+        for line in page_lines:
+            if xi_names and substitute_names:
+                break
+            line_xi, line_subs = _extract_names_from_line(line, team)
+            if line_xi and not xi_names:
+                xi_names = line_xi
+            if line_subs and not substitute_names:
+                substitute_names = line_subs
+
+        return xi_names, substitute_names
 
     def _extract_block_names(section_label: str, team: str, name_variants: set[str]) -> list[str]:
         patterns = [
@@ -887,6 +928,13 @@ def _extract_playing_xi_from_commentary(
     for team, name_variants in expanded_team_names.items():
         xi_names: list[str] = []
         substitute_names: list[str] = []
+
+        if not xi_names or not substitute_names:
+            line_xi_names, line_substitute_names = _extract_from_lines(team)
+            if line_xi_names and not xi_names:
+                xi_names = line_xi_names
+            if line_substitute_names and not substitute_names:
+                substitute_names = line_substitute_names
 
         for variant in name_variants:
             escaped_variant = re.escape(variant)
@@ -980,6 +1028,22 @@ def parse_playing_xi_from_sources(
         substitute_ids, substitute_unmatched_names, substitutes_available = _extract_named_players_from_cricbuzz_section(
             squads_html, "substitutes", team1, team2, players_rows
         )
+        # Cricbuzz has multiple squads page layouts; if the structured column parser
+        # doesn't see enough names, fall back to the more permissive text parser.
+        if len(playing_ids) < 18:
+            text_playing_ids, text_unmatched_names = _extract_playing_xi_from_text(
+                squads_html, team1, team2, players_rows
+            )
+            if len(text_playing_ids) > len(playing_ids):
+                playing_ids = list(text_playing_ids)
+                unmatched_names = text_unmatched_names
+                announced = len(playing_ids) >= 18
+        if len(playing_ids) < 22:
+            json_playing_ids, json_unmatched_names = _extract_playing_xi_from_json(squads_html, players_rows)
+            if len(json_playing_ids) == 22 and len(json_playing_ids) > len(playing_ids):
+                playing_ids = list(json_playing_ids)
+                unmatched_names = json_unmatched_names
+                announced = True
         if announced:
             payload.update(
                 {
