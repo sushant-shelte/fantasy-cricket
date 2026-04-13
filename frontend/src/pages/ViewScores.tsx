@@ -313,15 +313,15 @@ export default function ViewScoresPage() {
     return (
       <div className="min-h-screen bg-black">
         <header id="view-scores-sticky-header" className="mobile-safe-blur sticky top-0 z-30 bg-black/80 border-b border-white/10 md:backdrop-blur-lg">
-          <div className="max-w-6xl mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
+          <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 px-4 py-4">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-white/10 animate-pulse" />
               <div className="space-y-1.5">
                 <div className="h-5 w-28 rounded bg-white/10 animate-pulse" />
                 <div className="h-3 w-20 rounded bg-white/10 animate-pulse" />
               </div>
             </div>
-            <div className="grid w-full grid-cols-2 gap-1 rounded-xl bg-white/5 p-1 sm:w-auto">
+            <div className="shrink-0 grid w-[10.5rem] grid-cols-2 gap-1 rounded-xl bg-white/5 p-1">
               <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
               <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
               <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
@@ -662,18 +662,16 @@ export default function ViewScoresPage() {
               {lastUpdated && <p className="text-xs text-white/40">Updated {lastUpdated.toLocaleTimeString()}</p>}
             </div>
           </div>
-          <div className="flex w-full justify-end sm:w-auto">
-            <div className="grid w-full grid-cols-2 gap-1 rounded-xl bg-white/5 p-1 sm:w-auto">
+          <div className="shrink-0 grid w-[10.5rem] grid-cols-2 gap-1 rounded-xl bg-white/5 p-1">
               {VIEW_TABS.map((entry) => (
                 <button
                   key={entry.key}
                   onClick={() => setTab(entry.key)}
-                  className={`whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-medium transition sm:text-xs ${tab === entry.key ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}
+                  className={`w-full whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-medium transition ${tab === entry.key ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}
                 >
                   {entry.label}
                 </button>
               ))}
-            </div>
           </div>
         </div>
       </header>
