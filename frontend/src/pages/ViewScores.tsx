@@ -76,9 +76,9 @@ interface ScorecardInnings {
 type ViewTab = 'scores' | 'scorecard' | 'myteam' | 'diff';
 
 const VIEW_TABS: Array<{ key: ViewTab; label: string }> = [
-  { key: 'scores', label: 'Scores' },
+  { key: 'scores', label: 'Live' },
   { key: 'scorecard', label: 'Scorecard' },
-  { key: 'myteam', label: 'Team Analysis' },
+  { key: 'myteam', label: 'My Team' },
   { key: 'diff', label: 'Compare' },
 ];
 
@@ -293,11 +293,27 @@ export default function ViewScoresPage() {
     setSelectedContestantLoading(false);
   }, [matchId]);
 
+  useEffect(() => {
+    const header = document.getElementById('view-scores-sticky-header');
+    if (!header) return;
+
+    const updateHeight = () => {
+      const height = Math.ceil(header.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--view-scores-sticky-offset', `${height}px`);
+    };
+
+    updateHeight();
+    const ro = new ResizeObserver(updateHeight);
+    ro.observe(header);
+
+    return () => ro.disconnect();
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black">
-        <header className="mobile-safe-blur sticky top-0 z-30 bg-black/80 border-b border-white/10 md:backdrop-blur-lg">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <header id="view-scores-sticky-header" className="mobile-safe-blur sticky top-0 z-30 bg-black/80 border-b border-white/10 md:backdrop-blur-lg">
+          <div className="max-w-6xl mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-white/10 animate-pulse" />
               <div className="space-y-1.5">
@@ -305,7 +321,7 @@ export default function ViewScoresPage() {
                 <div className="h-3 w-20 rounded bg-white/10 animate-pulse" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-1 bg-white/5 rounded-xl p-1">
+            <div className="grid w-full grid-cols-2 gap-1 rounded-xl bg-white/5 p-1 sm:w-auto">
               <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
               <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
               <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
@@ -418,6 +434,122 @@ export default function ViewScoresPage() {
 
     setSelectedContestantId(contestantId);
     fetchContestantBreakdown(contestantId);
+  };
+
+  const getSelectedContestantPlayers = () => {
+    if (!selectedContestantBreakdown?.players?.length) return [];
+    return [...selectedContestantBreakdown.players].sort((a, b) => b.adjusted_points - a.adjusted_points);
+  };
+
+  const renderTeamAnalysisBreakdown = (player: BreakdownPlayer, index: number) => {
+    const bd = (player as BreakdownPlayer & { breakdown?: { label: string; points: number }[] }).breakdown || [];
+    const isOpen = expandedPlayer === 1000 + index;
+
+    return (
+      <div key={`${player.name}-${index}`}>
+        <div
+          onClick={() => setExpandedPlayer(isOpen ? null : 1000 + index)}
+          className={`flex items-center px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer bg-gradient-to-r ${getTeamTheme(player.team).tintClass}`}>
+          <div className="w-5 text-center flex-shrink-0">
+            <span className={`text-[10px] text-white/40 transition-transform inline-block ${isOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+          </div>
+          <div className="w-7 flex-shrink-0 ml-1">
+            {player.tag === 'C' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>}
+            {player.tag === 'VC' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>}
+          </div>
+          <div className="min-w-0 flex-[1.35] ml-2">
+            <div className="flex items-center gap-2">
+              {renderBackupDot(player.is_backup)}
+              <p className="text-white text-sm font-medium truncate">{player.name}</p>
+            </div>
+            <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
+              {renderTeamBadge(player.team)}
+              <span>{getShortRole(player.role)}</span>
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0 ml-2 min-w-[56px]">
+            <p className="text-blue-400 font-bold text-sm">{player.adjusted_points}</p>
+            {player.multiplier > 1 && (
+              <p className="text-white/30 text-[10px]">{player.base_points} &times; {player.multiplier}</p>
+            )}
+          </div>
+        </div>
+        {isOpen && bd.length > 0 && (
+          <div className="px-4 pb-3 pt-1">
+            <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1.5">Player Analysis</p>
+            <div className="flex flex-wrap gap-1.5">
+              {bd.map((item: { label: string; points: number }, j: number) => (
+                <span key={j} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                  item.points > 0 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                }`}>
+                  {item.label} <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderLiveSelectedContestant = () => {
+    if (!selectedContestantBreakdown) return null;
+    const players = getSelectedContestantPlayers();
+    if (!players.length) return null;
+    const renderPlayerCard = (player: BreakdownPlayer, index: number) => {
+      const bd = (player as BreakdownPlayer & { breakdown?: { label: string; points: number }[] }).breakdown || [];
+      return (
+        <div key={`${player.name}-${index}`} className={`rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(player.team).tintClass} px-3 py-2.5`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                {renderBackupDot(player.is_backup)}
+                <p className="truncate text-sm font-medium text-white">{player.name}</p>
+                {player.tag && (
+                  <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
+                    player.tag === 'C' ? 'bg-amber-500 text-black' : 'bg-sky-500 text-black'
+                  }`}>
+                    {player.tag}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
+                {renderTeamBadge(player.team)}
+                <span>{formatRoleName(player.role)}</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-blue-400">{player.adjusted_points}</p>
+              {player.multiplier > 1 && (
+                <p className="text-[10px] text-white/30">{player.base_points} &times; {player.multiplier}</p>
+              )}
+            </div>
+          </div>
+          {bd.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {bd.map((item: { label: string; points: number }, j: number) => (
+                <span key={j} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                  item.points > 0 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                }`}>
+                  {item.label} <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1 rounded-md border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-400">
+                Total: {player.adjusted_points}
+              </span>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {players.map((player, index) => renderPlayerCard(player, index))}
+        </div>
+      </div>
+    );
   };
 
   const renderScorecardSection = (innings: ScorecardInnings, index: number) => {
@@ -533,8 +665,8 @@ export default function ViewScoresPage() {
   return (
     <div className="min-h-screen bg-black">
       {/* Header */}
-      <header className="mobile-safe-blur sticky top-0 z-30 bg-black/80 border-b border-white/10 md:backdrop-blur-lg">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <header id="view-scores-sticky-header" className="mobile-safe-blur sticky top-0 z-30 bg-black/80 border-b border-white/10 md:backdrop-blur-lg">
+        <div className="max-w-6xl mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -546,7 +678,7 @@ export default function ViewScoresPage() {
               {lastUpdated && <p className="text-xs text-white/40">Updated {lastUpdated.toLocaleTimeString()}</p>}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-1 bg-white/5 rounded-xl p-1">
+          <div className="grid w-full grid-cols-2 gap-1 rounded-xl bg-white/5 p-1 sm:w-auto">
             {VIEW_TABS.map((entry) => (
               <button
                 key={entry.key}
@@ -640,37 +772,7 @@ export default function ViewScoresPage() {
                                 {selectedContestantLoading && (
                                   <p className="text-[10px] uppercase tracking-[0.2em] text-white/30">Refreshing latest data...</p>
                                 )}
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                  {selectedContestantBreakdown.players.map((player, index) => (
-                                    <div key={`${player.name}-${index}`} className={`rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(player.team).tintClass} px-3 py-2.5`}>
-                                      <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                              {renderBackupDot(player.is_backup)}
-                                              <p className="truncate text-sm font-medium text-white">{player.name}</p>
-                                            {player.tag && (
-                                              <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
-                                                player.tag === 'C' ? 'bg-amber-500 text-black' : 'bg-sky-500 text-black'
-                                              }`}>
-                                                {player.tag}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
-                                            {renderTeamBadge(player.team)}
-                                            <span>{formatRoleName(player.role)}</span>
-                                          </div>
-                                        </div>
-                                        <div className="text-right">
-                                          <p className="text-sm font-bold text-blue-400">{player.adjusted_points}</p>
-                                          {player.multiplier > 1 && (
-                                            <p className="text-[10px] text-white/30">{player.base_points} &times; {player.multiplier}</p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
+                                {renderLiveSelectedContestant()}
                               </div>
                             ) : (
                               <p className="text-sm text-white/40">No team data available.</p>
@@ -996,65 +1098,18 @@ export default function ViewScoresPage() {
                   </div>
                 </div>
 
-                {/* Player breakdown list */}
-                <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-                  <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-                    <h3 className="text-white font-semibold text-sm">Player Contributions</h3>
-                    <span className="text-white/40 text-[10px]">Tap player for analysis</span>
+                <div className="rounded-2xl overflow-hidden bg-white/5 border border-white/10">
+                  <div className="px-4 py-3 border-b border-white/10">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-white font-semibold text-sm">Player Contributions</h3>
+                        <p className="text-[10px] text-white/35">Tap player for analysis</p>
+                      </div>
+                      <p className="text-sm font-bold text-blue-400">{breakdown.total} pts</p>
+                    </div>
                   </div>
                   <div className="divide-y divide-white/5">
-                    {breakdown.players.map((p, i) => {
-                      const isOpen = expandedPlayer === 1000 + i;
-                      const bd = (p as any).breakdown || [];
-                      return (
-                        <div key={i}>
-                          <div
-                            onClick={() => setExpandedPlayer(isOpen ? null : 1000 + i)}
-                            className={`flex items-center px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer bg-gradient-to-r ${getTeamTheme(p.team).tintClass}`}>
-                            <div className="w-5 text-center flex-shrink-0">
-                              <span className={`text-[10px] text-white/40 transition-transform inline-block ${isOpen ? 'rotate-90' : ''}`}>&#9654;</span>
-                            </div>
-                            <div className="w-7 flex-shrink-0 ml-1">
-                              {p.tag === 'C' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black text-[10px] font-bold">C</span>}
-                              {p.tag === 'VC' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-black text-[10px] font-bold">VC</span>}
-                            </div>
-                            <div className="min-w-0 flex-[1.35] ml-2">
-                              <div className="flex items-center gap-2">
-                                {renderBackupDot(p.is_backup)}
-                                <p className="text-white text-sm font-medium truncate">{p.name}</p>
-                              </div>
-                              <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
-                                {renderTeamBadge(p.team)}
-                                <span>{getShortRole(p.role)}</span>
-                              </div>
-                            </div>
-                            <div className="text-right flex-shrink-0 ml-2 min-w-[56px]">
-                              <p className="text-blue-400 font-bold text-sm">{p.adjusted_points}</p>
-                              {p.multiplier > 1 && (
-                                <p className="text-white/30 text-[10px]">{p.base_points} &times; {p.multiplier}</p>
-                              )}
-                            </div>
-                          </div>
-                          {isOpen && bd.length > 0 && (
-                            <div className="px-4 pb-3 pt-1">
-                              <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1.5">Player Analysis</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {bd.map((item: { label: string; points: number }, j: number) => (
-                                  <span key={j}
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
-                                      item.points > 0
-                                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                        : 'bg-red-500/10 text-red-400 border-red-500/20'
-                                    }`}>
-                                    {item.label} <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {breakdown.players.map((p, i) => renderTeamAnalysisBreakdown(p, i))}
                   </div>
                 </div>
               </>

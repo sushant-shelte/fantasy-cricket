@@ -100,6 +100,20 @@ def _compute_match_contestant_points(db, match_id: int) -> list[dict]:
     return result
 
 
+def _get_match_participant_ids(db, match_id: int) -> set[int]:
+    rows = db.execute(
+        """
+        SELECT DISTINCT u.id
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.user_id
+        WHERE ut.match_id = ?
+          AND u.is_active = 1
+        """,
+        (match_id,),
+    ).fetchall()
+    return {int(row["id"]) for row in rows}
+
+
 def _get_completed_match_ids(db) -> list[int]:
     rows = db.execute(
         "SELECT id, match_date, match_time, status FROM matches ORDER BY id"
@@ -159,13 +173,15 @@ def _load_effective_match_points(db) -> dict[int, list[dict]]:
 
     for match_id in match_ids:
         contestants = matches.get(match_id, [])
+        expected_participant_ids = _get_match_participant_ids(db, match_id)
         if contestants:
+            stored_participant_ids = {entry["user_id"] for entry in contestants}
             has_nonzero = any(entry["points"] != 0 for entry in contestants)
             player_points_exist = db.execute(
                 "SELECT 1 FROM player_points WHERE match_id = ? AND points <> 0 LIMIT 1",
                 (match_id,),
             ).fetchone()
-            if has_nonzero or not player_points_exist:
+            if stored_participant_ids == expected_participant_ids and (has_nonzero or not player_points_exist):
                 effective[match_id] = contestants
                 continue
 

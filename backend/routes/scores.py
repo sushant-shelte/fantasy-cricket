@@ -255,6 +255,17 @@ def _build_completed_match_scores_payload(match_id: int, match_row, registry, pl
         return _empty_match_scores_payload("nr")
 
     match_obj = _get_completed_match_from_tournament(match_id)
+    if not match_obj:
+        # Completed matches can lose their in-memory tournament object after restart
+        # or a recompute cycle. Fall back to the same scorecard hydration path used
+        # for live matches so the team tab still has per-player stat breakdowns.
+        match_obj, _, _ = _hydrate_match_for_scores(
+            match_id,
+            match_row,
+            registry,
+            players_data,
+            include_playing_xi=False,
+        )
     team1 = clean_team_name(_row_value(match_row, "team1", "Team1", default=""))
     team2 = clean_team_name(_row_value(match_row, "team2", "Team2", default=""))
     owners_by_player = _load_player_owners(db, match_id)
@@ -263,18 +274,37 @@ def _build_completed_match_scores_payload(match_id: int, match_row, registry, pl
         "SELECT * FROM player_points WHERE match_id = ?",
         (match_id,),
     ).fetchall()
-    pp_lookup: dict[str, float] = {}
-    role_lookup: dict[str, str] = {}
+    db_pp_lookup: dict[str, float] = {}
+    db_role_lookup: dict[str, str] = {}
     for row in pp_rows:
-        pp_lookup[str(row["player_id"])] = float(row["points"])
-        role_lookup[str(row["player_id"])] = row["role"]
+        db_pp_lookup[str(row["player_id"])] = float(row["points"])
+        db_role_lookup[str(row["player_id"])] = row["role"]
+
+    cached_pp_lookup: dict[str, float] = {}
+    cached_role_lookup: dict[str, str] = {}
+    if match_obj and getattr(match_obj, "players", None):
+        for p in match_obj.players.values():
+            pid_str = str(p.player_id)
+            role = db_role_lookup.get(pid_str) or registry.players.get(p.player_id, {}).get("Role")
+            if role:
+                cached_role_lookup[pid_str] = role
+            if role:
+                cached_pp_lookup[pid_str] = float(p.calculate_player_points(role))
+
+    use_db_points = bool(db_pp_lookup)
+    if match_obj and getattr(match_obj, "players", None):
+        match_player_count = len(match_obj.players)
+        if len(db_pp_lookup) < match_player_count:
+            use_db_points = False
 
     players = []
     if match_obj and getattr(match_obj, "players", None):
         for p in match_obj.players.values():
             pid_str = str(p.player_id)
-            role = role_lookup.get(pid_str) or registry.players.get(p.player_id, {}).get("Role")
-            points = round(float(pp_lookup.get(pid_str, 0)), 2)
+            role = db_role_lookup.get(pid_str) or cached_role_lookup.get(pid_str) or registry.players.get(p.player_id, {}).get("Role")
+            points_source = db_pp_lookup if use_db_points else cached_pp_lookup
+            calculated_points = float(points_source.get(pid_str, p.calculate_player_points(role) if role else 0))
+            points = round(calculated_points, 2)
             players.append({
                 "player_id": int(p.player_id),
                 "name": p.name,
@@ -300,7 +330,7 @@ def _build_completed_match_scores_payload(match_id: int, match_row, registry, pl
                 "stumpings": getattr(p, "stumpings", 0),
                 "runout_indirect": getattr(p, "runout_indirect", 0),
                 "points": points,
-                "breakdown": [],
+                "breakdown": p.get_points_breakdown() if role else [],
                 "owners": owners_by_player.get(int(p.player_id), []),
             })
     else:
@@ -312,8 +342,8 @@ def _build_completed_match_scores_payload(match_id: int, match_row, registry, pl
                 "player_id": pid,
                 "name": row["name"],
                 "team": row["team"],
-                "role": role_lookup.get(pid_str) or row["role"],
-                "played": pid_str in pp_lookup,
+                "role": db_role_lookup.get(pid_str) or row["role"],
+                "played": pid_str in db_pp_lookup,
                 "is_out": False,
                 "runs": 0,
                 "balls": 0,
@@ -332,13 +362,13 @@ def _build_completed_match_scores_payload(match_id: int, match_row, registry, pl
                 "runout_direct": 0,
                 "stumpings": 0,
                 "runout_indirect": 0,
-                "points": round(float(pp_lookup.get(pid_str, 0)), 2),
+                "points": round(float(db_pp_lookup.get(pid_str, 0)), 2),
                 "breakdown": [],
                 "owners": owners_by_player.get(pid, []),
             })
 
     players.sort(key=lambda x: x["points"], reverse=True)
-    contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))
+    contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, db_pp_lookup or cached_pp_lookup))
 
     return {
         "players": players,
@@ -939,27 +969,36 @@ def _load_match_and_points(db, match_id):
         "SELECT player_id, points, role FROM player_points WHERE match_id = ?",
         (match_id,),
     ).fetchall()
-    pp_lookup = {
+    db_pp_lookup = {
         str(row["player_id"]): float(row["points"])
         for row in pp_rows
     }
-    role_lookup = {
+    db_role_lookup = {
         str(row["player_id"]): row["role"]
         for row in pp_rows
         if row["role"]
     }
+    cached_pp_lookup = {
+        str(player["player_id"]): float(player.get("points", 0))
+        for player in cached_payload.get("players", [])
+        if player.get("player_id") is not None
+    }
+    cached_role_lookup = {
+        str(player["player_id"]): player.get("role")
+        for player in cached_payload.get("players", [])
+        if player.get("player_id") is not None and player.get("role")
+    }
 
-    if not pp_lookup:
-        pp_lookup = {
-            str(player["player_id"]): float(player.get("points", 0))
-            for player in cached_payload.get("players", [])
-            if player.get("player_id") is not None
-        }
-        role_lookup = {
-            str(player["player_id"]): player.get("role")
-            for player in cached_payload.get("players", [])
-            if player.get("player_id") is not None and player.get("role")
-        }
+    match_status = _match_status_value(match_row)
+    if match_status == "completed":
+        pp_lookup = db_pp_lookup or cached_pp_lookup
+        role_lookup = db_role_lookup or cached_role_lookup
+    elif match_status == "live":
+        pp_lookup = cached_pp_lookup or db_pp_lookup
+        role_lookup = cached_role_lookup or db_role_lookup
+    else:
+        pp_lookup = db_pp_lookup or cached_pp_lookup
+        role_lookup = db_role_lookup or cached_role_lookup
 
     return match_row, cached_payload, pp_lookup, role_lookup
 
