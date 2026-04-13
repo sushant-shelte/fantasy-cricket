@@ -497,55 +497,43 @@ export default function ViewScoresPage() {
     const players = getSelectedContestantPlayers();
     if (!players.length) return null;
     const renderPlayerCard = (player: BreakdownPlayer, index: number) => {
-      const bd = (player as BreakdownPlayer & { breakdown?: { label: string; points: number }[] }).breakdown || [];
       return (
-        <div key={`${player.name}-${index}`} className={`rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(player.team).tintClass} px-3 py-2.5`}>
-          <div className="flex items-start justify-between gap-3">
+        <div key={`${player.name}-${index}`} className={`rounded-xl border border-white/10 bg-gradient-to-r ${getTeamTheme(player.team).tintClass} px-2.5 py-2`}>
+          <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {renderBackupDot(player.is_backup)}
-                <p className="truncate text-sm font-medium text-white">{player.name}</p>
+                <p className="truncate text-[13px] font-medium text-white">{player.name}</p>
                 {player.tag && (
-                  <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
+                  <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1.5 text-[9px] font-bold ${
                     player.tag === 'C' ? 'bg-amber-500 text-black' : 'bg-sky-500 text-black'
                   }`}>
                     {player.tag}
                   </span>
                 )}
               </div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-white/40">
-                {renderTeamBadge(player.team)}
-                <span>{formatRoleName(player.role)}</span>
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/40">
+                {renderTeamBadge(player.team, true)}
+                <span className="truncate">{formatRoleName(player.role)}</span>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right shrink-0">
               <p className="text-sm font-bold text-blue-400">{player.adjusted_points}</p>
-              {player.multiplier > 1 && (
-                <p className="text-[10px] text-white/30">{player.base_points} &times; {player.multiplier}</p>
-              )}
+              <p className="text-[10px] text-white/30">Pts</p>
             </div>
           </div>
-          {bd.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {bd.map((item: { label: string; points: number }, j: number) => (
-                <span key={j} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
-                  item.points > 0 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
-                }`}>
-                  {item.label} <span className="font-bold">{item.points > 0 ? '+' : ''}{item.points}</span>
-                </span>
-              ))}
-              <span className="inline-flex items-center gap-1 rounded-md border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-400">
-                Total: {player.adjusted_points}
-              </span>
-            </div>
-          )}
+          <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-white/35">
+            <span>Base {player.base_points}</span>
+            <span>{player.multiplier > 1 ? `x${player.multiplier}` : 'x1'}</span>
+            {player.is_backup ? <span className="text-sky-300">Backup</span> : <span>&nbsp;</span>}
+          </div>
         </div>
       );
     };
 
     return (
       <div className="space-y-4">
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           {players.map((player, index) => renderPlayerCard(player, index))}
         </div>
       </div>
@@ -667,27 +655,29 @@ export default function ViewScoresPage() {
       {/* Header */}
       <header id="view-scores-sticky-header" className="mobile-safe-blur sticky top-0 z-30 bg-black/80 border-b border-white/10 md:backdrop-blur-lg">
         <div className="max-w-6xl mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-xl transition-all">
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-lg font-bold text-white">Match #{matchId}</h1>
               {lastUpdated && <p className="text-xs text-white/40">Updated {lastUpdated.toLocaleTimeString()}</p>}
             </div>
           </div>
-          <div className="grid w-full grid-cols-2 gap-1 rounded-xl bg-white/5 p-1 sm:w-auto">
-            {VIEW_TABS.map((entry) => (
-              <button
-                key={entry.key}
-                onClick={() => setTab(entry.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tab === entry.key ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}
-              >
-                {entry.label}
-              </button>
-            ))}
+          <div className="flex w-full justify-end sm:w-auto">
+            <div className="flex flex-wrap justify-end gap-1 rounded-xl bg-white/5 p-1.5">
+              {VIEW_TABS.map((entry) => (
+                <button
+                  key={entry.key}
+                  onClick={() => setTab(entry.key)}
+                  className={`whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-medium transition sm:text-xs ${tab === entry.key ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>
