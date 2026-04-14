@@ -176,6 +176,7 @@ export default function DashboardPage() {
 
   const currentMatches = tab === 'today' ? todayMatches : tab === 'upcoming' ? upcomingMatches : completedMatches;
   const displayName = profile?.name || 'Player';
+  const isTodayMatch = (match: Match) => match.match_date === todayIST || match.status === 'live';
 
   const statusBadge = (status: Match['status']) => {
     switch (status) {
@@ -265,6 +266,33 @@ export default function DashboardPage() {
           </div>
         );
     }
+  };
+
+  const getPlayingXiCardMessage = (matchId: number) => {
+    const info = teamLineupInfo[matchId];
+    if (!info) return null;
+
+    if (!info.announced) {
+      return {
+        text: 'Playing XI not announced',
+        tone: 'text-white/55',
+        subtext: 'Waiting for XI update',
+      };
+    }
+
+    if (!info.complete) {
+      return {
+        text: 'Playing XI announced, subs not announced',
+        tone: 'text-amber-300',
+        subtext: 'Substitute list is still incomplete',
+      };
+    }
+
+    return {
+      text: 'Playing XI announced',
+      tone: 'text-blue-300',
+      subtext: 'Substitutes are also available',
+    };
   };
 
   const tabs: { key: MatchTab; label: string; count: number }[] = [
@@ -419,32 +447,27 @@ export default function DashboardPage() {
                     </span>
                   </p>
                 )}
-                {match.status === 'future' && myTeams.has(match.id) && teamLineupInfo[match.id]?.announced && (
+                {tab === 'today' && isTodayMatch(match) && match.status === 'future' && myTeams.has(match.id) && teamLineupInfo[match.id] && (() => {
+                  const lineupMessage = getPlayingXiCardMessage(match.id);
+                  if (!lineupMessage) return null;
+
+                  return (
                     <div className="mb-3 space-y-1 text-center text-xs font-medium">
-                    <p className={
-                      teamLineupInfo[match.id].unannouncedSelected > 0
-                        ? 'text-red-300'
-                        : teamLineupInfo[match.id].substituteSelected > 0
-                        ? 'text-sky-300'
-                        : teamLineupInfo[match.id].complete
-                        ? 'text-blue-300'
-                        : 'text-white/55'
-                    }>
-                      {teamLineupInfo[match.id].unannouncedSelected > 0
-                        ? `${teamLineupInfo[match.id].unannouncedSelected} unavailable players in your team`
-                        : teamLineupInfo[match.id].substituteSelected > 0
-                        ? 'All other selected players are in Playing XI'
-                        : teamLineupInfo[match.id].complete
-                        ? 'All selected players are in Playing XI'
-                        : 'Playing XI announced'}
-                    </p>
-                    {teamLineupInfo[match.id].substituteSelected > 0 && (
-                      <p className="text-sky-300">
-                        {teamLineupInfo[match.id].substituteSelected} substitutes selected
-                      </p>
-                    )}
-                  </div>
-                )}
+                      <p className={lineupMessage.tone}>{lineupMessage.text}</p>
+                      <p className="text-white/35">{lineupMessage.subtext}</p>
+                      {teamLineupInfo[match.id].unannouncedSelected > 0 && (
+                        <p className="text-red-300">
+                          {teamLineupInfo[match.id].unannouncedSelected} unavailable players in your team
+                        </p>
+                      )}
+                      {teamLineupInfo[match.id].substituteSelected > 0 && (
+                        <p className="text-sky-300">
+                          {teamLineupInfo[match.id].substituteSelected} substitutes selected
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
                 {match.status === 'future' && (backupCounts[match.id] || 0) > 0 && (
                   <div className="mb-3 text-center">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300">

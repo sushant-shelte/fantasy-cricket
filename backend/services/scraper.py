@@ -589,6 +589,8 @@ def _find_close_team_player_id(raw_name: str, team: str, players_rows: list[dict
     if not normalized_target:
         return None
 
+    target_tokens = set(normalized_target.split())
+
     best_player_id = None
     best_score = 0.0
     tie = False
@@ -606,6 +608,13 @@ def _find_close_team_player_id(raw_name: str, team: str, players_rows: list[dict
             normalized_candidate = _normalize_player_name(candidate)
             if not normalized_candidate:
                 continue
+            candidate_tokens = set(normalized_candidate.split())
+            if target_tokens and target_tokens.issubset(candidate_tokens):
+                candidate_score = max(candidate_score, 0.97)
+                continue
+            if normalized_target in normalized_candidate or normalized_candidate in normalized_target:
+                candidate_score = max(candidate_score, 0.94)
+                continue
             score = SequenceMatcher(None, normalized_target, normalized_candidate).ratio()
             candidate_score = max(candidate_score, score)
 
@@ -616,7 +625,7 @@ def _find_close_team_player_id(raw_name: str, team: str, players_rows: list[dict
         elif candidate_score == best_score and candidate_score > 0:
             tie = True
 
-    if best_player_id and best_score >= 0.88 and not tie:
+    if best_player_id and best_score >= 0.82 and not tie:
         return int(best_player_id)
     return None
 
@@ -1028,6 +1037,18 @@ def parse_playing_xi_from_sources(
         substitute_ids, substitute_unmatched_names, substitutes_available = _extract_named_players_from_cricbuzz_section(
             squads_html, "substitutes", team1, team2, players_rows
         )
+        if len(playing_ids) < 18:
+            payload_playing_ids, payload_unmatched_playing, payload_substitute_ids, payload_unmatched_substitutes = _extract_playing_xi_from_squads_payload(
+                squads_html, players_rows
+            )
+            if len(payload_playing_ids) > len(playing_ids):
+                playing_ids = payload_playing_ids
+                unmatched_names = payload_unmatched_playing
+                announced = len(playing_ids) >= 18
+            if len(payload_substitute_ids) > len(substitute_ids):
+                substitute_ids = payload_substitute_ids
+                substitute_unmatched_names = payload_unmatched_substitutes
+                substitutes_available = len(substitute_ids) > 0
         # Cricbuzz has multiple squads page layouts; if the structured column parser
         # doesn't see enough names, fall back to the more permissive text parser.
         if len(playing_ids) < 18:
@@ -1151,6 +1172,106 @@ def _extract_playing_xi_from_json(html: str, players_rows: list[dict]) -> tuple[
         _extract_candidate_names_from_json(data, all_names)
 
     return _match_candidate_names(all_names, player_lookup)
+
+
+def _extract_escaped_json_arrays(html: str, marker: str) -> list[str]:
+    """Extract escaped JSON arrays from Next.js payloads."""
+    arrays: list[str] = []
+    search_start = 0
+
+    while True:
+        marker_pos = html.find(marker, search_start)
+        if marker_pos == -1:
+            break
+
+        array_start = html.find("[", marker_pos)
+        if array_start == -1:
+            break
+
+        depth = 0
+        array_end = -1
+        for idx in range(array_start, len(html)):
+            ch = html[idx]
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    array_end = idx
+                    break
+
+        if array_end == -1:
+            break
+
+        arrays.append(html[array_start:array_end + 1])
+        search_start = array_end + 1
+
+    return arrays
+
+
+def _extract_playing_xi_from_squads_payload(html: str, players_rows: list[dict]) -> tuple[list[int], list[str], list[int], list[str]]:
+    """Parse Cricbuzz squads payload arrays embedded in the page source."""
+    team_lookup = _build_team_player_lookup(players_rows)
+    playing_ids: list[int] = []
+    substitute_ids: list[int] = []
+    unmatched_playing: list[str] = []
+    unmatched_substitutes: list[str] = []
+    seen_playing: set[int] = set()
+    seen_substitute: set[int] = set()
+
+    def _team_for_name(team_name: str) -> str:
+        normalized_team = _normalize_player_name(team_name)
+        for team in team_lookup.keys():
+            if _normalize_player_name(team) == normalized_team:
+                return team
+        return team_name
+
+    def _consume_players(raw_array: str, substitute_flag: bool):
+        nonlocal playing_ids, substitute_ids, unmatched_playing, unmatched_substitutes
+        try:
+            decoded = raw_array.encode("utf-8").decode("unicode_escape")
+            players = json.loads(decoded)
+        except Exception:
+            return
+
+        if not isinstance(players, list):
+            return
+
+        for player in players:
+            if not isinstance(player, dict):
+                continue
+
+            name = str(player.get("name") or player.get("fullName") or "").strip()
+            team_name = str(player.get("teamName") or "").strip()
+            if not name or not team_name:
+                continue
+
+            team = _team_for_name(team_name)
+            normalized_name = _normalize_player_name(name)
+            player_id = team_lookup.get(team, {}).get(normalized_name)
+            if not player_id:
+                player_id = _find_close_team_player_id(name, team, players_rows)
+
+            if player_id:
+                if substitute_flag or bool(player.get("substitute")):
+                    if player_id not in seen_substitute:
+                        seen_substitute.add(player_id)
+                        substitute_ids.append(player_id)
+                else:
+                    if player_id not in seen_playing:
+                        seen_playing.add(player_id)
+                        playing_ids.append(player_id)
+            elif substitute_flag or bool(player.get("substitute")):
+                unmatched_substitutes.append(name)
+            else:
+                unmatched_playing.append(name)
+
+    for raw_array in _extract_escaped_json_arrays(html, '\\"playing XI\\":['):
+        _consume_players(raw_array, substitute_flag=False)
+    for raw_array in _extract_escaped_json_arrays(html, '\\"bench\\":['):
+        _consume_players(raw_array, substitute_flag=True)
+
+    return playing_ids, unmatched_playing, substitute_ids, unmatched_substitutes
 
 
 def _extract_playing_xi_from_text(html: str, team1: str, team2: str, players_rows: list[dict]) -> tuple[set[int], list[str]]:
