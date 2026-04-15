@@ -223,7 +223,7 @@ async def list_players(
             playing_xi_data = cached_playing_xi
 
         toss_info = get_cached_toss_info(match_id) or {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
-        lineup_window_open = _is_lineup_window_open(match_date, match_time, match.get("toss_time") or match.get("TossTime"))
+        lineup_window_open = _is_lineup_window_open(match_date, match_time)
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))
