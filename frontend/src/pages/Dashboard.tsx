@@ -33,7 +33,13 @@ function useCountdown() {
 }
 
 type MatchTab = 'today' | 'upcoming' | 'completed';
-type LiveTeamLineupInfo = { announced: boolean; complete: boolean; unannouncedSelected: number; substituteSelected: number };
+type LiveTeamLineupInfo = {
+  announced: boolean;
+  complete: boolean;
+  unannouncedSelected: number;
+  substituteSelected: number;
+  lineupWindowOpen?: boolean;
+};
 type MatchContestant = { user_id: number; name: string; last_team_updated: string | null };
 
 export default function DashboardPage() {
@@ -270,7 +276,7 @@ export default function DashboardPage() {
 
   const getPlayingXiCardMessage = (matchId: number) => {
     const info = teamLineupInfo[matchId];
-    if (!info) return null;
+    if (!info || !info.lineupWindowOpen) return null;
 
     if (!info.announced) {
       return {
@@ -447,7 +453,7 @@ export default function DashboardPage() {
                     </span>
                   </p>
                 )}
-                {tab === 'today' && isTodayMatch(match) && match.status === 'future' && myTeams.has(match.id) && teamLineupInfo[match.id] && (() => {
+                {tab === 'today' && isTodayMatch(match) && match.status === 'future' && myTeams.has(match.id) && teamLineupInfo[match.id]?.lineupWindowOpen && (() => {
                   const lineupMessage = getPlayingXiCardMessage(match.id);
                   if (!lineupMessage) return null;
 

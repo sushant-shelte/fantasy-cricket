@@ -62,6 +62,14 @@ export type Player = {
   }>;
 };
 
+export type PlayingXiInfo = {
+  announced: boolean;
+  url?: string | null;
+  playingCount?: number;
+  substituteCount?: number;
+  lineup_window_open?: boolean;
+};
+
 export type TeamSelection = {
   player_id: number;
   player_name: string;

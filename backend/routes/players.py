@@ -2,10 +2,11 @@ import copy
 
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
+from datetime import datetime, timedelta
 
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
-from backend.config import ESPN_MATCH_ID_OFFSET, ROLES
+from backend.config import ESPN_MATCH_ID_OFFSET, ROLES, IST
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services import data_service
@@ -91,6 +92,25 @@ def _load_recent_completed_history(db, teams: list[str], player_ids: list[int]) 
         ]
 
     return history_by_player
+
+
+def _is_lineup_window_open(match_date: str, match_time: str, toss_time: str | None = None) -> bool:
+    try:
+        match_datetime = datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M")
+        match_datetime = IST.localize(match_datetime)
+    except Exception:
+        return False
+
+    if toss_time:
+        try:
+            window_start = IST.localize(datetime.strptime(f"{match_date} {toss_time}", "%Y-%m-%d %H:%M"))
+        except Exception:
+            window_start = match_datetime - timedelta(minutes=30)
+    else:
+        window_start = match_datetime - timedelta(minutes=30)
+
+    now = datetime.now(IST)
+    return window_start <= now < match_datetime
 
 @router.get("/players")
 async def list_players(
@@ -203,6 +223,7 @@ async def list_players(
             playing_xi_data = cached_playing_xi
 
         toss_info = get_cached_toss_info(match_id) or {"announced": False, "team": None, "decision": None, "text": "", "url": ""}
+        lineup_window_open = _is_lineup_window_open(match_date, match_time, match.get("toss_time") or match.get("TossTime"))
 
         playing_ids = set(playing_xi_data["player_ids"])
         substitute_ids = set(playing_xi_data.get("substitute_ids", []))
@@ -253,6 +274,7 @@ async def list_players(
                 "playing_count": len(playing_ids),
                 "substitute_count": len(substitute_ids),
             },
+            "lineup_window_open": lineup_window_open,
             "toss": toss_info,
         }
 

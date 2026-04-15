@@ -17,6 +17,7 @@ interface PlayingXiState {
   url: string | null;
   playingCount?: number;
   substituteCount?: number;
+  lineupWindowOpen?: boolean;
 }
 
 interface PlayerHistoryToggleProps {
@@ -178,8 +179,11 @@ export default function SelectTeamPage() {
   const touchStartYRef = useRef<number | null>(null);
   const backupPanelRef = useRef<HTMLDivElement | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
+  const lineupWindowOpen = Boolean(playingXi.lineupWindowOpen);
+  const showAvailabilityDetails = lineupWindowOpen;
 
   const hasFullAvailabilityBreakdown =
+    showAvailabilityDetails &&
     playingXi.announced &&
     (((playingXi.playingCount || 0) >= 22) ||
       ((playingXi.substituteCount || 0) >= 10) ||
@@ -209,6 +213,7 @@ export default function SelectTeamPage() {
           url: data.playing_xi?.url || null,
           playingCount: data.playing_xi?.playing_count || 0,
           substituteCount: data.playing_xi?.substitute_count || 0,
+          lineupWindowOpen: Boolean(data.lineup_window_open),
         });
         setTossInfo(data.toss || null);
 
@@ -243,7 +248,7 @@ export default function SelectTeamPage() {
       refreshTimerRef.current = null;
     }
 
-    if (!loading && (!playingXi.announced || !hasFullAvailabilityBreakdown)) {
+    if (!loading && showAvailabilityDetails && (!playingXi.announced || !hasFullAvailabilityBreakdown)) {
       refreshTimerRef.current = window.setInterval(() => {
         void (async () => {
           try {
@@ -260,6 +265,7 @@ export default function SelectTeamPage() {
               url: data.playing_xi?.url || null,
               playingCount: data.playing_xi?.playing_count || 0,
               substituteCount: data.playing_xi?.substitute_count || 0,
+              lineupWindowOpen: Boolean(data.lineup_window_open),
             });
             setTossInfo(data.toss || null);
           } catch {
@@ -275,7 +281,7 @@ export default function SelectTeamPage() {
         refreshTimerRef.current = null;
       }
     };
-  }, [matchId, loading, playingXi.announced, hasFullAvailabilityBreakdown]);
+  }, [matchId, loading, showAvailabilityDetails, playingXi.announced, hasFullAvailabilityBreakdown]);
 
   useEffect(() => {
     if (!showBackupPanel) return;
@@ -288,6 +294,19 @@ export default function SelectTeamPage() {
   useEffect(() => {
     setOpenHistoryPlayerId(null);
   }, [activeTab, showPlayerSearch]);
+
+  useEffect(() => {
+    if (!showAvailabilityDetails && activeTab === LINEUPS_TAB) {
+      setActiveTab(REQUIRED_ROLES[0]);
+    }
+  }, [activeTab, showAvailabilityDetails]);
+
+  useEffect(() => {
+    if (!showAvailabilityDetails) {
+      setShowPlayerSearch(false);
+      setPlayerSearch('');
+    }
+  }, [showAvailabilityDetails]);
 
   const togglePlayer = (playerId: number) => {
     setOpenHistoryPlayerId((current) => (current === playerId ? null : current));
@@ -516,7 +535,7 @@ export default function SelectTeamPage() {
 
   const activeRole = activeTab === LINEUPS_TAB ? REQUIRED_ROLES[0] : activeTab;
   const selectionTabs = [
-    { key: LINEUPS_TAB, label: 'XI' },
+    ...(showAvailabilityDetails ? [{ key: LINEUPS_TAB, label: 'XI' }] : []),
     ...REQUIRED_ROLES.map((role) => ({ key: role, label: ROLE_CONFIG[role].label })),
   ] as const;
   const tabKeys = selectionTabs.map((tab) => tab.key);
@@ -692,7 +711,7 @@ export default function SelectTeamPage() {
                 1.5x
               </span>
             </div>
-            {!playingXi.announced && (
+            {!showAvailabilityDetails && (
               <button
                 type="button"
                 onClick={() => setShowPlayerSearch(true)}
@@ -706,7 +725,7 @@ export default function SelectTeamPage() {
             )}
           </div>
 
-          {showPlayerSearch && !playingXi.announced && (
+          {showPlayerSearch && !showAvailabilityDetails && (
             <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
               <svg className="h-4 w-4 flex-shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
@@ -732,7 +751,7 @@ export default function SelectTeamPage() {
             </div>
           )}
 
-          {showPlayerSearch && !playingXi.announced && normalizedPlayerSearch && (
+          {showPlayerSearch && !showAvailabilityDetails && normalizedPlayerSearch && (
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
               <div className="max-h-72 overflow-y-auto">
                 {playerSearchResults.length > 0 ? (
@@ -741,8 +760,6 @@ export default function SelectTeamPage() {
                     const isCaptain = captainId === player.id;
                     const isVC = vcId === player.id;
                     const selectionAllowed = canSelectPlayer(player);
-                    const availabilityStatus = player.availability_status || 'unavailable';
-
                     return (
                       <button
                         key={player.id}
@@ -762,17 +779,7 @@ export default function SelectTeamPage() {
                             : 'bg-white/[0.02] hover:bg-white/[0.05]'
                         }`}
                       >
-                        <div
-                          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${
-                            isSelected
-                              ? availabilityStatus === 'available'
-                                ? 'bg-sky-400'
-                                : availabilityStatus === 'substitute'
-                                ? 'bg-sky-500'
-                                : 'bg-red-500'
-                              : 'border border-white/15 bg-white/5'
-                          }`}
-                        >
+                        <div className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${isSelected ? 'bg-sky-400' : 'border border-white/15 bg-white/5'}`}>
                           {isSelected ? (
                             <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -814,34 +821,36 @@ export default function SelectTeamPage() {
           )}
 
           {tossInfo?.announced && tossInfo.text && (
-              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-center text-xs font-semibold text-cyan-300">
-                {tossInfo.text}
-              </div>
-            )}
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-center text-xs font-semibold text-cyan-300">
+              {tossInfo.text}
+            </div>
+          )}
 
+          {showAvailabilityDetails && (
             <div
               className={`rounded-2xl border px-4 py-3 text-sm ${
-              playingXi.announced
-                ? 'bg-blue-500/10 border-blue-400/20 text-blue-100'
-                : 'bg-amber-500/10 border-amber-400/20 text-amber-100'
-            }`}
-          >
-            <div className="font-semibold">
-              {playingXi.announced ? 'Playing XI announced' : 'Playing XI not announced'}
+                playingXi.announced
+                  ? 'bg-blue-500/10 border-blue-400/20 text-blue-100'
+                  : 'bg-amber-500/10 border-amber-400/20 text-amber-100'
+              }`}
+            >
+              <div className="font-semibold">
+                {playingXi.announced ? 'Playing XI announced' : 'Playing XI not announced'}
+              </div>
+              {playingXi.url && (
+                <a
+                  href={playingXi.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex text-xs font-semibold text-cyan-300 hover:text-cyan-200"
+                >
+                  Open lineup page
+                </a>
+              )}
             </div>
-            {playingXi.url && (
-              <a
-                href={playingXi.url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex text-xs font-semibold text-cyan-300 hover:text-cyan-200"
-              >
-                Open lineup page
-              </a>
-            )}
-          </div>
+          )}
 
-          {playingXi.announced && (
+          {showAvailabilityDetails && playingXi.announced && (
             <div className="space-y-2">
               {showPlayerSearch ? (
                 <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
@@ -906,7 +915,6 @@ export default function SelectTeamPage() {
                         const isVC = vcId === player.id;
                         const selectionAllowed = canSelectPlayer(player);
                         const availabilityStatus = player.availability_status || 'unavailable';
-
                         return (
                           <button
                             key={player.id}
@@ -953,7 +961,7 @@ export default function SelectTeamPage() {
                               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
                                 <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
                                 <span className="font-semibold text-blue-300">Avg {formatPoints(player.avg_points || 0)}</span>
-                                {playingXi.announced && (
+                                {showAvailabilityDetails && playingXi.announced && (
                                   <span
                                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
                                       availabilityStatus === 'available'
@@ -1050,9 +1058,9 @@ export default function SelectTeamPage() {
             <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
               {selectionTabs.map(({ key, label }) => {
                 const hasUnavailableSelected =
-                  key !== LINEUPS_TAB && playingXi.announced && selectedUnavailableCounts[key] > 0;
+                  key !== LINEUPS_TAB && showAvailabilityDetails && playingXi.announced && selectedUnavailableCounts[key] > 0;
                 const hasSubstituteSelected =
-                  key !== LINEUPS_TAB && playingXi.announced && selectedSubstituteCounts[key] > 0;
+                  key !== LINEUPS_TAB && showAvailabilityDetails && playingXi.announced && selectedSubstituteCounts[key] > 0;
                 const selectedTabCount =
                   key === LINEUPS_TAB
                     ? selectedCount
@@ -1100,7 +1108,7 @@ export default function SelectTeamPage() {
               })}
             </div>
 
-            {activeTab === LINEUPS_TAB ? (
+            {showAvailabilityDetails && activeTab === LINEUPS_TAB ? (
               <div className="mt-4 space-y-2">
                 <div className="grid grid-cols-2 gap-3">
                 {teamsInMatch.map((team) => (
@@ -1311,7 +1319,7 @@ export default function SelectTeamPage() {
                     ({rolePlayers[activeRole].filter((player) => selected.has(player.id)).length} selected)
                   </span>
                 </div>
-                {playingXi.announced && selectedUnavailableCounts[activeRole] > 0 && (
+                {showAvailabilityDetails && playingXi.announced && selectedUnavailableCounts[activeRole] > 0 && (
                   <span className="rounded-full border border-red-500/25 bg-red-500/15 px-2 py-1 text-[10px] font-semibold text-red-200">
                     {selectedUnavailableCounts[activeRole]} unavailable selected
                   </span>
@@ -1371,19 +1379,19 @@ export default function SelectTeamPage() {
                               </span>
                             </>
                           )}
-                          {playingXi.announced && availabilityStatus === 'available' && (
+                          {showAvailabilityDetails && playingXi.announced && availabilityStatus === 'available' && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-blue-400/30 bg-blue-500/15 px-2 py-0.5 font-semibold text-blue-200">
                               <span className="h-2 w-2 rounded-full bg-blue-400"></span>
                               Avl
                             </span>
                           )}
-                          {playingXi.announced && availabilityStatus === 'substitute' && (
+                          {showAvailabilityDetails && playingXi.announced && availabilityStatus === 'substitute' && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2 py-0.5 font-semibold text-sky-200">
                               <span className="h-2 w-2 rounded-full bg-sky-400"></span>
                               Sub
                             </span>
                           )}
-                          {playingXi.announced && availabilityStatus === 'unavailable' && (
+                          {showAvailabilityDetails && playingXi.announced && availabilityStatus === 'unavailable' && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 font-semibold text-red-200">
                               <span className="h-2 w-2 rounded-full bg-red-400"></span>
                               Unavl

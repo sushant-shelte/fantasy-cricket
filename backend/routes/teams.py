@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
 from backend.middleware.auth import get_current_user
@@ -40,6 +40,25 @@ def is_match_locked(match_date: str, match_time: str) -> bool:
     except Exception:
         return True
     return get_now() >= match_datetime
+
+
+def _is_lineup_window_open(match_date: str, match_time: str, toss_time: str | None = None) -> bool:
+    try:
+        match_datetime = datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M")
+        match_datetime = IST.localize(match_datetime)
+    except Exception:
+        return False
+
+    if toss_time:
+        try:
+            window_start = IST.localize(datetime.strptime(f"{match_date} {toss_time}", "%Y-%m-%d %H:%M"))
+        except Exception:
+            window_start = match_datetime - timedelta(minutes=30)
+    else:
+        window_start = match_datetime - timedelta(minutes=30)
+
+    now = datetime.now(IST)
+    return window_start <= now < match_datetime
 
 
 @router.get("/my")
@@ -123,6 +142,13 @@ async def my_lineup_statuses(
     result = {}
     for match_id in requested_ids:
         match = match_lookup.get(match_id)
+        lineup_window_open = False
+        if match:
+            lineup_window_open = _is_lineup_window_open(
+                match["match_date"],
+                match["match_time"],
+                match.get("toss_time") or match.get("TossTime"),
+            )
         selected_ids = selected_by_match.get(match_id, set())
         if not match or not selected_ids:
             result[str(match_id)] = {
@@ -131,6 +157,7 @@ async def my_lineup_statuses(
                 "unannouncedSelected": 0,
                 "substituteSelected": 0,
                 "backupCount": backup_counts.get(match_id, 0),
+                "lineupWindowOpen": lineup_window_open,
             }
             continue
 
@@ -172,6 +199,7 @@ async def my_lineup_statuses(
             "unannouncedSelected": unavailable_selected,
             "substituteSelected": substitute_selected,
             "backupCount": backup_counts.get(match_id, 0),
+            "lineupWindowOpen": lineup_window_open,
         }
 
     elapsed_ms = (time.perf_counter() - started) * 1000
