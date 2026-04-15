@@ -185,7 +185,7 @@ async def my_lineup_statuses(
         playing_ids = set(playing_xi.get("player_ids", []))
         substitute_ids = set(playing_xi.get("substitute_ids", []))
         announced = bool(playing_xi.get("announced"))
-        playing_ids_complete = len(playing_ids) == 22 and len(substitute_ids) >= 10
+        playing_ids_complete = len(playing_ids) == 22 and len(substitute_ids) == 10
 
         unavailable_selected = 0
         substitute_selected = 0

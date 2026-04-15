@@ -62,11 +62,11 @@ def _copy_toss_payload(payload: dict) -> dict:
 
 
 def _is_finalized_playing_xi(payload: dict) -> bool:
-    return len(payload.get("player_ids", [])) == 22 and len(payload.get("substitute_ids", [])) >= 10
+    return len(payload.get("player_ids", [])) == 22 and len(payload.get("substitute_ids", [])) == 10
 
 
 def _is_playing_xi_announced(payload: dict) -> bool:
-    return len(payload.get("player_ids", [])) == 22
+    return _is_finalized_playing_xi(payload)
 
 
 def _parse_match_datetime(match_date: str | None, match_time: str | None):
@@ -1368,14 +1368,13 @@ def fetch_playing_xi(
             except Exception:
                 pass
             return payload
+        # Keep retrying until the XI is exact. Partial data is useful for logs,
+        # but it should not stop another fetch from being attempted.
         if not force_refresh and allow_cache_read and now_ts - cached.get("fetched_at", 0) < PLAYING_XI_TTL_SECONDS:
-            try:
-                data_service.set_cached_match_playing_xi(
-                    match_id, team1, team2, match_date or "", match_time or "", payload
-                )
-            except Exception:
-                pass
-            return payload
+            print(
+                f"[Playing XI] Match {match_id}: cached data incomplete "
+                f"(players={len(payload.get('player_ids', []))}, subs={len(payload.get('substitute_ids', []))}); refetching"
+            )
 
     if not _should_attempt_playing_xi_fetch(match_date, match_time, toss_time):
         payload = {"announced": False, "url": "", "player_ids": [], "substitute_ids": []}

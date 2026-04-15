@@ -296,12 +296,6 @@ export default function SelectTeamPage() {
   }, [activeTab, showPlayerSearch]);
 
   useEffect(() => {
-    if (!showAvailabilityDetails && activeTab === LINEUPS_TAB) {
-      setActiveTab(REQUIRED_ROLES[0]);
-    }
-  }, [activeTab, showAvailabilityDetails]);
-
-  useEffect(() => {
     if (!showAvailabilityDetails) {
       setShowPlayerSearch(false);
       setPlayerSearch('');
@@ -535,7 +529,7 @@ export default function SelectTeamPage() {
 
   const activeRole = activeTab === LINEUPS_TAB ? REQUIRED_ROLES[0] : activeTab;
   const selectionTabs = [
-    ...(showAvailabilityDetails ? [{ key: LINEUPS_TAB, label: 'XI' }] : []),
+    { key: LINEUPS_TAB, label: 'XI' },
     ...REQUIRED_ROLES.map((role) => ({ key: role, label: ROLE_CONFIG[role].label })),
   ] as const;
   const tabKeys = selectionTabs.map((tab) => tab.key);
@@ -1108,7 +1102,7 @@ export default function SelectTeamPage() {
               })}
             </div>
 
-            {showAvailabilityDetails && activeTab === LINEUPS_TAB ? (
+            {activeTab === LINEUPS_TAB ? (
               <div className="mt-4 space-y-2">
                 <div className="grid grid-cols-2 gap-3">
                 {teamsInMatch.map((team) => (

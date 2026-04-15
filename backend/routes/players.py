@@ -232,7 +232,7 @@ async def list_players(
             player_id: index for index, player_id in enumerate(playing_xi_data.get("substitute_ids", []))
         }
         playing_xi_known = len(playing_ids) == 22
-        substitutes_known = len(substitute_ids) >= 10
+        substitutes_known = len(substitute_ids) == 10
 
         # Group by role
         grouped = {role: [] for role in ROLES}

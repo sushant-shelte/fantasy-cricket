@@ -74,7 +74,7 @@ def _is_playing_xi_final(payload: dict | None) -> bool:
         return False
     player_ids = payload.get("player_ids") or []
     substitute_ids = payload.get("substitute_ids") or []
-    return len(player_ids) == 22 and len(substitute_ids) >= 10
+    return len(player_ids) == 22 and len(substitute_ids) == 10
 
 
 def get_cached_match_playing_xi(
@@ -573,7 +573,7 @@ def get_active_backup_replacements(match_id: int, user_id: int | None = None) ->
 
 
 def apply_backups_for_match(match_id: int | str, playing_ids: list[int], substitute_ids: list[int]) -> int:
-    if len(playing_ids) != 22 or len(substitute_ids) < 10:
+    if len(playing_ids) != 22 or len(substitute_ids) != 10:
         return 0
 
     db = get_db()

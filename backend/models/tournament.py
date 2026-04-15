@@ -257,7 +257,7 @@ class Tournament:
             playing_ids = playing_xi.get("player_ids", [])
             substitute_ids = playing_xi.get("substitute_ids", [])
             print(f"[Playing XI] Match {match_id}: fetch result url={playing_xi.get('url')} players={len(playing_ids)}")
-            if len(playing_ids) == 22 and len(substitute_ids) >= 10:
+            if len(playing_ids) == 22 and len(substitute_ids) == 10:
                 swaps_applied = data_service.apply_backups_for_match(match_id, playing_ids, substitute_ids)
                 if swaps_applied:
                     print(f"[Backups] Match {match_id}: applied {swaps_applied} backup swaps")
