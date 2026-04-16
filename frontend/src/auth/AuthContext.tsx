@@ -29,9 +29,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // Fetch profile from backend
-  const fetchProfile = async (devLogin = false) => {
+  const fetchProfile = async (devLogin = false, firebaseUserOverride: FirebaseUser | null = null) => {
     try {
-      const res = await client.get('/api/auth/me', devLogin ? { headers: { 'X-Dev-Login': '1' } } : undefined);
+      if (devLogin) {
+        const res = await client.get('/api/auth/me', { headers: { 'X-Dev-Login': '1' } });
+        setProfile(res.data);
+        return;
+      }
+
+      if (firebaseUserOverride) {
+        const token = await firebaseUserOverride.getIdToken();
+        const res = await client.get('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setProfile(res.data);
+        return;
+      }
+
+      const res = await client.get('/api/auth/me');
       setProfile(res.data);
     } catch {
       setProfile(null);
@@ -42,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
-        await fetchProfile();
+        await fetchProfile(false, user);
       } else {
         setProfile(null);
       }
@@ -52,8 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
-    await fetchProfile();
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    await fetchProfile(false, cred.user);
   };
 
   const register = async (email: string, password: string, name: string) => {
@@ -65,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       { name },
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    await fetchProfile();
+    await fetchProfile(false, cred.user);
   };
 
   const logout = async () => {
