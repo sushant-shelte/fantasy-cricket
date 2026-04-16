@@ -396,6 +396,10 @@ async def recalculate_match(
     if not match_row:
         raise HTTPException(status_code=404, detail="Match not found")
 
+    current_status = tournament_ref.get_match_status(match_row)
+    if current_status == "future":
+        raise HTTPException(status_code=400, detail="Future matches cannot be recalculated")
+
     match_id_str = str(match_id)
 
     _refresh_tournament_static_state()

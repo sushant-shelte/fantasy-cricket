@@ -635,9 +635,10 @@ class Match:
 
             # Parse bowlers
             if bowling_idx != -1:
+                bowling_header_lines = lines[bowling_idx: min(bowling_idx + 3, section_end)]
                 has_dot_balls_column = any(
-                    line.upper() == "0S"
-                    for line in lines[bowling_idx + 1: section_end]
+                    re.search(r"\b0\s*s\b|\b0s\b|\bdot\s+balls?\b", line, flags=re.IGNORECASE)
+                    for line in bowling_header_lines
                 )
                 idx = bowling_idx + 1
                 while idx < section_end:

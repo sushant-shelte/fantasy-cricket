@@ -154,8 +154,9 @@ export default function ScoreControl() {
   const recalculateAll = async () => {
     setRecalcAllLoading(true);
     try {
-      await Promise.all(matches.map((m) => client.post(`/api/admin/recalculate/${m.id}`)));
-      addToast('success', 'All matches recalculated successfully.');
+      const eligibleMatches = matches.filter((m) => m.status === 'live' || m.status === 'completed');
+      await Promise.all(eligibleMatches.map((m) => client.post(`/api/admin/recalculate/${m.id}`)));
+      addToast('success', 'All live/completed matches recalculated successfully.');
     } catch (err) {
       console.error('Recalculate all failed', err);
       addToast('error', 'Failed to recalculate some matches.');
