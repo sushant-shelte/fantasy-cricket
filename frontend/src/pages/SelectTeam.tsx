@@ -599,7 +599,6 @@ export default function SelectTeamPage() {
   const renderLineupPlayerCard = (
     player: Player,
     showAvailabilityBadge = false,
-    isImpactSub = false,
   ) => {
     const isSelected = selected.has(player.id);
     const isCaptain = captainId === player.id;
@@ -632,12 +631,7 @@ export default function SelectTeamPage() {
                 <span className="font-semibold text-blue-300">
                   Avg {Math.round(player.avg_points || 0)}
                 </span>
-                {isImpactSub ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-200">
-                    <span className="h-2 w-2 rounded-full bg-amber-400" />
-                    Impact Sub
-                  </span>
-                ) : showAvailabilityBadge && showAvailabilityDetails && playingXi.announced && (
+                {showAvailabilityBadge && showAvailabilityDetails && playingXi.announced && (
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
                       availabilityStatus === 'available'
@@ -1301,36 +1295,27 @@ export default function SelectTeamPage() {
                         ) : hasPreview ? (
                           [
                             { key: 'last', label: 'Last Match XI', accent: 'text-blue-300', players: getLastMatchXiPlayers(team) },
+                            { key: 'impact', label: 'Impact Sub', accent: 'text-amber-300', players: getLastMatchImpactSubPlayers(team) },
                             { key: 'others', label: 'Others', accent: 'text-white/55', players: getOtherPreviewPlayers(team) },
-                          ].map((section) => (
-                            <div key={section.key} className="border-t border-white/10 px-2.5 py-2">
-                              <div className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${section.accent}`}>
-                                {section.label}
-                              </div>
-                              <div className="space-y-1">
-                                {section.players.length > 0 ? (
-                                  section.players.map((player) => renderLineupPlayerCard(player))
-                                ) : (
-                                  <div className="rounded-lg border border-dashed border-white/10 px-2 py-2 text-center text-[10px] text-white/30">
-                                    No players
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )).concat(
-                            getLastMatchImpactSubPlayers(team).length > 0
-                              ? [
-                                  <div key="impact-sub" className="border-t border-white/10 px-2.5 py-2">
-                                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-                                      Impact Sub
+                          ].map((section) => {
+                            if (section.key === 'impact' && section.players.length === 0) return null;
+                            return (
+                              <div key={section.key} className="border-t border-white/10 px-2.5 py-2">
+                                <div className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${section.accent}`}>
+                                  {section.label}
+                                </div>
+                                <div className="space-y-1">
+                                  {section.players.length > 0 ? (
+                                    section.players.map((player) => renderLineupPlayerCard(player))
+                                  ) : (
+                                    <div className="rounded-lg border border-dashed border-white/10 px-2 py-2 text-center text-[10px] text-white/30">
+                                      No players
                                     </div>
-                                    <div className="space-y-1">
-                                      {getLastMatchImpactSubPlayers(team).map((player) => renderLineupPlayerCard(player, false, true))}
-                                    </div>
-                                  </div>,
-                                ]
-                              : []
-                          )
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
                         ) : (
                           <div className="border-t border-white/10 px-2.5 py-2">
                             <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
