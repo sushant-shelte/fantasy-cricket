@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from backend.config import ESPN_MATCH_ID_OFFSET, IST
+from backend.config import IST
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
 from backend.models.match import Match, clean_team_name
@@ -731,8 +731,7 @@ def _build_live_match_payload(match_id: int, match_row, registry, players_data, 
     if html_content:
         match_obj.parse_cricbuzz_scorecard_html(html_content, reset_players=False)
 
-    scorecard_id = match_id + ESPN_MATCH_ID_OFFSET
-    espn_html = fetch_scorecard_html(scorecard_id)
+    espn_html = fetch_scorecard_html(match_id, team1, team2)
     if espn_html:
         soup = BeautifulSoup(espn_html, "html.parser")
         match_obj.parse_espn_bowling_dot_balls(soup)

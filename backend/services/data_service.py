@@ -200,7 +200,7 @@ def _cached_users() -> list[dict]:
 def _cached_matches() -> list[dict]:
     db = get_db()
     rows = db.execute(
-        "SELECT id, team1, team2, match_date, match_time, status, venue, cricbuzz_match_id, toss_time FROM matches"
+        "SELECT id, team1, team2, match_date, match_time, status, venue, cricbuzz_match_id, espn_match_id, toss_time FROM matches"
     ).fetchall()
     return [
         {
@@ -212,6 +212,7 @@ def _cached_matches() -> list[dict]:
             "Status": r["status"],
             "Venue": r["venue"],
             "CricbuzzMatchID": r["cricbuzz_match_id"],
+            "ESPNMatchID": r["espn_match_id"],
             "TossTime": r["toss_time"],
         }
         for r in rows
@@ -328,6 +329,7 @@ def get_matches_api_rows() -> list[dict]:
             "status": row.get("Status", "future"),
             "venue": row.get("Venue"),
             "cricbuzz_match_id": row.get("CricbuzzMatchID"),
+            "espn_match_id": row.get("ESPNMatchID"),
             "toss_time": row.get("TossTime"),
         }
         for row in rows
@@ -357,8 +359,25 @@ def get_stored_cricbuzz_match_id(match_id: int) -> int | None:
         return None
 
 
+def get_stored_espn_match_id(match_id: int) -> int | None:
+    db = get_db()
+    row = db.execute(
+        "SELECT espn_match_id FROM matches WHERE id = ?",
+        (int(match_id),),
+    ).fetchone()
+    if not row:
+        return None
+    value = row["espn_match_id"]
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
 def update_match_fields(match_id: int, **fields) -> bool:
-    allowed_fields = {"team1", "team2", "match_date", "match_time", "status", "venue", "cricbuzz_match_id", "toss_time"}
+    allowed_fields = {"team1", "team2", "match_date", "match_time", "status", "venue", "cricbuzz_match_id", "espn_match_id", "toss_time"}
     updates = []
     values = []
     for key, value in fields.items():

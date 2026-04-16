@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from backend.middleware.auth import get_current_user
 from backend.database import get_db
-from backend.config import ESPN_MATCH_ID_OFFSET, ROLES, IST
+from backend.config import ROLES, IST
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services import data_service
@@ -174,7 +174,7 @@ def _load_last_completed_team_xi(
     cricbuzz_html = fetch_cricbuzz_scorecard_html(last_match_id, last_team1, last_team2)
     if cricbuzz_html:
         match_obj.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
-    espn_html = fetch_scorecard_html(last_match_id + ESPN_MATCH_ID_OFFSET)
+    espn_html = fetch_scorecard_html(last_match_id, last_team1, last_team2)
     if espn_html:
         soup = BeautifulSoup(espn_html, "html.parser")
         match_obj.parse_espn_bowling_dot_balls(soup)

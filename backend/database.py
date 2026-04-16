@@ -334,6 +334,8 @@ def _ensure_team_backups_sqlite(conn):
 def _ensure_matches_metadata_sqlite(conn):
     if not _sqlite_column_exists(conn, "matches", "cricbuzz_match_id"):
         conn.execute("ALTER TABLE matches ADD COLUMN cricbuzz_match_id INTEGER DEFAULT NULL")
+    if not _sqlite_column_exists(conn, "matches", "espn_match_id"):
+        conn.execute("ALTER TABLE matches ADD COLUMN espn_match_id INTEGER DEFAULT NULL")
     if not _sqlite_column_exists(conn, "matches", "toss_time"):
         conn.execute("ALTER TABLE matches ADD COLUMN toss_time TEXT DEFAULT NULL")
     conn.execute(
@@ -350,6 +352,7 @@ def _ensure_matches_metadata_sqlite(conn):
 
 def _ensure_matches_metadata_postgres(cursor):
     cursor.execute("ALTER TABLE matches ADD COLUMN IF NOT EXISTS cricbuzz_match_id INTEGER")
+    cursor.execute("ALTER TABLE matches ADD COLUMN IF NOT EXISTS espn_match_id INTEGER")
     cursor.execute("ALTER TABLE matches ADD COLUMN IF NOT EXISTS toss_time TEXT")
     cursor.execute(
         """
@@ -417,6 +420,7 @@ def init_db():
                 status TEXT DEFAULT 'future',
                 venue TEXT DEFAULT NULL,
                 cricbuzz_match_id INTEGER DEFAULT NULL,
+                espn_match_id INTEGER DEFAULT NULL,
                 toss_time TEXT DEFAULT NULL
             )
         """)
@@ -509,6 +513,7 @@ def init_db():
                 status TEXT DEFAULT 'future',
                 venue TEXT DEFAULT NULL,
                 cricbuzz_match_id INTEGER DEFAULT NULL,
+                espn_match_id INTEGER DEFAULT NULL,
                 toss_time TEXT DEFAULT NULL
             );
             CREATE TABLE IF NOT EXISTS user_teams (

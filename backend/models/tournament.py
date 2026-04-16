@@ -3,7 +3,7 @@ import threading
 import traceback
 from datetime import datetime, timedelta
 
-from backend.config import IST, ESPN_MATCH_ID_OFFSET
+from backend.config import IST
 from backend.models.match import Match
 from backend.models.team import Team, Contestant
 from backend.models.registry import PlayerRegistry
@@ -12,6 +12,7 @@ from backend.services.scraper import (
     fetch_toss_info,
     fetch_scorecard_html,
     fetch_cricbuzz_scorecard_html,
+    initialize_espn_match_map,
     initialize_cricbuzz_match_map,
     is_cached_toss_announced,
 )
@@ -70,6 +71,7 @@ class Tournament:
         self.player_roles = build_player_role_map(players_data)
         if refresh_schedule_map:
             initialize_cricbuzz_match_map(matches_data)
+            initialize_espn_match_map(matches_data)
         self.players_by_team = {}
         for player in players_data:
             self.players_by_team.setdefault(player["Team"], []).append({
@@ -284,8 +286,7 @@ class Tournament:
         if cricbuzz_html:
             match.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
 
-        scorecard_id = int(match_id) + ESPN_MATCH_ID_OFFSET
-        espn_html_text = fetch_scorecard_html(scorecard_id)
+        espn_html_text = fetch_scorecard_html(int(match_id), match.team1, match.team2)
         if espn_html_text:
             soup = BeautifulSoup(espn_html_text, "html.parser")
             match.parse_espn_bowling_dot_balls(soup)

@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from backend.config import (
     CRICBUZZ_IPL_SERIES_ID,
     CRICBUZZ_IPL_SERIES_SLUG,
+    ESPN_SERIES_ID,
     ESPN_IPL_SERIES_ID,
     ESPN_IPL_SERIES_SLUG,
     ESPN_MATCH_ID_OFFSET,
@@ -20,6 +21,7 @@ from backend.services import data_service
 
 
 CRICBUZZ_MATCH_ID_MAP: dict[int, int] = {}
+ESPN_MATCH_ID_MAP: dict[int, int] = {}
 PLAYING_XI_CACHE: dict[int, dict] = {}
 PLAYING_XI_TTL_SECONDS = 60
 TOSS_INFO_CACHE: dict[int, dict] = {}
@@ -137,15 +139,44 @@ def _is_before_match_start(match_date: str | None, match_time: str | None) -> bo
     return datetime.now(IST) < match_start
 
 
-def fetch_scorecard_html(scorecard_id):
-    url = f"https://www.espn.in/cricket/series/8048/scorecard/{scorecard_id}/utils"
+def fetch_scorecard_html(match_id, team1: str | None = None, team2: str | None = None, match_date: str | None = None, force_refresh: bool = False):
+    espn_match_id = None
+    if team1 and team2:
+        espn_match_id = data_service.get_stored_espn_match_id(int(match_id))
+        if not espn_match_id or force_refresh:
+            espn_match_id = resolve_espn_match_id(int(match_id), team1, team2, force_refresh=force_refresh)
+
+    if not espn_match_id:
+        try:
+            espn_match_id = int(match_id)
+        except Exception:
+            return None
+
+    url = build_espn_scorecard_url(int(espn_match_id))
     try:
         res = _session_get(url)
         if res.status_code != 200:
+            if team1 and team2 and not force_refresh:
+                refreshed_match_id = resolve_espn_match_id(int(match_id), team1, team2, force_refresh=True)
+                if refreshed_match_id and refreshed_match_id != espn_match_id:
+                    refreshed_url = build_espn_scorecard_url(int(refreshed_match_id))
+                    refreshed_res = _session_get(refreshed_url)
+                    if refreshed_res.status_code == 200:
+                        return refreshed_res.text
             return None
         return res.text
     except Exception as e:
         print("Error fetching scorecard:", e)
+        if team1 and team2 and not force_refresh:
+            refreshed_match_id = resolve_espn_match_id(int(match_id), team1, team2, force_refresh=True)
+            if refreshed_match_id and refreshed_match_id != espn_match_id:
+                refreshed_url = build_espn_scorecard_url(int(refreshed_match_id))
+                try:
+                    refreshed_res = _session_get(refreshed_url)
+                    if refreshed_res.status_code == 200:
+                        return refreshed_res.text
+                except Exception:
+                    pass
         return None
 
 
@@ -198,6 +229,154 @@ def build_cricbuzz_commentary_url(cricbuzz_match_id: int) -> str:
     return f"https://www.cricbuzz.com/live-cricket-scores/{cricbuzz_match_id}"
 
 
+def build_espn_schedule_url() -> str:
+    return f"https://www.espn.in/cricket/scores/series/{ESPN_SERIES_ID}/season/2026/indian-premier-league"
+
+
+def build_espn_scorecard_url(espn_match_id: int) -> str:
+    return f"https://www.espn.com/cricket/series/{ESPN_SERIES_ID}/scorecard/{int(espn_match_id)}/utils"
+
+
+def _normalize_espn_match_key(match_id: int, team1: str, team2: str) -> tuple[int, frozenset[str]]:
+    return (
+        int(match_id),
+        frozenset({_to_short_team_name(team1), _to_short_team_name(team2)}),
+    )
+
+
+def _fetch_espn_schedule_lookup() -> dict[tuple[int, frozenset[str]], int] | None:
+    schedule_urls = [
+        build_espn_schedule_url(),
+        f"https://www.espn.com/cricket/scores/series/{ESPN_SERIES_ID}/season/2026/ipl",
+        f"https://www.espn.com/cricket/scores/series/_/id/{ESPN_SERIES_ID}/season/2026/{ESPN_SERIES_ID}",
+    ]
+    match_no_regex = re.compile(r"\b(\d+)(?:st|nd|rd|th)\s+match\b", flags=re.IGNORECASE)
+
+    def _teams_mentioned(text: str) -> set[str]:
+        normalized = " ".join(text.lower().split())
+        found: set[str] = set()
+        for full_name, short_name in TEAM_MAP.items():
+            if full_name == short_name:
+                continue
+            if full_name.lower() in normalized or short_name.lower() in normalized:
+                found.add(short_name)
+        return found
+
+    for schedule_url in schedule_urls:
+        try:
+            print(f"[ESPN] Loading schedule mapping from {schedule_url}")
+            res = _session_get(schedule_url)
+            if res.status_code != 200:
+                continue
+
+            soup = BeautifulSoup(res.text, "html.parser")
+            schedule_lookup: dict[tuple[int, frozenset[str]], int] = {}
+
+            for anchor in soup.find_all("a", href=True):
+                href = anchor.get("href", "")
+                match_id_match = re.search(r"/cricket/series/\d+/(?:game|scorecard)/(\d+)/", href)
+                if not match_id_match:
+                    continue
+
+                text_candidates = [
+                    " ".join(anchor.stripped_strings),
+                    " ".join(anchor.parent.stripped_strings) if anchor.parent else "",
+                ]
+                matched = False
+                for text in text_candidates:
+                    match_no_match = match_no_regex.search(text)
+                    if not match_no_match:
+                        continue
+
+                    teams_found = _teams_mentioned(text)
+                    if len(teams_found) != 2:
+                        continue
+
+                    match_no = int(match_no_match.group(1))
+                    team_a, team_b = sorted(teams_found)
+                    schedule_lookup[(match_no, frozenset({team_a, team_b}))] = int(match_id_match.group(1))
+                    matched = True
+                    break
+
+                if not matched:
+                    continue
+
+            if schedule_lookup:
+                return schedule_lookup
+        except Exception as exc:
+            print(f"[ESPN] Schedule lookup failed for {schedule_url}: {exc}")
+
+    return None
+
+
+def initialize_espn_match_map(matches_data: list[dict]) -> dict[int, int]:
+    global ESPN_MATCH_ID_MAP
+
+    mapping: dict[int, int] = {}
+    missing_matches: list[dict] = []
+    for match in matches_data:
+        our_match_id = int(match["MatchID"])
+        stored_match_id = match.get("ESPNMatchID")
+        espn_match_id = int(stored_match_id) if stored_match_id not in (None, "") else None
+        if espn_match_id:
+            mapping[our_match_id] = espn_match_id
+        else:
+            missing_matches.append(match)
+
+    ESPN_MATCH_ID_MAP.update(mapping)
+
+    if missing_matches:
+        schedule_lookup = _fetch_espn_schedule_lookup()
+        if schedule_lookup:
+            for match in missing_matches:
+                our_match_id = int(match["MatchID"])
+                key = _normalize_espn_match_key(our_match_id, match["Team1"], match["Team2"])
+                espn_match_id = schedule_lookup.get(key)
+                if not espn_match_id:
+                    continue
+                mapping[our_match_id] = espn_match_id
+                ESPN_MATCH_ID_MAP[our_match_id] = espn_match_id
+                try:
+                    data_service.update_match_fields(our_match_id, espn_match_id=int(espn_match_id))
+                except Exception:
+                    pass
+
+    print(f"[ESPN] Cached {len(ESPN_MATCH_ID_MAP)} match id mappings")
+    return ESPN_MATCH_ID_MAP
+
+
+def resolve_espn_match_id(match_id: int, team1: str, team2: str, force_refresh: bool = False) -> int | None:
+    stored_match_id = None
+    try:
+        stored_match_id = data_service.get_stored_espn_match_id(int(match_id))
+    except Exception:
+        stored_match_id = None
+
+    if stored_match_id and not force_refresh:
+        ESPN_MATCH_ID_MAP[int(match_id)] = int(stored_match_id)
+        return int(stored_match_id)
+
+    cached_match_id = ESPN_MATCH_ID_MAP.get(int(match_id))
+    if cached_match_id and not force_refresh:
+        return int(cached_match_id)
+
+    schedule_lookup = _fetch_espn_schedule_lookup()
+    if not schedule_lookup:
+        return int(stored_match_id) if stored_match_id else cached_match_id
+
+    key = _normalize_espn_match_key(int(match_id), team1, team2)
+    resolved = schedule_lookup.get(key)
+    if resolved:
+        ESPN_MATCH_ID_MAP[int(match_id)] = int(resolved)
+        try:
+            data_service.update_match_fields(int(match_id), espn_match_id=int(resolved))
+        except Exception:
+            pass
+        return int(resolved)
+
+    return int(stored_match_id) if stored_match_id else cached_match_id
+
+
 def _slugify(value: str) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return re.sub(r"-{2,}", "-", value)
@@ -225,7 +404,9 @@ def _to_short_team_name(team_name: str) -> str:
 
 
 def build_ipl_playing_xi_url(match_id: int, team1: str, team2: str) -> str:
-    espn_match_id = int(match_id) + ESPN_MATCH_ID_OFFSET
+    espn_match_id = resolve_espn_match_id(int(match_id), team1, team2)
+    if not espn_match_id:
+        espn_match_id = int(match_id) + ESPN_MATCH_ID_OFFSET
     matchup_slug = f"{_slugify(_expand_team_name(team1))}-vs-{_slugify(_expand_team_name(team2))}"
     return (
         f"https://www.espncricinfo.com/series/{ESPN_IPL_SERIES_SLUG}-{ESPN_IPL_SERIES_ID}/"
@@ -234,7 +415,9 @@ def build_ipl_playing_xi_url(match_id: int, team1: str, team2: str) -> str:
 
 
 def build_ipl_playing_xi_urls(match_id: int, team1: str, team2: str) -> list[str]:
-    espn_match_id = int(match_id) + ESPN_MATCH_ID_OFFSET
+    espn_match_id = resolve_espn_match_id(int(match_id), team1, team2)
+    if not espn_match_id:
+        espn_match_id = int(match_id) + ESPN_MATCH_ID_OFFSET
     team1_slug = _slugify(_expand_team_name(team1))
     team2_slug = _slugify(_expand_team_name(team2))
     matchup_slug = f"{team1_slug}-vs-{team2_slug}"
@@ -1665,14 +1848,16 @@ def sync_match_metadata_from_schedule(db=None) -> dict[str, int]:
 
     rows = db.execute(
         """
-        SELECT id, team1, team2, match_date, match_time, cricbuzz_match_id, toss_time
+        SELECT id, team1, team2, match_date, match_time, cricbuzz_match_id, espn_match_id, toss_time
         FROM matches
         """
     ).fetchall()
 
     updated_toss_times = 0
     updated_cricbuzz_ids = 0
+    updated_espn_ids = 0
     missing_cricbuzz_rows: list[dict] = []
+    missing_espn_rows: list[dict] = []
 
     for row in rows:
         match_id = int(row["id"])
@@ -1686,6 +1871,8 @@ def sync_match_metadata_from_schedule(db=None) -> dict[str, int]:
 
         if row["cricbuzz_match_id"] in (None, ""):
             missing_cricbuzz_rows.append(dict(row))
+        if row["espn_match_id"] in (None, ""):
+            missing_espn_rows.append(dict(row))
 
     schedule_lookup = None
     if missing_cricbuzz_rows:
@@ -1705,7 +1892,25 @@ def sync_match_metadata_from_schedule(db=None) -> dict[str, int]:
             CRICBUZZ_MATCH_ID_MAP[match_id] = int(cricbuzz_match_id)
             updated_cricbuzz_ids += 1
 
-    if updated_toss_times or updated_cricbuzz_ids:
+    espn_schedule_lookup = None
+    if missing_espn_rows:
+        espn_schedule_lookup = _fetch_espn_schedule_lookup()
+
+    if espn_schedule_lookup:
+        for row in missing_espn_rows:
+            match_id = int(row["id"])
+            key = _normalize_espn_match_key(match_id, row["team1"], row["team2"])
+            espn_match_id = espn_schedule_lookup.get(key)
+            if not espn_match_id:
+                continue
+            db.execute(
+                "UPDATE matches SET espn_match_id = ? WHERE id = ?",
+                (int(espn_match_id), match_id),
+            )
+            ESPN_MATCH_ID_MAP[match_id] = int(espn_match_id)
+            updated_espn_ids += 1
+
+    if updated_toss_times or updated_cricbuzz_ids or updated_espn_ids:
         db.commit()
         try:
             data_service.invalidate_cache("matches")
@@ -1720,6 +1925,7 @@ def sync_match_metadata_from_schedule(db=None) -> dict[str, int]:
     return {
         "toss_time": updated_toss_times,
         "cricbuzz_match_id": updated_cricbuzz_ids,
+        "espn_match_id": updated_espn_ids,
     }
 
 
