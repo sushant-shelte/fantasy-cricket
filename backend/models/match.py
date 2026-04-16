@@ -552,13 +552,13 @@ class Match:
                 is_float_text(lines[index + 5]) and is_int_text(lines[index + 6])
             )
 
-        def is_reasonable_bowling_row(index):
+        def is_reasonable_bowling_row(index, has_dot_balls_column):
             try:
                 overs = float(lines[index + 1])
                 maidens = int(lines[index + 2])
                 runs = int(lines[index + 3])
                 wickets = int(lines[index + 4])
-                dot_balls = int(lines[index + 6])
+                trailing_value = int(lines[index + 6])
             except Exception:
                 return False
 
@@ -571,7 +571,7 @@ class Match:
                 return False
             if wickets < 0 or wickets > 5:
                 return False
-            if dot_balls < 0 or dot_balls > 24:
+            if has_dot_balls_column and (trailing_value < 0 or trailing_value > 24):
                 return False
 
             return True
@@ -635,10 +635,14 @@ class Match:
 
             # Parse bowlers
             if bowling_idx != -1:
+                has_dot_balls_column = any(
+                    line.upper() == "0S"
+                    for line in lines[bowling_idx + 1: section_end]
+                )
                 idx = bowling_idx + 1
                 while idx < section_end:
                     if looks_like_bowler_row(idx, section_end):
-                        if not is_reasonable_bowling_row(idx):
+                        if not is_reasonable_bowling_row(idx, has_dot_balls_column):
                             idx += 1
                             continue
                         name = clean_name(lines[idx])
@@ -653,7 +657,8 @@ class Match:
                         player.maidens = int(lines[idx + 2])
                         player.runs_conceded = int(lines[idx + 3])
                         player.wickets = int(lines[idx + 4])
-                        player.dot_balls = int(lines[idx + 6])
+                        if has_dot_balls_column:
+                            player.dot_balls = int(lines[idx + 6])
                         if player.overs > 0:
                             player.economy = round(player.runs_conceded / player.overs, 2)
                         idx += 7
