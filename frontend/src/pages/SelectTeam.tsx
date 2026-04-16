@@ -1282,7 +1282,7 @@ export default function SelectTeamPage() {
                                 </div>
                                 <div className="space-y-1">
                                   {sectionPlayers.length > 0 ? (
-                                    sectionPlayers.map((player) => renderLineupPlayerCard(player, true))
+                                    sectionPlayers.map((player) => renderLineupPlayerCard(player))
                                   ) : (
                                     <div className="rounded-lg border border-dashed border-white/10 px-2 py-2 text-center text-[10px] text-white/30">
                                       No players
