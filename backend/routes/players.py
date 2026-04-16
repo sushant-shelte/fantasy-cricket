@@ -10,7 +10,7 @@ from backend.config import ESPN_MATCH_ID_OFFSET, ROLES, IST
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services import data_service
-from backend.services.scraper import get_cached_toss_info
+from backend.services.scraper import fetch_playing_xi, get_cached_toss_info
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api", tags=["players"])
@@ -94,6 +94,88 @@ def _load_recent_completed_history(db, teams: list[str], player_ids: list[int]) 
     return history_by_player
 
 
+def _load_last_completed_team_xi(
+    db,
+    current_match_id: int,
+    team: str,
+) -> dict | None:
+    cached = data_service.get_cached_last_match_xi(current_match_id, team)
+    if cached is not None:
+        return cached
+
+    last_match = db.execute(
+        """
+        SELECT id, team1, team2, match_date, match_time, toss_time
+        FROM matches
+        WHERE status = 'completed'
+          AND (team1 = ? OR team2 = ?)
+        ORDER BY match_date DESC, match_time DESC, id DESC
+        LIMIT 1
+        """,
+        (team, team),
+    ).fetchone()
+    if not last_match:
+        return None
+
+    last_match_row = dict(last_match)
+    last_match_id = int(last_match_row["id"])
+    last_team1 = last_match_row["team1"]
+    last_team2 = last_match_row["team2"]
+    last_match_date = last_match_row["match_date"]
+    last_match_time = last_match_row["match_time"]
+    last_toss_time = last_match_row.get("toss_time") or last_match_row.get("TossTime")
+
+    player_rows = db.execute(
+        """
+        SELECT id, name, team, role, aliases
+        FROM players
+        WHERE team IN (?, ?)
+        """,
+        (last_team1, last_team2),
+    ).fetchall()
+    last_players = [dict(row) for row in player_rows]
+
+    cached_playing_xi = data_service.get_cached_match_playing_xi(
+        last_match_id,
+        last_team1,
+        last_team2,
+        last_match_date,
+        last_match_time,
+    )
+    if cached_playing_xi and cached_playing_xi.get("announced"):
+        playing_xi = cached_playing_xi
+    else:
+        playing_xi = fetch_playing_xi(
+            last_match_id,
+            last_team1,
+            last_team2,
+            last_players,
+            last_match_date,
+            last_match_time,
+            last_toss_time,
+            force_refresh=True,
+        )
+
+    if not playing_xi or not playing_xi.get("announced"):
+        return None
+
+    playing_ids = [int(pid) for pid in playing_xi.get("player_ids", [])]
+    if len(playing_ids) != 22:
+        return None
+
+    player_team_lookup = {int(row["id"]): row["team"] for row in last_players}
+    team_order = [pid for pid in playing_ids if player_team_lookup.get(pid) == team]
+    if len(team_order) != 11:
+        return None
+
+    payload = {
+        "match_id": last_match_id,
+        "team": team,
+        "player_ids": team_order,
+    }
+    return data_service.set_cached_last_match_xi(current_match_id, team, payload)
+
+
 def _is_lineup_window_open(match_date: str, match_time: str, toss_time: str | None = None) -> bool:
     try:
         match_datetime = datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M")
@@ -111,6 +193,15 @@ def _is_lineup_window_open(match_date: str, match_time: str, toss_time: str | No
 
     now = datetime.now(IST)
     return window_start <= now < match_datetime
+
+
+def _is_match_today(match_date: str | None) -> bool:
+    if not match_date:
+        return False
+    try:
+        return match_date == datetime.now(IST).strftime("%Y-%m-%d")
+    except Exception:
+        return False
 
 @router.get("/players")
 async def list_players(
@@ -233,6 +324,13 @@ async def list_players(
         }
         playing_xi_known = len(playing_ids) == 22
         substitutes_known = len(substitute_ids) == 10
+        is_today_match = _is_match_today(match_date)
+        lineup_preview: dict[str, dict] = {}
+        if is_today_match and not playing_xi_data["announced"]:
+            for team in (team1, team2):
+                preview = _load_last_completed_team_xi(db, match_id, team)
+                if preview:
+                    lineup_preview[team] = preview
 
         # Group by role
         grouped = {role: [] for role in ROLES}
@@ -275,6 +373,8 @@ async def list_players(
                 "substitute_count": len(substitute_ids),
             },
             "lineup_window_open": lineup_window_open,
+            "is_today_match": is_today_match,
+            "last_match_xi": lineup_preview,
             "toss": toss_info,
         }
 

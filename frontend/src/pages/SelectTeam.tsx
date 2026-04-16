@@ -18,6 +18,13 @@ interface PlayingXiState {
   playingCount?: number;
   substituteCount?: number;
   lineupWindowOpen?: boolean;
+  isTodayMatch?: boolean;
+}
+
+interface LastMatchXiTeam {
+  match_id: number;
+  team: string;
+  player_ids: number[];
 }
 
 interface PlayerHistoryToggleProps {
@@ -175,12 +182,14 @@ export default function SelectTeamPage() {
   const [showPlayerSearch, setShowPlayerSearch] = useState(false);
   const [playerSearch, setPlayerSearch] = useState('');
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<number | null>(null);
+  const [lastMatchXi, setLastMatchXi] = useState<Record<string, LastMatchXiTeam>>({});
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const backupPanelRef = useRef<HTMLDivElement | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
   const lineupWindowOpen = Boolean(playingXi.lineupWindowOpen);
   const showAvailabilityDetails = lineupWindowOpen;
+  const isTodayMatch = Boolean(playingXi.isTodayMatch);
 
   const hasFullAvailabilityBreakdown =
     showAvailabilityDetails &&
@@ -214,8 +223,10 @@ export default function SelectTeamPage() {
           playingCount: data.playing_xi?.playing_count || 0,
           substituteCount: data.playing_xi?.substitute_count || 0,
           lineupWindowOpen: Boolean(data.lineup_window_open),
+          isTodayMatch: Boolean(data.is_today_match),
         });
         setTossInfo(data.toss || null);
+        setLastMatchXi(data.last_match_xi || {});
 
         const existing: TeamSelection[] = teamRes.data || [];
         if (existing.length > 0) {
@@ -266,8 +277,10 @@ export default function SelectTeamPage() {
               playingCount: data.playing_xi?.playing_count || 0,
               substituteCount: data.playing_xi?.substitute_count || 0,
               lineupWindowOpen: Boolean(data.lineup_window_open),
+              isTodayMatch: Boolean(data.is_today_match),
             });
             setTossInfo(data.toss || null);
+            setLastMatchXi(data.last_match_xi || {});
           } catch {
             // keep trying until the cache becomes ready
           }
@@ -546,6 +559,132 @@ export default function SelectTeamPage() {
 
   const getLineupSectionPlayers = (team: string, status: Player['availability_status']) =>
     sortPlayersForLineupView(lineupPlayersByTeam[team]?.[status || ''] || []);
+
+  const getLastMatchXiPlayers = (team: string) => {
+    const preview = lastMatchXi[team];
+    if (!preview?.player_ids?.length) return [];
+    const order = new Map(preview.player_ids.map((playerId, index) => [playerId, index]));
+    return [...(preAnnouncementPlayersByTeam[team] || [])]
+      .filter((player) => order.has(player.id))
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  };
+
+  const getOtherPreviewPlayers = (team: string) => {
+    const preview = lastMatchXi[team];
+    const previewIds = new Set((preview?.player_ids || []).map((playerId) => Number(playerId)));
+    return [...(preAnnouncementPlayersByTeam[team] || [])]
+      .filter((player) => !previewIds.has(player.id))
+      .sort((a, b) => {
+        const roleDiff =
+          REQUIRED_ROLES.indexOf(a.role as (typeof REQUIRED_ROLES)[number]) -
+          REQUIRED_ROLES.indexOf(b.role as (typeof REQUIRED_ROLES)[number]);
+        if (roleDiff !== 0) return roleDiff;
+        const pointsDiff = (b.total_points || 0) - (a.total_points || 0);
+        if (pointsDiff !== 0) return pointsDiff;
+        return a.name.localeCompare(b.name);
+      });
+  };
+
+  const renderLineupPlayerCard = (
+    player: Player,
+    showAvailabilityBadge = false,
+  ) => {
+    const isSelected = selected.has(player.id);
+    const isCaptain = captainId === player.id;
+    const isVC = vcId === player.id;
+    const selectionAllowed = canSelectPlayer(player);
+    const availabilityStatus = player.availability_status || 'unavailable';
+
+    return (
+      <div
+        key={player.id}
+        onClick={() => {
+          if (isSelected || selectionAllowed) togglePlayer(player.id);
+        }}
+        className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
+          isSelected
+            ? 'player-selected-highlight border border-sky-300/60'
+            : !selectionAllowed
+            ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
+            : 'bg-white/[0.04] hover:bg-white/[0.08]'
+        }`}
+      >
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold leading-tight text-white whitespace-normal break-words">
+              {player.name}
+            </div>
+            <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
+              <div className="flex items-center gap-2">
+                <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
+                <span className="font-semibold text-blue-300">
+                  Avg {Math.round(player.avg_points || 0)}
+                </span>
+                {showAvailabilityBadge && showAvailabilityDetails && playingXi.announced && (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
+                      availabilityStatus === 'available'
+                        ? 'border border-blue-400/25 bg-blue-500/10 text-blue-200'
+                        : availabilityStatus === 'substitute'
+                        ? 'border border-sky-400/25 bg-sky-500/10 text-sky-200'
+                        : 'border border-red-400/20 bg-red-500/10 text-red-200'
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        availabilityStatus === 'available'
+                          ? 'bg-blue-400'
+                          : availabilityStatus === 'substitute'
+                          ? 'bg-sky-400'
+                          : 'bg-red-400'
+                      }`}
+                    />
+                    {availabilityStatus === 'available' ? 'Avl' : availabilityStatus === 'substitute' ? 'Sub' : 'Unavl'}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isSelected) setCaptain(player.id);
+                  }}
+                  disabled={!isSelected}
+                  className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
+                    isCaptain
+                      ? 'border-amber-400 bg-amber-500 text-white'
+                      : isSelected
+                      ? 'border-amber-400/40 text-amber-300'
+                      : 'border-white/10 text-white/15'
+                  }`}
+                >
+                  C
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isSelected) setViceCaptain(player.id);
+                  }}
+                  disabled={!isSelected}
+                  className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
+                    isVC
+                      ? 'border-sky-400 bg-sky-500 text-white'
+                      : isSelected
+                      ? 'border-sky-400/40 text-sky-300'
+                      : 'border-white/10 text-white/15'
+                  }`}
+                >
+                  VC
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const getPreAnnouncementPlayers = (team: string) =>
     [...(preAnnouncementPlayersByTeam[team] || [])].sort((a, b) => {
@@ -1105,105 +1244,55 @@ export default function SelectTeamPage() {
             {activeTab === LINEUPS_TAB ? (
               <div className="mt-4 space-y-2">
                 <div className="grid grid-cols-2 gap-3">
-                {teamsInMatch.map((team) => (
-                  <div
-                    key={team}
-                    className={`overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b ${getTeamTheme(team).tintClass} bg-white/5`}
-                  >
-                    <div className="border-b border-white/10 px-3 py-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs font-bold text-white">{team}</div>
-                        <div className="text-[11px] text-white/45">{selectedByTeam[team] || 0} selected</div>
-                      </div>
-                    </div>
-                    {hasFullAvailabilityBreakdown
-                      ? [
-                           { key: 'available', label: 'Playing XI', accent: 'text-blue-300' },
-                           { key: 'substitute', label: 'Substitutes', accent: 'text-sky-300' },
-                           { key: 'unavailable', label: 'Unavailable', accent: 'text-red-300' },
-                        ].map((section) => {
-                          const sectionPlayers = getLineupSectionPlayers(team, section.key as Player['availability_status']);
-                          return (
+                  {teamsInMatch.map((team) => {
+                    const hasPreview = isTodayMatch && !playingXi.announced && Boolean(lastMatchXi[team]?.player_ids?.length);
+                    return (
+                      <div
+                        key={team}
+                        className={`overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b ${getTeamTheme(team).tintClass} bg-white/5`}
+                      >
+                        <div className="border-b border-white/10 px-3 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs font-bold text-white">{team}</div>
+                            <div className="text-[11px] text-white/45">{selectedByTeam[team] || 0} selected</div>
+                          </div>
+                        </div>
+                        {showAvailabilityDetails && playingXi.announced ? (
+                          [
+                            { key: 'available', label: 'Playing XI', accent: 'text-blue-300' },
+                            { key: 'substitute', label: 'Substitutes', accent: 'text-sky-300' },
+                            { key: 'unavailable', label: 'Unavailable', accent: 'text-red-300' },
+                          ].map((section) => {
+                            const sectionPlayers = getLineupSectionPlayers(team, section.key as Player['availability_status']);
+                            return (
+                              <div key={section.key} className="border-t border-white/10 px-2.5 py-2">
+                                <div className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${section.accent}`}>
+                                  {section.label}
+                                </div>
+                                <div className="space-y-1">
+                                  {sectionPlayers.length > 0 ? (
+                                    sectionPlayers.map((player) => renderLineupPlayerCard(player, true))
+                                  ) : (
+                                    <div className="rounded-lg border border-dashed border-white/10 px-2 py-2 text-center text-[10px] text-white/30">
+                                      No players
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : hasPreview ? (
+                          [
+                            { key: 'last', label: 'Last Match XI', accent: 'text-blue-300', players: getLastMatchXiPlayers(team) },
+                            { key: 'others', label: 'Others', accent: 'text-white/55', players: getOtherPreviewPlayers(team) },
+                          ].map((section) => (
                             <div key={section.key} className="border-t border-white/10 px-2.5 py-2">
                               <div className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${section.accent}`}>
                                 {section.label}
                               </div>
                               <div className="space-y-1">
-                                {sectionPlayers.length > 0 ? (
-                                  sectionPlayers.map((player) => {
-                                    const isSelected = selected.has(player.id);
-                                    const isCaptain = captainId === player.id;
-                                    const isVC = vcId === player.id;
-                                    const selectionAllowed = canSelectPlayer(player);
-
-                                    return (
-                                      <div
-                                        key={player.id}
-                                        onClick={() => {
-                                          if (isSelected || selectionAllowed) togglePlayer(player.id);
-                                        }}
-                                        className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
-                                          isSelected
-                                            ? 'player-selected-highlight border border-sky-300/60'
-                                            : !selectionAllowed
-                                            ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
-                                            : 'bg-white/[0.04] hover:bg-white/[0.08]'
-                                        }`}
-                                      >
-                                        <div className="flex items-start gap-2">
-                                          <div className="min-w-0 flex-1">
-                                            <div className="text-[11px] font-semibold leading-tight text-white whitespace-normal break-words">
-                                              {player.name}
-                                            </div>
-                                            <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
-                                              <div className="flex items-center gap-2">
-                                                <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                                                <span className="font-semibold text-blue-300">
-                                                  Avg {Math.round(player.avg_points || 0)}
-                                                </span>
-                                              </div>
-                                              <div className="flex items-center gap-1">
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (isSelected) setCaptain(player.id);
-                                                  }}
-                                                  disabled={!isSelected}
-                                                  className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
-                                                    isCaptain
-                                                      ? 'border-amber-400 bg-amber-500 text-white'
-                                                      : isSelected
-                                                      ? 'border-amber-400/40 text-amber-300'
-                                                      : 'border-white/10 text-white/15'
-                                                  }`}
-                                                >
-                                                  C
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (isSelected) setViceCaptain(player.id);
-                                                  }}
-                                                  disabled={!isSelected}
-                                                  className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
-                                                    isVC
-                                                      ? 'border-sky-400 bg-sky-500 text-white'
-                                                      : isSelected
-                                                      ? 'border-sky-400/40 text-sky-300'
-                                                      : 'border-white/10 text-white/15'
-                                                  }`}
-                                                >
-                                                  VC
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })
+                                {section.players.length > 0 ? (
+                                  section.players.map((player) => renderLineupPlayerCard(player, false))
                                 ) : (
                                   <div className="rounded-lg border border-dashed border-white/10 px-2 py-2 text-center text-[10px] text-white/30">
                                     No players
@@ -1211,93 +1300,20 @@ export default function SelectTeamPage() {
                                 )}
                               </div>
                             </div>
-                          );
-                        })
-                      : (
-                        <div className="border-t border-white/10 px-2.5 py-2">
-                          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
-                            Squad Order
+                          ))
+                        ) : (
+                          <div className="border-t border-white/10 px-2.5 py-2">
+                            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
+                              Squads
+                            </div>
+                            <div className="space-y-1">
+                              {getPreAnnouncementPlayers(team).map((player) => renderLineupPlayerCard(player, false))}
+                            </div>
                           </div>
-                          <div className="space-y-1">
-                            {getPreAnnouncementPlayers(team).map((player) => {
-                              const isSelected = selected.has(player.id);
-                              const isCaptain = captainId === player.id;
-                              const isVC = vcId === player.id;
-                              const selectionAllowed = canSelectPlayer(player);
-
-                              return (
-                                <div
-                                  key={player.id}
-                                  onClick={() => {
-                                    if (isSelected || selectionAllowed) togglePlayer(player.id);
-                                  }}
-                                  className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all ${
-                                    isSelected
-                                      ? 'player-selected-highlight border border-sky-300/60'
-                                      : !selectionAllowed
-                                      ? 'cursor-not-allowed bg-white/[0.03] opacity-45'
-                                      : 'bg-white/[0.04] hover:bg-white/[0.08]'
-                                  }`}
-                                >
-                                  <div className="flex items-start gap-2">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="text-[11px] font-semibold leading-tight text-white whitespace-normal break-words">
-                                        {player.name}
-                                      </div>
-                                      <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-white/50">
-                                        <div className="flex items-center gap-2">
-                                          <span>{ROLE_CONFIG[player.role]?.label || player.role}</span>
-                                          <span className="font-semibold text-blue-300">
-                                            Avg {Math.round(player.avg_points || 0)}
-                                          </span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (isSelected) setCaptain(player.id);
-                                            }}
-                                            disabled={!isSelected}
-                                            className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
-                                              isCaptain
-                                                ? 'border-amber-400 bg-amber-500 text-white'
-                                                : isSelected
-                                                ? 'border-amber-400/40 text-amber-300'
-                                                : 'border-white/10 text-white/15'
-                                            }`}
-                                          >
-                                            C
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (isSelected) setViceCaptain(player.id);
-                                            }}
-                                            disabled={!isSelected}
-                                            className={`h-6 w-6 rounded-full border text-[9px] font-bold ${
-                                              isVC
-                                                ? 'border-sky-400 bg-sky-500 text-white'
-                                                : isSelected
-                                                ? 'border-sky-400/40 text-sky-300'
-                                                : 'border-white/10 text-white/15'
-                                            }`}
-                                          >
-                                            VC
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                ))}
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : (

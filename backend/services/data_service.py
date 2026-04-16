@@ -29,6 +29,7 @@ CACHE: dict = {
 
 PLAYER_MATCH_PAYLOAD_CACHE: dict[int, dict] = {}
 PLAYING_XI_STATUS_CACHE: dict[tuple, dict] = {}
+LAST_MATCH_XI_CACHE: dict[tuple[int, str], dict] = {}
 
 
 def _row_to_dict(row) -> dict:
@@ -117,6 +118,20 @@ def is_cached_playing_xi_final(
     cache_key = (int(match_id), team1, team2, match_date, match_time)
     with _lock:
         return _is_playing_xi_final(PLAYING_XI_STATUS_CACHE.get(cache_key))
+
+
+def get_cached_last_match_xi(match_id: int, team: str) -> dict | None:
+    cache_key = (int(match_id), team)
+    with _lock:
+        payload = LAST_MATCH_XI_CACHE.get(cache_key)
+        return copy.deepcopy(payload) if payload is not None else None
+
+
+def set_cached_last_match_xi(match_id: int, team: str, payload: dict) -> dict:
+    cache_key = (int(match_id), team)
+    with _lock:
+        LAST_MATCH_XI_CACHE[cache_key] = copy.deepcopy(payload)
+        return copy.deepcopy(LAST_MATCH_XI_CACHE[cache_key])
 
 
 def prime_static_cache():
