@@ -10,7 +10,7 @@ from backend.config import ESPN_MATCH_ID_OFFSET, ROLES, IST
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services import data_service
-from backend.services.scraper import fetch_playing_xi, get_cached_toss_info
+from backend.services.scraper import fetch_cricbuzz_scorecard_html, fetch_playing_xi, fetch_scorecard_html, get_cached_toss_info
 from bs4 import BeautifulSoup
 
 router = APIRouter(prefix="/api", tags=["players"])
@@ -134,6 +134,13 @@ def _load_last_completed_team_xi(
         (last_team1, last_team2),
     ).fetchall()
     last_players = [dict(row) for row in player_rows]
+    registry = _build_registry(last_players)
+    match_obj = Match(
+        last_match_id,
+        last_team1,
+        last_team2,
+        registry,
+    )
 
     cached_playing_xi = data_service.get_cached_match_playing_xi(
         last_match_id,
@@ -163,15 +170,42 @@ def _load_last_completed_team_xi(
     if len(playing_ids) != 22:
         return None
 
+    match_obj.apply_playing_xi(playing_ids)
+    cricbuzz_html = fetch_cricbuzz_scorecard_html(last_match_id, last_team1, last_team2)
+    if cricbuzz_html:
+        match_obj.parse_cricbuzz_scorecard_html(cricbuzz_html, reset_players=False)
+    espn_html = fetch_scorecard_html(last_match_id + ESPN_MATCH_ID_OFFSET)
+    if espn_html:
+        soup = BeautifulSoup(espn_html, "html.parser")
+        match_obj.parse_espn_bowling_dot_balls(soup)
+
     player_team_lookup = {int(row["id"]): row["team"] for row in last_players}
     team_order = [pid for pid in playing_ids if player_team_lookup.get(pid) == team]
     if len(team_order) != 11:
         return None
 
+    impact_sub_player_ids = [
+        int(pid)
+        for pid, player in match_obj.players.items()
+        if player_team_lookup.get(int(pid)) == team and int(pid) not in team_order and getattr(player, "played", False)
+    ]
+    impact_sub_player_ids = [
+        pid for pid in impact_sub_player_ids
+        if pid not in team_order
+    ]
+    impact_sub_player_ids.sort(
+        key=lambda pid: (
+            0 if player_team_lookup.get(pid) == team else 1,
+            -getattr(match_obj.players.get(pid), "points", 0),
+            pid,
+        )
+    )
+
     payload = {
         "match_id": last_match_id,
         "team": team,
         "player_ids": team_order,
+        "impact_sub_player_ids": impact_sub_player_ids[:1],
     }
     return data_service.set_cached_last_match_xi(current_match_id, team, payload)
 

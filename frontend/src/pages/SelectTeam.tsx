@@ -25,6 +25,7 @@ interface LastMatchXiTeam {
   match_id: number;
   team: string;
   player_ids: number[];
+  impact_sub_player_ids?: number[];
 }
 
 interface PlayerHistoryToggleProps {
@@ -569,11 +570,21 @@ export default function SelectTeamPage() {
       .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   };
 
+  const getLastMatchImpactSubPlayers = (team: string) => {
+    const preview = lastMatchXi[team];
+    if (!preview?.impact_sub_player_ids?.length) return [];
+    const order = new Map(preview.impact_sub_player_ids.map((playerId, index) => [playerId, index]));
+    return [...(preAnnouncementPlayersByTeam[team] || [])]
+      .filter((player) => order.has(player.id))
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  };
+
   const getOtherPreviewPlayers = (team: string) => {
     const preview = lastMatchXi[team];
     const previewIds = new Set((preview?.player_ids || []).map((playerId) => Number(playerId)));
+    const impactSubIds = new Set((preview?.impact_sub_player_ids || []).map((playerId) => Number(playerId)));
     return [...(preAnnouncementPlayersByTeam[team] || [])]
-      .filter((player) => !previewIds.has(player.id))
+      .filter((player) => !previewIds.has(player.id) && !impactSubIds.has(player.id))
       .sort((a, b) => {
         const roleDiff =
           REQUIRED_ROLES.indexOf(a.role as (typeof REQUIRED_ROLES)[number]) -
@@ -588,6 +599,7 @@ export default function SelectTeamPage() {
   const renderLineupPlayerCard = (
     player: Player,
     showAvailabilityBadge = false,
+    isImpactSub = false,
   ) => {
     const isSelected = selected.has(player.id);
     const isCaptain = captainId === player.id;
@@ -620,7 +632,12 @@ export default function SelectTeamPage() {
                 <span className="font-semibold text-blue-300">
                   Avg {Math.round(player.avg_points || 0)}
                 </span>
-                {showAvailabilityBadge && showAvailabilityDetails && playingXi.announced && (
+                {isImpactSub ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-200">
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    Impact Sub
+                  </span>
+                ) : showAvailabilityBadge && showAvailabilityDetails && playingXi.announced && (
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
                       availabilityStatus === 'available'
@@ -1292,7 +1309,7 @@ export default function SelectTeamPage() {
                               </div>
                               <div className="space-y-1">
                                 {section.players.length > 0 ? (
-                                  section.players.map((player) => renderLineupPlayerCard(player, false))
+                                  section.players.map((player) => renderLineupPlayerCard(player))
                                 ) : (
                                   <div className="rounded-lg border border-dashed border-white/10 px-2 py-2 text-center text-[10px] text-white/30">
                                     No players
@@ -1300,14 +1317,27 @@ export default function SelectTeamPage() {
                                 )}
                               </div>
                             </div>
-                          ))
+                          )).concat(
+                            getLastMatchImpactSubPlayers(team).length > 0
+                              ? [
+                                  <div key="impact-sub" className="border-t border-white/10 px-2.5 py-2">
+                                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+                                      Impact Sub
+                                    </div>
+                                    <div className="space-y-1">
+                                      {getLastMatchImpactSubPlayers(team).map((player) => renderLineupPlayerCard(player, false, true))}
+                                    </div>
+                                  </div>,
+                                ]
+                              : []
+                          )
                         ) : (
                           <div className="border-t border-white/10 px-2.5 py-2">
                             <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
                               Squads
                             </div>
                             <div className="space-y-1">
-                              {getPreAnnouncementPlayers(team).map((player) => renderLineupPlayerCard(player, false))}
+                              {getPreAnnouncementPlayers(team).map((player) => renderLineupPlayerCard(player))}
                             </div>
                           </div>
                         )}
