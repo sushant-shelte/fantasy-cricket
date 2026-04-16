@@ -576,6 +576,18 @@ class Match:
 
             return True
 
+        def get_bowling_dot_balls(index):
+            try:
+                trailing_value = int(lines[index + 6])
+            except Exception:
+                return None
+
+            # ESPN scorecards commonly expose dot balls as a trailing 0s column.
+            # Keep the fallback conservative so we do not misread unrelated rows.
+            if 0 <= trailing_value <= 24:
+                return trailing_value
+            return None
+
         innings_headers = find_innings_headers()
         if not innings_headers:
             return False
@@ -635,9 +647,17 @@ class Match:
 
             # Parse bowlers
             if bowling_idx != -1:
-                bowling_header_lines = lines[bowling_idx: min(bowling_idx + 3, section_end)]
+                bowling_header_lines = lines[bowling_idx: min(bowling_idx + 8, section_end)]
+
+                def is_dot_ball_header(line):
+                    normalized = " ".join(str(line).strip().lower().split())
+                    return bool(
+                        re.search(r"\b0\s*[s]\b|\bdot\s+balls?\b", normalized, flags=re.IGNORECASE)
+                        or normalized in {"0s", "0 s"}
+                    )
+
                 has_dot_balls_column = any(
-                    re.search(r"\b0\s*s\b|\b0s\b|\bdot\s+balls?\b", line, flags=re.IGNORECASE)
+                    is_dot_ball_header(line)
                     for line in bowling_header_lines
                 )
                 idx = bowling_idx + 1
@@ -658,8 +678,9 @@ class Match:
                         player.maidens = int(lines[idx + 2])
                         player.runs_conceded = int(lines[idx + 3])
                         player.wickets = int(lines[idx + 4])
-                        if has_dot_balls_column:
-                            player.dot_balls = int(lines[idx + 6])
+                        dot_balls = get_bowling_dot_balls(idx)
+                        if dot_balls is not None and (has_dot_balls_column or player.dot_balls <= 0):
+                            player.dot_balls = dot_balls
                         if player.overs > 0:
                             player.economy = round(player.runs_conceded / player.overs, 2)
                         idx += 7
