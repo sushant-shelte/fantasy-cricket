@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -54,6 +54,7 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<MatchTab>('today');
   const { profile, loading: authLoading } = useAuth();
   const getCountdown = useCountdown();
+  const prefetchedMatchIdsRef = useRef<Set<number>>(new Set());
 
   const loadDashboard = useCallback(async () => {
     if (!profile) {
@@ -184,6 +185,35 @@ export default function DashboardPage() {
 
   // Get today's date in IST
   const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+  useEffect(() => {
+    if (authLoading || !profile || matches.length === 0) {
+      return;
+    }
+
+    const todayMatchesToPrefetch = matches.filter((match) =>
+      (match.match_date === todayIST || match.status === 'live') &&
+      match.status === 'future'
+    );
+
+    const pendingMatchIds = todayMatchesToPrefetch
+      .map((match) => match.id)
+      .filter((matchId) => !prefetchedMatchIdsRef.current.has(matchId));
+
+    if (pendingMatchIds.length === 0) {
+      return;
+    }
+
+    pendingMatchIds.forEach((matchId) => prefetchedMatchIdsRef.current.add(matchId));
+
+    void (async () => {
+      await Promise.allSettled(
+        pendingMatchIds.map((matchId) =>
+          client.get(`/api/players?match_id=${matchId}`).catch(() => null)
+        )
+      );
+    })();
+  }, [authLoading, matches, profile, todayIST]);
 
   // Split matches into tabs
   // Today = today's matches + any live match (even if started yesterday)
