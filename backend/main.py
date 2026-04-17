@@ -46,6 +46,7 @@ app.include_router(admin.router)
 # Tournament singleton
 tournament = Tournament()
 bootstrap_lock = threading.Lock()
+bootstrap_started = False
 bootstrap_error = None
 bootstrap_ready = False
 bootstrap_warmup_complete = False
@@ -149,6 +150,16 @@ def bootstrap_app():
         raise
 
 
+def start_bootstrap_if_needed():
+    global bootstrap_started
+    with bootstrap_lock:
+        if bootstrap_started:
+            return
+        bootstrap_started = True
+        thread = threading.Thread(target=bootstrap_app, daemon=True)
+        thread.start()
+
+
 def _run_background_warmup():
     global bootstrap_warmup_complete, bootstrap_warmup_error
 
@@ -247,7 +258,7 @@ def start_completed_match_recompute_if_needed():
 @app.on_event("startup")
 def startup():
     admin.set_tournament(tournament)
-    bootstrap_app()
+    start_bootstrap_if_needed()
     # Populate venue data from Cricbuzz in background (fails silently)
     import threading
     def _populate_venues():
