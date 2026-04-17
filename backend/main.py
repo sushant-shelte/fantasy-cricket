@@ -46,9 +46,10 @@ app.include_router(admin.router)
 # Tournament singleton
 tournament = Tournament()
 bootstrap_lock = threading.Lock()
-bootstrap_started = False
 bootstrap_error = None
 bootstrap_ready = False
+bootstrap_warmup_complete = False
+bootstrap_warmup_error = None
 completed_recompute_started = False
 
 
@@ -135,72 +136,81 @@ def bootstrap_app():
         init_db()
         print("Database initialized")
         seed_db_if_needed()
-        sync_match_metadata_from_schedule(get_db())
-
         init_firebase()
-        data_service.prime_static_cache()
-        match_rows = data_service.get_matches_api_rows()
-        for match in match_rows:
-            status, _ = matches.compute_runtime_match_status(
-                match["match_date"],
-                match["match_time"],
-                match.get("status"),
-            )
-            match["status"] = status
-        prime_today_venue_cache(match_rows)
-
-        players_data = data_service.get_cached_data("players")
-        matches_data = data_service.get_cached_data("matches")
-
-        tournament.initialize(players_data, matches_data, [])
-        tournament.start_lineup_cache_scheduler()
-        tournament.start_toss_cache_scheduler()
-        tournament.start_scheduler()
-        print("[BOOT] Starting scores cache scheduler")
-        scores.start_scores_cache_scheduler()
-        print("[BOOT] Starting leaderboard cache scheduler")
-        leaderboard.start_leaderboard_cache_scheduler()
-        print("[BOOT] Priming scores cache")
-        try:
-            prime_summary = scores.refresh_scores_response_cache_once()
-            print(
-                "[BOOT] Scores cache primed "
-                f"matches={prime_summary['matches']} "
-                f"eligible={prime_summary['eligible']} "
-                f"refreshed={prime_summary['refreshed']} "
-                f"errors={prime_summary['errors']}"
-            )
-        except Exception as exc:
-            print(f"[BOOT] Scores cache prime failed: {exc}")
-        try:
-            leaderboard_summary = leaderboard.refresh_leaderboard_cache_once()
-            print(
-                "[BOOT] Leaderboard cache primed "
-                f"leaderboard={leaderboard_summary['leaderboard']} "
-                f"points_table={leaderboard_summary['points_table']}"
-            )
-        except Exception as exc:
-            print(f"[BOOT] Leaderboard cache prime failed: {exc}")
-        start_completed_match_recompute_if_needed()
-
         bootstrap_ready = True
         bootstrap_error = None
-        print("Fantasy Cricket API started!")
+        print("Fantasy Cricket API critical path ready")
+
+        warmup_thread = threading.Thread(target=_run_background_warmup, daemon=True)
+        warmup_thread.start()
     except Exception as exc:
         bootstrap_error = str(exc)
         print(f"Bootstrap error: {exc}")
         raise
 
 
-def start_bootstrap_if_needed():
-    global bootstrap_started
-    with bootstrap_lock:
-        if bootstrap_started:
-            return
-        bootstrap_started = True
-        thread = threading.Thread(target=bootstrap_app, daemon=True)
-        thread.start()
+def _run_background_warmup():
+    global bootstrap_warmup_complete, bootstrap_warmup_error
 
+    while True:
+        try:
+            print("[BOOT] Background warmup starting")
+            sync_match_metadata_from_schedule(get_db())
+            data_service.prime_static_cache()
+
+            match_rows = data_service.get_matches_api_rows()
+            for match in match_rows:
+                status, _ = matches.compute_runtime_match_status(
+                    match["match_date"],
+                    match["match_time"],
+                    match.get("status"),
+                )
+                match["status"] = status
+            prime_today_venue_cache(match_rows)
+
+            players_data = data_service.get_cached_data("players")
+            matches_data = data_service.get_cached_data("matches")
+
+            tournament.initialize(players_data, matches_data, [])
+            tournament.start_lineup_cache_scheduler()
+            tournament.start_toss_cache_scheduler()
+            tournament.start_scheduler()
+            print("[BOOT] Starting scores cache scheduler")
+            scores.start_scores_cache_scheduler()
+            print("[BOOT] Starting leaderboard cache scheduler")
+            leaderboard.start_leaderboard_cache_scheduler()
+            print("[BOOT] Priming scores cache")
+            try:
+                prime_summary = scores.refresh_scores_response_cache_once()
+                print(
+                    "[BOOT] Scores cache primed "
+                    f"matches={prime_summary['matches']} "
+                    f"eligible={prime_summary['eligible']} "
+                    f"refreshed={prime_summary['refreshed']} "
+                    f"errors={prime_summary['errors']}"
+                )
+            except Exception as exc:
+                print(f"[BOOT] Scores cache prime failed: {exc}")
+            try:
+                leaderboard_summary = leaderboard.refresh_leaderboard_cache_once()
+                print(
+                    "[BOOT] Leaderboard cache primed "
+                    f"leaderboard={leaderboard_summary['leaderboard']} "
+                    f"points_table={leaderboard_summary['points_table']}"
+                )
+            except Exception as exc:
+                print(f"[BOOT] Leaderboard cache prime failed: {exc}")
+
+            start_completed_match_recompute_if_needed()
+
+            bootstrap_warmup_complete = True
+            bootstrap_warmup_error = None
+            print("Fantasy Cricket API background warmup complete")
+            return
+        except Exception as exc:
+            bootstrap_warmup_error = str(exc)
+            print(f"[BOOT] Background warmup error: {exc}")
+            time.sleep(30)
 
 def _seconds_until_next_completed_recompute() -> float:
     now = datetime.now(IST)
@@ -237,7 +247,7 @@ def start_completed_match_recompute_if_needed():
 @app.on_event("startup")
 def startup():
     admin.set_tournament(tournament)
-    start_bootstrap_if_needed()
+    bootstrap_app()
     # Populate venue data from Cricbuzz in background (fails silently)
     import threading
     def _populate_venues():
@@ -253,9 +263,17 @@ def startup():
 @app.get("/api/health")
 def health():
     status = "ok" if bootstrap_ready else "starting"
-    payload = {"status": status}
+    if bootstrap_ready and not bootstrap_warmup_complete:
+        status = "warming"
+    payload = {
+        "status": status,
+        "critical_ready": bootstrap_ready,
+        "warmup_complete": bootstrap_warmup_complete,
+    }
     if bootstrap_error:
         payload["bootstrap_error"] = bootstrap_error
+    if bootstrap_warmup_error:
+        payload["bootstrap_warmup_error"] = bootstrap_warmup_error
     return payload
 
 
@@ -275,11 +293,12 @@ def status():
         matches = db.execute("SELECT COUNT(*) as cnt FROM matches").fetchone()
         users = db.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
         return {
-            "status": "ok",
+            "status": "ok" if bootstrap_warmup_complete else "warming",
             "players": players["cnt"] if isinstance(players, dict) else players[0],
             "matches": matches["cnt"] if isinstance(matches, dict) else matches[0],
             "users": users["cnt"] if isinstance(users, dict) else users[0],
             "scheduler": "running",
+            "warmup_complete": bootstrap_warmup_complete,
         }
     except Exception as e:
         return {"status": "error", "detail": str(e)}
