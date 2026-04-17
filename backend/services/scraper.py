@@ -68,7 +68,40 @@ def _is_finalized_playing_xi(payload: dict) -> bool:
 
 
 def _is_playing_xi_announced(payload: dict) -> bool:
-    return _is_finalized_playing_xi(payload)
+    return len(payload.get("player_ids", [])) == 22
+
+
+def _merge_playing_xi_payloads(primary: dict | None, secondary: dict | None) -> dict:
+    merged = {
+        "announced": False,
+        "url": "",
+        "player_ids": [],
+        "substitute_ids": [],
+        "source": "",
+        "substitutes_available": False,
+        "finalized": False,
+    }
+
+    for candidate in (primary, secondary):
+        if not candidate:
+            continue
+        if candidate.get("url"):
+            merged["url"] = candidate.get("url") or merged["url"]
+        if candidate.get("source"):
+            merged["source"] = candidate.get("source") or merged["source"]
+
+        for key in ("player_ids", "substitute_ids"):
+            combined = list(merged[key])
+            for pid in candidate.get(key, []) or []:
+                if pid not in combined:
+                    combined.append(pid)
+            merged[key] = combined
+
+        merged["substitutes_available"] = merged["substitutes_available"] or bool(candidate.get("substitutes_available"))
+
+    merged["announced"] = len(merged["player_ids"]) == 22
+    merged["finalized"] = len(merged["player_ids"]) == 22 and len(merged["substitute_ids"]) == 10
+    return merged
 
 
 def _parse_match_datetime(match_date: str | None, match_time: str | None):
@@ -1044,7 +1077,7 @@ def _extract_playing_xi_from_commentary(
                 continue
 
             xi_match = re.search(
-                rf"^{re.escape(variant)}\s*\(Playing XI\)\s*[:\-]\s*(.+)$",
+                rf"(?:^|\bTeams:\s*){re.escape(variant)}\s*\(Playing XI\)\s*[:\-]\s*(.+)$",
                 line,
                 flags=re.IGNORECASE,
             )
@@ -1052,7 +1085,7 @@ def _extract_playing_xi_from_commentary(
                 return _extract_comma_separated_names(xi_match.group(1)), []
 
             subs_match = re.search(
-                rf"^{re.escape(variant)}\s+Impact\s+(?:sub|subs|substitute|substitutes)\s*[:\-]\s*(.+)$",
+                rf"(?:^|\bTeams:\s*){re.escape(variant)}\s+Impact\s+(?:sub|subs|substitute|substitutes)\s*[:\-]\s*(.+)$",
                 line,
                 flags=re.IGNORECASE,
             )
@@ -1613,7 +1646,7 @@ def fetch_playing_xi(
             )
 
         commentary_html = None
-        if not parsed_from_squads or not parsed_from_squads["announced"]:
+        if not parsed_from_squads or not parsed_from_squads["finalized"]:
             print(f"[Playing XI] Match {match_id}: trying commentary {commentary_url}")
             commentary_res = _session_get(commentary_url)
             if commentary_res.status_code == 200:
@@ -1644,15 +1677,29 @@ def fetch_playing_xi(
                 pass
             return _copy_playing_xi_payload(payload)
 
-        parsed_payload = parse_playing_xi_from_sources(
-            commentary_html,
-            squads_html,
-            team1,
-            team2,
-            players_rows,
-            commentary_url=commentary_url,
-            squads_url=squads_url,
-        )
+        parsed_from_commentary = None
+        if commentary_html:
+            parsed_from_commentary = parse_playing_xi_from_sources(
+                commentary_html,
+                None,
+                team1,
+                team2,
+                players_rows,
+                commentary_url=commentary_url,
+            )
+
+        parsed_payload = _merge_playing_xi_payloads(parsed_from_squads, parsed_from_commentary)
+
+        if not parsed_payload["announced"] and not parsed_payload["substitute_ids"]:
+            parsed_payload = parse_playing_xi_from_sources(
+                commentary_html,
+                squads_html,
+                team1,
+                team2,
+                players_rows,
+                commentary_url=commentary_url,
+                squads_url=squads_url,
+            )
 
         if not parsed_payload["announced"]:
             print(f"[Playing XI] Match {match_id}: Playing XI section not available yet")

@@ -12,6 +12,7 @@ from backend.database import get_db
 from backend.models.match import Match, clean_team_name
 from backend.models.registry import PlayerRegistry
 from backend.services import data_service
+from backend.services.live_scores import append_missing_live_team_players
 from backend.services.scraper import fetch_playing_xi, fetch_scorecard_html, fetch_cricbuzz_scorecard_html
 from bs4 import BeautifulSoup
 
@@ -203,6 +204,24 @@ def _build_match_scores_payload(match_id: int, match_row, registry, players_data
     pp_lookup, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup, role_lookup)
     owners_by_player = _load_player_owners(db, match_id)
 
+    selected_rows = []
+    if _is_live_window(match_row):
+        selected_rows = db.execute(
+            """
+            SELECT DISTINCT
+                p.id,
+                p.name,
+                p.team,
+                p.role
+            FROM user_teams ut
+            JOIN players p ON p.id = ut.player_id
+            WHERE ut.match_id = ?
+              AND p.team IN (?, ?)
+            ORDER BY p.team, p.role, p.name
+            """,
+            (match_id, team1, team2),
+        ).fetchall()
+
     players = []
     for p in match_obj.players.values():
         pid_str = str(p.player_id)
@@ -236,6 +255,14 @@ def _build_match_scores_payload(match_id: int, match_row, registry, players_data
             "breakdown": p.get_points_breakdown() if role else [],
             "owners": owners_by_player.get(int(p.player_id), []),
         })
+
+    if selected_rows:
+        append_missing_live_team_players(
+            players,
+            registry,
+            [dict(row) for row in selected_rows],
+            owners_by_player,
+        )
 
     players.sort(key=lambda x: x["points"], reverse=True)
     contestants = _rank_contestants(_compute_contestants_from_player_points(db, match_id, pp_lookup))

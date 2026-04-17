@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import {
   signInWithEmailAndPassword,
@@ -25,6 +25,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const BOOT_WAIT_TIMEOUT_MS = 60_000;
 const BOOT_POLL_INTERVAL_MS = 1_500;
+const PROFILE_RETRY_INTERVAL_MS = 2_000;
 
 async function waitForBackendReady(): Promise<boolean> {
   const startedAt = Date.now();
@@ -53,27 +54,32 @@ async function waitForBackendReady(): Promise<boolean> {
   return false;
 }
 
+type ProfileFetchResult = {
+  profile: User | null;
+  backendReady: boolean;
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch profile from backend
   const fetchProfile = async (
     devLogin = false,
     firebaseUserOverride: FirebaseUser | null = null
-  ): Promise<User | null> => {
+  ): Promise<ProfileFetchResult> => {
     const backendReady = await waitForBackendReady();
     if (!backendReady) {
-      setProfile(null);
-      return null;
+      return { profile: null, backendReady: false };
     }
 
     try {
       if (devLogin) {
         const res = await client.get('/api/auth/me', { headers: { 'X-Dev-Login': '1' } });
         setProfile(res.data);
-        return res.data;
+        return { profile: res.data, backendReady: true };
       }
 
       if (firebaseUserOverride) {
@@ -82,36 +88,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: { Authorization: `Bearer ${token}` },
         });
         setProfile(res.data);
-        return res.data;
+        return { profile: res.data, backendReady: true };
       }
 
       const res = await client.get('/api/auth/me');
       setProfile(res.data);
-      return res.data;
+      return { profile: res.data, backendReady: true };
     } catch {
       setProfile(null);
-      return null;
+      return { profile: null, backendReady: true };
     }
+  };
+
+  const clearProfileRetryTimer = () => {
+    if (profileRetryTimerRef.current) {
+      clearTimeout(profileRetryTimerRef.current);
+      profileRetryTimerRef.current = null;
+    }
+  };
+
+  const retryFirebaseProfile = async (user: FirebaseUser) => {
+    clearProfileRetryTimer();
+    const result = await fetchProfile(false, user);
+    if (result.profile) {
+      setLoading(false);
+      return;
+    }
+
+    if (!result.backendReady) {
+      profileRetryTimerRef.current = setTimeout(() => {
+        void retryFirebaseProfile(user);
+      }, PROFILE_RETRY_INTERVAL_MS);
+      return;
+    }
+
+    setProfile(null);
+    setLoading(false);
+    await signOut(auth);
   };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
-        await fetchProfile(false, user);
+        setLoading(true);
+        await retryFirebaseProfile(user);
       } else {
+        clearProfileRetryTimer();
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return unsub;
+    return () => {
+      clearProfileRetryTimer();
+      unsub();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(auth, email, password);
-    const profile = await fetchProfile(false, cred.user);
-    if (!profile) {
+    const result = await fetchProfile(false, cred.user);
+    if (!result.profile) {
       await signOut(auth);
+      if (!result.backendReady) {
+        throw new Error('The app is still starting up. Please try again in a moment.');
+      }
       throw new Error('Your account is not registered in the app yet.');
     }
   };
@@ -125,9 +166,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       { name },
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    const profile = await fetchProfile(false, cred.user);
-    if (!profile) {
+    const result = await fetchProfile(false, cred.user);
+    if (!result.profile) {
       await signOut(auth);
+      if (!result.backendReady) {
+        throw new Error('The app is still starting up. Please try again in a moment.');
+      }
       throw new Error('Registration completed, but the profile could not be loaded.');
     }
   };
@@ -139,8 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Dev mode login - works without Firebase
   const devLogin = async () => {
-    const profile = await fetchProfile(true);
-    if (!profile) {
+    const result = await fetchProfile(true);
+    if (!result.profile) {
       throw new Error('Dev login failed.');
     }
     setLoading(false);
