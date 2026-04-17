@@ -52,10 +52,17 @@ export default function DashboardPage() {
   const [contestantsLoading, setContestantsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MatchTab>('today');
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const getCountdown = useCountdown();
 
   const loadDashboard = useCallback(async () => {
+    if (!profile) {
+      setTeamLineupInfo({});
+      setBackupCounts({});
+      setLoading(false);
+      return;
+    }
+
     try {
       const dashboardStart = performance.now();
       console.time('dashboard:/api/dashboard/matches + /api/teams/my-matches');
@@ -99,9 +106,22 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [profile]);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!profile) {
+      setMatches([]);
+      setMyTeams(new Set());
+      setTeamLineupInfo({});
+      setBackupCounts({});
+      setLoading(false);
+      return;
+    }
+
     let alive = true;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -120,7 +140,7 @@ export default function DashboardPage() {
       alive = false;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [loadDashboard]);
+  }, [authLoading, loadDashboard, profile]);
 
   const formatDate = (dateStr: string, timeStr: string) => {
     try {
