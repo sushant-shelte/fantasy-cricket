@@ -203,6 +203,8 @@ def _build_match_scores_payload(match_id: int, match_row, registry, players_data
 
     pp_lookup, role_lookup = _fill_missing_player_points(match_obj, registry, pp_lookup, role_lookup)
     owners_by_player = _load_player_owners(db, match_id)
+    team1 = clean_team_name(_row_value(match_row, "team1", "Team1", default=""))
+    team2 = clean_team_name(_row_value(match_row, "team2", "Team2", default=""))
 
     selected_rows = []
     if _is_live_window(match_row):

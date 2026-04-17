@@ -77,6 +77,8 @@ def _merge_playing_xi_payloads(primary: dict | None, secondary: dict | None) -> 
         "url": "",
         "player_ids": [],
         "substitute_ids": [],
+        "unmatched_names": [],
+        "substitute_unmatched_names": [],
         "source": "",
         "substitutes_available": False,
         "finalized": False,
@@ -96,6 +98,13 @@ def _merge_playing_xi_payloads(primary: dict | None, secondary: dict | None) -> 
                 if pid not in combined:
                     combined.append(pid)
             merged[key] = combined
+
+        for key in ("unmatched_names", "substitute_unmatched_names"):
+            combined_names = list(merged[key])
+            for name in candidate.get(key, []) or []:
+                if name not in combined_names:
+                    combined_names.append(name)
+            merged[key] = combined_names
 
         merged["substitutes_available"] = merged["substitutes_available"] or bool(candidate.get("substitutes_available"))
 
